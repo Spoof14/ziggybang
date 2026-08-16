@@ -1,29 +1,25 @@
-# Create T3 App
+# Ziggybang
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+직방과 네이버 부동산 매물을 한 지도에서 모아 보는 aggregator입니다.
 
-## What's next? How do I make an app with this?
+## What it does
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+- 현재 지도 화면(viewport)에 해당하는 매물만 불러옵니다.
+- 직방은 geohash 타일(`onerooms`, `villas`, `officetels`, 아파트 단지)을 사용합니다.
+- 네이버는 줌에 따라 cluster / article list를 사용합니다. 네이버가 막혀 있으면 직방만 보여주고 오류를 표시합니다.
+- 멀리 보거나 점이 많으면 서버에서 묶음(cluster)으로 줄여 지도를 가볍게 유지합니다.
+- 마커를 누르면 상세와 원문 링크를 엽니다.
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+## Develop
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+```bash
+npm install
+npm test
+npm run dev
+```
 
-## Learn More
+Open [http://localhost:3000](http://localhost:3000). Pan and zoom the map; only the visible area is fetched.
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+## Tests
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
-
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
-
-## How do I deploy this?
-
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+`npm test` runs unit tests for geohash tiling, clustering, source mapping, and aggregation, plus a live Zigbang smoke test. Naver is asserted to fail soft if the host is unreachable.

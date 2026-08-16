@@ -7,7 +7,9 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@t3-oss/env-nextjs": "^0.10.1",
@@ -16,18 +18,22 @@
     "@trpc/react-query": "^11.0.0-rc.446",
     "@trpc/server": "^11.0.0-rc.446",
     "geist": "^1.3.0",
+    "leaflet": "^1.9.4",
     "next": "^14.2.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-leaflet": "^4.2.1",
     "server-only": "^0.0.1",
     "superjson": "^2.2.1",
     "zod": "^3.23.3"
   },
   "devDependencies": {
     "@types/eslint": "^8.56.10",
+    "@types/leaflet": "^1.9.16",
     "@types/node": "^20.14.10",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "vitest": "^2.1.9",
     "@typescript-eslint/eslint-plugin": "^7.1.1",
     "@typescript-eslint/parser": "^7.1.1",
     "eslint": "^8.57.0",

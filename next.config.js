@@ -5,6 +5,8 @@
 await import("./src/env.js");
 
 /** @type {import("next").NextConfig} */
-const config = {};
+const config = {
+  transpilePackages: ["leaflet", "react-leaflet"],
+};
 
 export default config;

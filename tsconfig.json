@@ -34,10 +34,7 @@
       "~/*": [
         "./src/*"
       ]
-    },
-    "types": [
-      "kakao.maps.d.ts"
-    ]
+    }
   },
   "include": [
     ".eslintrc.cjs",

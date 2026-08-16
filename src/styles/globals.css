@@ -1,3 +1,23 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+.leaflet-container {
+  background: #0f172a;
+  font-family: inherit;
+}
+
+.leaflet-tooltip {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: #0f172a;
+  font-weight: 700;
+  padding: 0;
+}
