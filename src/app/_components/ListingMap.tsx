@@ -9,6 +9,7 @@ import {
   useMap,
   useMapEvents,
 } from "react-leaflet";
+import { type Map as LeafletMap } from "leaflet";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
 
 const SEOUL: [number, number] = [37.5665, 126.978];
@@ -22,7 +23,7 @@ function sourceColor(sources: Partial<Record<"zigbang" | "naver", number>>) {
 }
 
 function emitViewport(
-  map: { getBounds: () => { getSouth: () => number; getWest: () => number; getNorth: () => number; getEast: () => number }; getZoom: () => number },
+  map: LeafletMap,
   onViewport: (next: {
     south: number;
     west: number;
@@ -66,7 +67,7 @@ function MapEvents({
   }, [focus, map]);
 
   useMapEvents({
-    moveend: (event) => emitViewport(event.target, onViewport),
+    moveend: () => emitViewport(map, onViewport),
   });
 
   return null;

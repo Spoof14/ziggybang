@@ -72,7 +72,7 @@ export async function getMapData(
 
   const results = await Promise.allSettled(jobs);
   const listings: MapListing[] = [];
-  const errors = [];
+  const errors: MapData["errors"] = [];
 
   results.forEach((result, index) => {
     const source = jobSources[index]!;
