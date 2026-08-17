@@ -256,7 +256,7 @@ export default function MapApp() {
   const zigbangQuery = api.listings.getMap.useQuery(
     { ...sharedInput, sources: ["zigbang"] },
     {
-      enabled: sources.includes("zigbang"),
+      enabled: prefsLoaded && sources.includes("zigbang"),
       placeholderData: (previous) => previous,
       refetchOnWindowFocus: false,
     },
@@ -264,7 +264,7 @@ export default function MapApp() {
   const naverQuery = api.listings.getMap.useQuery(
     { ...sharedInput, sources: ["naver"] },
     {
-      enabled: sources.includes("naver"),
+      enabled: prefsLoaded && sources.includes("naver"),
       placeholderData: (previous) => previous,
       refetchOnWindowFocus: false,
       retry: false,
@@ -274,7 +274,7 @@ export default function MapApp() {
   const peterpanQuery = api.listings.getMap.useQuery(
     { ...sharedInput, sources: ["peterpan"] },
     {
-      enabled: sources.includes("peterpan"),
+      enabled: prefsLoaded && sources.includes("peterpan"),
       placeholderData: (previous) => previous,
       refetchOnWindowFocus: false,
       retry: false,

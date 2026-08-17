@@ -263,7 +263,8 @@ async function fetchMarkers(input: {
     );
     return (Array.isArray(payload) ? payload : [])
       .map(markerToListing)
-      .filter((item): item is MapListing => item !== null);
+      .filter((item): item is MapListing => item !== null)
+      .slice(0, 1200);
   });
 }
 
@@ -274,6 +275,13 @@ export async function fetchPeterpanListings(input: {
   salesTypes?: SalesType[];
   needsDetails?: boolean;
 }): Promise<MapListing[]> {
+  const span = Math.max(
+    input.bounds.north - input.bounds.south,
+    input.bounds.east - input.bounds.west,
+  );
+  if (!input.needsDetails && (input.zoom < 13 || span > 0.12)) {
+    return [];
+  }
   const listings =
     input.zoom >= 15 || input.needsDetails
       ? await fetchHouseList(input)
