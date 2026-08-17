@@ -34,6 +34,7 @@ describe("live aggregator", () => {
               item.lng <= gangnam.east,
           ),
         ).toBe(true);
+        expect(data.listings.some((item) => item.thumbnail)).toBe(true);
       }
     },
     30000,
@@ -76,5 +77,32 @@ describe("live aggregator", () => {
       }
     },
     12000,
+  );
+
+  it(
+    "keeps Hongdae radius results near Hongdae, not Gangnam",
+    async () => {
+      const data = await getMapData({
+        bounds: gangnam,
+        zoom: 13,
+        sources: ["zigbang"],
+        propertyTypes: ["oneroom", "officetel"],
+        circle: { lat: 37.556, lng: 126.923, radiusM: 1200 },
+        includeListings: true,
+      });
+
+      expect(data.errors).toEqual([]);
+      expect(data.mode).toBe("markers");
+      expect(data.listings.length).toBeGreaterThan(0);
+      expect(
+        data.listings.every(
+          (item) =>
+            Math.abs(item.lat - 37.556) < 0.02 &&
+            Math.abs(item.lng - 126.923) < 0.02,
+        ),
+      ).toBe(true);
+      expect(data.listings.some((item) => item.lat < 37.52)).toBe(false);
+    },
+    30000,
   );
 });

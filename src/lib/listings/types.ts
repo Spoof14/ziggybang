@@ -27,6 +27,13 @@ export type MapQuery = {
   salesTypes?: SalesType[];
   query?: string;
   areaBucketIds?: Array<"xs" | "s" | "m" | "l">;
+  circle?: {
+    lat: number;
+    lng: number;
+    radiusM: number;
+  };
+  polygon?: Array<{ lat: number; lng: number }>;
+  includeListings?: boolean;
 };
 
 export type MapListing = {

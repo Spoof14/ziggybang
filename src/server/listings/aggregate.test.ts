@@ -167,6 +167,29 @@ describe("getMapData", () => {
     expect(data.listings.map((item) => item.id)).toEqual(["z1"]);
   });
 
+  it("keeps only listings inside a Hongdae radius", async () => {
+    const data = await getMapData(
+      {
+        bounds: seoulBounds,
+        zoom: 13,
+        sources: ["zigbang"],
+        propertyTypes: ["oneroom"],
+        query: "hongdae",
+        circle: { lat: 37.556, lng: 126.923, radiusM: 1000 },
+        includeListings: true,
+      },
+      {
+        zigbang: async () => [
+          { ...listing("near", "zigbang"), lat: 37.5565, lng: 126.922 },
+          { ...listing("far", "zigbang"), lat: 37.498, lng: 127.028 },
+        ],
+        naver: async () => [],
+      },
+    );
+
+    expect(data.listings.map((item) => item.id)).toEqual(["near"]);
+  });
+
   it("rejects invalid bounds", async () => {
     await expect(
       getMapData({

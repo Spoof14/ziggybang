@@ -2,15 +2,19 @@
 
 import { useEffect, useMemo } from "react";
 import {
+  Circle,
   CircleMarker,
   MapContainer,
   Marker,
+  Polygon,
+  Polyline,
   TileLayer,
   ZoomControl,
   useMap,
   useMapEvents,
 } from "react-leaflet";
-import { DivIcon, type Map as LeafletMap } from "leaflet";
+import { DivIcon, DomEvent, type Map as LeafletMap } from "leaflet";
+import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
 
 const SEOUL: [number, number] = [37.5665, 126.978];
@@ -46,6 +50,9 @@ function emitViewport(
 function MapEvents({
   onViewport,
   focus,
+  tool,
+  onMapClick,
+  onFinishDraw,
 }: {
   onViewport: (next: {
     south: number;
@@ -55,12 +62,31 @@ function MapEvents({
     zoom: number;
   }) => void;
   focus: { lat: number; lng: number; zoom?: number; token: number } | null;
+  tool: "pan" | "radius" | "draw";
+  onMapClick: (point: LatLng) => void;
+  onFinishDraw: () => void;
 }) {
   const map = useMap();
 
   useEffect(() => {
     emitViewport(map, onViewport);
   }, [map, onViewport]);
+
+  useEffect(() => {
+    const container = map.getContainer();
+    container.style.cursor = tool === "pan" ? "" : "crosshair";
+    if (tool === "pan") {
+      map.doubleClickZoom.enable();
+    } else {
+      map.doubleClickZoom.disable();
+    }
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(container);
+    return () => {
+      observer.disconnect();
+      container.style.cursor = "";
+    };
+  }, [map, tool]);
 
   useEffect(() => {
     if (!focus) return;
@@ -76,7 +102,7 @@ function MapEvents({
       ],
       {
         maxZoom: Math.min(map.getZoom() + 2, 17),
-        paddingTopLeft: [0, 150],
+        paddingTopLeft: [0, 24],
         duration: 0.35,
       },
     );
@@ -85,6 +111,15 @@ function MapEvents({
   useMapEvents({
     moveend: () => emitViewport(map, onViewport),
     zoomend: () => emitViewport(map, onViewport),
+    click: (event) => {
+      if (tool === "pan") return;
+      onMapClick({ lat: event.latlng.lat, lng: event.latlng.lng });
+    },
+    dblclick: (event) => {
+      if (tool !== "draw") return;
+      DomEvent.stop(event);
+      onFinishDraw();
+    },
   });
 
   return null;
@@ -102,9 +137,11 @@ function clusterIcon(count: number, color: string) {
 
 function ClusterLayer({
   clusters,
+  tool,
   onSelect,
 }: {
   clusters: MapCluster[];
+  tool: "pan" | "radius" | "draw";
   onSelect: (cluster: MapCluster) => void;
 }) {
   return (
@@ -114,9 +151,13 @@ function ClusterLayer({
           key={cluster.id}
           position={[cluster.lat, cluster.lng]}
           icon={clusterIcon(cluster.count, sourceColor(cluster.sources))}
-          eventHandlers={{
-            click: () => onSelect(cluster),
-          }}
+            eventHandlers={{
+              click: (event) => {
+                if (tool !== "pan") return;
+                DomEvent.stopPropagation(event);
+                onSelect(cluster);
+              },
+            }}
         />
       ))}
     </>
@@ -126,10 +167,12 @@ function ClusterLayer({
 function MarkerLayer({
   listings,
   selectedId,
+  tool,
   onSelect,
 }: {
   listings: MapListing[];
   selectedId?: string;
+  tool: "pan" | "radius" | "draw";
   onSelect: (listing: MapListing) => void;
 }) {
   return (
@@ -146,7 +189,11 @@ function MarkerLayer({
             fillOpacity: 0.92,
           }}
           eventHandlers={{
-            click: () => onSelect(listing),
+            click: (event) => {
+              DomEvent.stopPropagation(event);
+              if (tool !== "pan") return;
+              onSelect(listing);
+            },
           }}
         />
       ))}
@@ -159,14 +206,24 @@ export function ListingMap({
   listings,
   selectedId,
   focus,
+  circle,
+  polygon,
+  draftPoints,
+  tool,
   onViewport,
   onSelectListing,
   onSelectCluster,
+  onMapClick,
+  onFinishDraw,
 }: {
   clusters: MapCluster[];
   listings: MapListing[];
   selectedId?: string;
   focus: { lat: number; lng: number; zoom?: number; token: number } | null;
+  circle: CircleFilter | null;
+  polygon: LatLng[] | null;
+  draftPoints: LatLng[];
+  tool: "pan" | "radius" | "draw";
   onViewport: (next: {
     south: number;
     west: number;
@@ -176,20 +233,25 @@ export function ListingMap({
   }) => void;
   onSelectListing: (listing: MapListing) => void;
   onSelectCluster: (cluster: MapCluster) => void;
+  onMapClick: (point: LatLng) => void;
+  onFinishDraw: () => void;
 }) {
   const clusterLayer = useMemo(
-    () => <ClusterLayer clusters={clusters} onSelect={onSelectCluster} />,
-    [clusters, onSelectCluster],
+    () => (
+      <ClusterLayer clusters={clusters} tool={tool} onSelect={onSelectCluster} />
+    ),
+    [clusters, onSelectCluster, tool],
   );
   const markerLayer = useMemo(
     () => (
       <MarkerLayer
         listings={listings}
         selectedId={selectedId}
+        tool={tool}
         onSelect={onSelectListing}
       />
     ),
-    [listings, onSelectListing, selectedId],
+    [listings, onSelectListing, selectedId, tool],
   );
 
   return (
@@ -209,7 +271,32 @@ export function ListingMap({
         maxZoom={20}
       />
       <ZoomControl position="bottomright" />
-      <MapEvents onViewport={onViewport} focus={focus} />
+      <MapEvents
+        onViewport={onViewport}
+        focus={focus}
+        tool={tool}
+        onMapClick={onMapClick}
+        onFinishDraw={onFinishDraw}
+      />
+      {circle ? (
+        <Circle
+          center={[circle.lat, circle.lng]}
+          radius={circle.radiusM}
+          pathOptions={{ color: "#38bdf8", weight: 2, fillOpacity: 0.12 }}
+        />
+      ) : null}
+      {polygon && polygon.length >= 3 ? (
+        <Polygon
+          positions={polygon.map((point) => [point.lat, point.lng] as [number, number])}
+          pathOptions={{ color: "#a78bfa", weight: 2, fillOpacity: 0.12 }}
+        />
+      ) : null}
+      {draftPoints.length ? (
+        <Polyline
+          positions={draftPoints.map((point) => [point.lat, point.lng] as [number, number])}
+          pathOptions={{ color: "#a78bfa", weight: 2, dashArray: "6 6" }}
+        />
+      ) : null}
       {clusterLayer}
       {markerLayer}
     </MapContainer>

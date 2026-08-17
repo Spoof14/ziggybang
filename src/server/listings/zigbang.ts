@@ -77,6 +77,20 @@ const verticalByType: Record<
   officetel: "officetels",
 };
 
+export function zigbangItemImageUrl(itemId: string | number): string {
+  return `https://ic.zigbang.com/ic/items/${itemId}/1.jpg`;
+}
+
+function normalizeZigbangThumbnail(
+  raw: string | undefined,
+  itemId: string | number,
+): string {
+  if (!raw) return zigbangItemImageUrl(itemId);
+  if (raw.startsWith("//")) return `https:${raw}`;
+  if (raw.startsWith("/")) return `https://ic.zigbang.com${raw}`;
+  return raw;
+}
+
 export function zigbangListingUrl(
   propertyType: PropertyType,
   sourceId: string,
@@ -112,6 +126,7 @@ function toMarker(
     lat: item.lat,
     lng: item.lng,
     propertyType,
+    thumbnail: zigbangItemImageUrl(item.id),
     url: zigbangListingUrl(propertyType, String(item.id)),
   };
 }
@@ -222,7 +237,7 @@ export async function fetchZigbangListings(input: {
         areaBucketIds: input.areaBucketIds ?? [],
         query: input.query ?? "",
       }));
-  if (input.zoom >= 15 && shouldHydrate) {
+  if (shouldHydrate) {
     return hydrateZigbangListings(listings);
   }
   return listings;
@@ -346,7 +361,7 @@ export async function fetchZigbangDetail(
           ? `${item.floor.floor}/${item.floor.allFloors}`
           : item.floor?.floor,
       address: item.addressOrigin?.fullText ?? item.jibunAddress,
-      thumbnail: item.imageThumbnail,
+      thumbnail: normalizeZigbangThumbnail(item.imageThumbnail, item.itemId),
       url: zigbangListingUrl(propertyType, String(item.itemId)),
       description: item.description,
       manageCost: item.manageCost?.amount,
@@ -356,4 +371,7 @@ export async function fetchZigbangDetail(
   });
 }
 
-export { toMarker as zigbangMarkerToListing, toComplex as zigbangComplexToListing };
+export {
+  toMarker as zigbangMarkerToListing,
+  toComplex as zigbangComplexToListing,
+};

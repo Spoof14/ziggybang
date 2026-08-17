@@ -35,6 +35,12 @@ describe("bilingual fuzzy search", () => {
     expect(matchPlace("Hongdae studio")?.id).toBe("hongdae");
     expect(parseSearchQuery("연남동 studio").listingQuery.toLowerCase()).toContain("studio");
   });
+
+  it("treats Hongdae as a place so leftover listing text can be empty", () => {
+    const parsed = parseSearchQuery("hongdae");
+    expect(parsed.place?.id).toBe("hongdae");
+    expect(parsed.listingQuery).toBe("");
+  });
 });
 
 describe("area buckets", () => {

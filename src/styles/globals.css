@@ -6,6 +6,7 @@ html,
 body {
   height: 100%;
   margin: 0;
+  color-scheme: dark;
 }
 
 .leaflet-container {
@@ -60,4 +61,25 @@ body {
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+.search-input,
+.search-input:focus {
+  background-color: #0f172a;
+  caret-color: #f8fafc;
+  color: #f8fafc;
+  -webkit-text-fill-color: #f8fafc;
+}
+
+.search-input::placeholder {
+  color: #94a3b8;
+  -webkit-text-fill-color: #94a3b8;
+}
+
+.search-input:-webkit-autofill,
+.search-input:-webkit-autofill:hover,
+.search-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f8fafc;
+  box-shadow: 0 0 0 1000px #0f172a inset;
+  transition: background-color 9999s ease-out;
 }

@@ -1,6 +1,12 @@
 import { clusterListings, shouldCluster, cellSizeForZoom } from "~/lib/geo/cluster";
 import { isValidBounds } from "~/lib/geo/bounds";
 import {
+  boundsAroundCircle,
+  boundsAroundPolygon,
+  pointInCircle,
+  pointInPolygon,
+} from "~/lib/geo/shape";
+import {
   type ListingDetail,
   type MapData,
   type MapListing,
@@ -60,7 +66,19 @@ export async function getMapData(
     areaBucketIds,
     query: listingQuery,
   };
-  const requireDetails = query.zoom >= 15 && needsListingDetails(detailFilters);
+  const requireDetails =
+    (query.zoom >= 15 || Boolean(query.includeListings)) &&
+    needsListingDetails(detailFilters);
+
+  const fetchBounds = query.circle
+    ? boundsAroundCircle(query.circle)
+    : query.polygon && query.polygon.length >= 3
+      ? (boundsAroundPolygon(query.polygon) ?? query.bounds)
+      : query.bounds;
+
+  if (!isValidBounds(fetchBounds)) {
+    throw new Error("Invalid map bounds");
+  }
 
   const jobs: Promise<MapListing[]>[] = [];
   const jobSources: Source[] = [];
@@ -69,13 +87,13 @@ export async function getMapData(
     jobSources.push("zigbang");
     jobs.push(
       adapters.zigbang({
-        bounds: query.bounds,
+        bounds: fetchBounds,
         zoom: query.zoom,
         propertyTypes,
         salesTypes: selectedSalesTypes,
         query: listingQuery,
         areaBucketIds,
-        needsDetails: requireDetails,
+        needsDetails: requireDetails || Boolean(query.includeListings),
       }),
     );
   }
@@ -84,7 +102,7 @@ export async function getMapData(
     jobs.push(
       withTimeout(
         adapters.naver({
-          bounds: query.bounds,
+          bounds: fetchBounds,
           zoom: query.zoom,
           propertyTypes,
           salesTypes: selectedSalesTypes,
@@ -109,13 +127,22 @@ export async function getMapData(
     }
   });
 
-  const unique = filterListings(dedupeListings(listings), {
+  let unique = filterListings(dedupeListings(listings), {
     ...detailFilters,
     requireDetails,
   });
+  const circle = query.circle;
+  const polygon = query.polygon;
+  if (circle) {
+    unique = unique.filter((item) => pointInCircle(item, circle));
+  } else if (polygon && polygon.length >= 3) {
+    unique = unique.filter((item) => pointInPolygon(item, polygon));
+  }
   const zigbang = unique.filter((item) => item.source === "zigbang").length;
   const naver = unique.filter((item) => item.source === "naver").length;
-  const cluster = shouldCluster(query.zoom, unique.length, MAX_MARKERS);
+  const cluster =
+    !query.includeListings &&
+    shouldCluster(query.zoom, unique.length, MAX_MARKERS);
 
   if (cluster) {
     const clusters = clusterListings(unique, cellSizeForZoom(query.zoom));

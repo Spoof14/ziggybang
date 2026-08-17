@@ -13,6 +13,7 @@ import {
   sourceLabel,
 } from "~/lib/listings/copy";
 import { type MapListing } from "~/lib/listings/types";
+import { ListingPhoto } from "./ListingPhoto";
 
 export function ListingPanel({
   listing,
@@ -64,13 +65,11 @@ export function ListingPanel({
         </button>
       </div>
 
-      {detail.thumbnail ? (
-        <img
-          src={detail.thumbnail}
-          alt={detail.title ?? "listing"}
-          className="mb-3 h-40 w-full rounded-xl object-cover"
-        />
-      ) : null}
+      <ListingPhoto
+        url={detail.thumbnail}
+        alt={detail.title ?? "listing"}
+        className="mb-3 h-40 w-full rounded-xl object-cover"
+      />
 
       <dl className="grid grid-cols-2 gap-2 text-sm">
         {price ? (

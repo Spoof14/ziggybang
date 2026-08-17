@@ -4,6 +4,12 @@ import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "~/trpc/react";
 import {
+  type CircleFilter,
+  type LatLng,
+  formatRadius,
+  listingInArea,
+} from "~/lib/geo/shape";
+import {
   areaBuckets,
   isAllAreaBuckets,
   type AreaBucketId,
@@ -17,6 +23,7 @@ import {
 } from "~/lib/listings/copy";
 import { needsListingDetails } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
+import { loadPrefs, savePrefs, type ViewMode } from "~/lib/listings/prefs";
 import { parseSearchQuery } from "~/lib/listings/search";
 import {
   type Bounds,
@@ -26,12 +33,15 @@ import {
   type SalesType,
   type Source,
 } from "~/lib/listings/types";
+import { ListingList } from "./ListingList";
 import { ListingMap } from "./ListingMap";
 import { ListingPanel } from "./ListingPanel";
+import { ListingPhoto } from "./ListingPhoto";
 
 const ALL_SOURCES: Source[] = ["zigbang", "naver"];
 const ALL_TYPES: PropertyType[] = ["oneroom", "villa", "officetel", "apartment"];
 const ALL_SALES: SalesType[] = ["jeonse", "wolse", "sale"];
+const DEFAULT_RADIUS_M = 1200;
 
 function roundCoord(value: number) {
   return Math.round(value * 10_000) / 10_000;
@@ -53,6 +63,13 @@ function toggleValue<T>(values: T[], value: T) {
     : [...values, value];
 }
 
+function boundsCenter(bounds: Bounds): LatLng {
+  return {
+    lat: (bounds.south + bounds.north) / 2,
+    lng: (bounds.west + bounds.east) / 2,
+  };
+}
+
 export default function MapApp() {
   const [bounds, setBounds] = useState<Bounds>({
     south: 37.53,
@@ -67,6 +84,12 @@ export default function MapApp() {
   const [areaBucketIds, setAreaBucketIds] = useState<AreaBucketId[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("map");
+  const [tool, setTool] = useState<"pan" | "radius" | "draw">("pan");
+  const [radiusM, setRadiusM] = useState(DEFAULT_RADIUS_M);
+  const [manualCircle, setManualCircle] = useState<CircleFilter | null>(null);
+  const [polygon, setPolygon] = useState<LatLng[] | null>(null);
+  const [draftPoints, setDraftPoints] = useState<LatLng[]>([]);
   const [selected, setSelected] = useState<MapListing | null>(null);
   const [focus, setFocus] = useState<{
     lat: number;
@@ -78,14 +101,68 @@ export default function MapApp() {
   const lastViewportKey = useRef<string | null>(null);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPlaceId = useRef<string | null>(null);
+  const prefsReady = useRef(false);
 
   const parsedSearch = useMemo(
     () => parseSearchQuery(debouncedQuery),
     [debouncedQuery],
   );
 
+  const circle = useMemo<CircleFilter | null>(() => {
+    if (polygon) return null;
+    if (manualCircle) return { ...manualCircle, radiusM };
+    if (!parsedSearch.place) return null;
+    return {
+      lat: parsedSearch.place.lat,
+      lng: parsedSearch.place.lng,
+      radiusM,
+    };
+  }, [manualCircle, parsedSearch.place, polygon, radiusM]);
+
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(searchInput), 320);
+    const saved = loadPrefs();
+    if (saved) {
+      setSources(saved.sources);
+      setPropertyTypes(saved.propertyTypes);
+      setSalesTypes(saved.salesTypes);
+      setAreaBucketIds(saved.areaBucketIds);
+      setSearchInput(saved.searchInput);
+      setDebouncedQuery(saved.searchInput);
+      setViewMode(saved.viewMode);
+      setRadiusM(saved.radiusM);
+      setManualCircle(saved.circle);
+      setPolygon(saved.polygon);
+    }
+    prefsReady.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!prefsReady.current) return;
+    savePrefs({
+      sources,
+      propertyTypes,
+      salesTypes,
+      areaBucketIds,
+      searchInput,
+      viewMode,
+      radiusM,
+      circle: manualCircle,
+      polygon,
+    });
+  }, [
+    areaBucketIds,
+    manualCircle,
+    polygon,
+    propertyTypes,
+    radiusM,
+    salesTypes,
+    searchInput,
+    sources,
+    viewMode,
+  ]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchInput), 280);
     return () => clearTimeout(timer);
   }, [searchInput]);
 
@@ -97,7 +174,15 @@ export default function MapApp() {
     }
     if (lastPlaceId.current === place.id) return;
     lastPlaceId.current = place.id;
-    setFocus({ lat: place.lat, lng: place.lng, zoom: place.zoom, token: Date.now() });
+    setPolygon(null);
+    setDraftPoints([]);
+    setManualCircle(null);
+    setFocus({
+      lat: place.lat,
+      lng: place.lng,
+      zoom: Math.max(place.zoom, 15),
+      token: Date.now(),
+    });
   }, [parsedSearch.place]);
 
   const sharedInput = useMemo(
@@ -108,8 +193,21 @@ export default function MapApp() {
       salesTypes: salesTypes.length ? salesTypes : ALL_SALES,
       query: parsedSearch.listingQuery || undefined,
       areaBucketIds: isAllAreaBuckets(areaBucketIds) ? undefined : areaBucketIds,
+      circle: circle ?? undefined,
+      polygon: polygon && polygon.length >= 3 ? polygon : undefined,
+      includeListings: viewMode === "list" || Boolean(circle ?? polygon),
     }),
-    [areaBucketIds, bounds, parsedSearch.listingQuery, propertyTypes, salesTypes, zoom],
+    [
+      areaBucketIds,
+      bounds,
+      circle,
+      parsedSearch.listingQuery,
+      polygon,
+      propertyTypes,
+      salesTypes,
+      viewMode,
+      zoom,
+    ],
   );
 
   const zigbangQuery = api.listings.getMap.useQuery(
@@ -139,11 +237,22 @@ export default function MapApp() {
     [naverQuery.data, sources, zigbangQuery.data],
   );
 
+  const visible = useMemo(() => {
+    const hasArea = Boolean(circle ?? (polygon && polygon.length >= 3));
+    const listings = data.listings.filter((listing) =>
+      listingInArea(listing, circle ?? undefined, polygon ?? undefined),
+    );
+    return {
+      clusters: hasArea ? [] : data.clusters,
+      listings,
+      stats: data.stats,
+      errors: data.errors,
+    };
+  }, [circle, data, polygon]);
+
   const waitingForFirst =
     (sources.includes("zigbang") && zigbangQuery.isLoading) ||
-    (sources.includes("naver") &&
-      naverQuery.isLoading &&
-      !zigbangQuery.data);
+    (sources.includes("naver") && naverQuery.isLoading && !zigbangQuery.data);
   const refreshing = zigbangQuery.isFetching && !zigbangQuery.isLoading;
 
   const onViewport = useCallback((next: Bounds & { zoom: number }) => {
@@ -167,18 +276,59 @@ export default function MapApp() {
     setFocus({ lat: cluster.lat, lng: cluster.lng, token: Date.now() });
   }, []);
 
+  const onMapClick = useCallback(
+    (point: LatLng) => {
+      if (tool === "radius") {
+        setPolygon(null);
+        setDraftPoints([]);
+        setManualCircle({ ...point, radiusM });
+        return;
+      }
+      if (tool === "draw") {
+        setManualCircle(null);
+        setDraftPoints((current) => [...current, point]);
+      }
+    },
+    [radiusM, tool],
+  );
+
+  const finishDraw = useCallback(() => {
+    if (draftPoints.length < 3) return;
+    setPolygon(draftPoints);
+    setDraftPoints([]);
+    setTool("pan");
+  }, [draftPoints]);
+
+  const clearArea = () => {
+    setPolygon(null);
+    setDraftPoints([]);
+    setManualCircle(null);
+    if (parsedSearch.place) {
+      setSearchInput("");
+      setDebouncedQuery("");
+    }
+  };
+
   const naverError = dismissedNaver
     ? undefined
-    : data.errors.find((error) => error.source === "naver");
+    : visible.errors.find((error) => error.source === "naver");
 
   const statusLabel = waitingForFirst
     ? "Loading…"
-    : `Zigbang ${data.stats.zigbang.toLocaleString("en-US")} · Naver ${data.stats.naver.toLocaleString("en-US")}`;
+    : `Zigbang ${visible.stats.zigbang.toLocaleString("en-US")} · Naver ${visible.stats.naver.toLocaleString("en-US")}`;
+
+  const areaHint = parsedSearch.place
+    ? `${parsedSearch.place.names[1] ?? parsedSearch.place.names[0]} · ${formatRadius(radiusM)}`
+    : circle
+      ? `Within ${formatRadius(radiusM)}`
+      : polygon
+        ? "Inside drawn area"
+        : null;
 
   return (
-    <div className="relative h-[100dvh] w-screen overflow-hidden bg-slate-950 text-slate-100">
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-[1100] p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="pointer-events-auto max-w-xl rounded-2xl border border-white/10 bg-slate-950/92 p-2.5 shadow-xl backdrop-blur">
+    <div className="flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
+      <header className="z-[1100] shrink-0 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-slate-950/92 p-2.5 shadow-xl backdrop-blur">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.18em] text-sky-300">
@@ -262,15 +412,35 @@ export default function MapApp() {
             ))}
           </div>
 
-          <label className="mt-2 block">
+          <label className="relative mt-2 block">
             <span className="sr-only">Search neighborhoods or listings</span>
             <input
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") setDebouncedQuery(searchInput);
+              }}
               placeholder="Search Hongdae, 연남동, studio…"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-sky-400"
+              autoComplete="off"
+              spellCheck={false}
+              className="search-input w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-1.5 pr-16 text-sm text-slate-100 caret-white outline-none focus:border-sky-400"
             />
+            {searchInput ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInput("");
+                  setDebouncedQuery("");
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-0.5 text-xs text-slate-400 hover:bg-white/10 hover:text-white"
+              >
+                Clear
+              </button>
+            ) : null}
           </label>
+          {areaHint ? (
+            <p className="mt-1 text-[11px] text-sky-300">{areaHint}</p>
+          ) : null}
 
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {areaBuckets.map((bucket) => {
@@ -293,20 +463,111 @@ export default function MapApp() {
             })}
           </div>
 
-          <p className="mt-1.5 hidden text-xs text-slate-400 sm:block">
-            Zigbang and Naver listings on one map, with KRW prices and jeonse vs
-            monthly rent explained.
-          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {(["map", "list"] as ViewMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setViewMode(mode)}
+                className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
+                  viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+            {(["pan", "radius", "draw"] as const).map((nextTool) => (
+              <button
+                key={nextTool}
+                type="button"
+                onClick={() => setTool(nextTool)}
+                className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
+                  tool === nextTool ? "bg-sky-400 text-slate-950" : "bg-white/10 text-slate-300"
+                }`}
+              >
+                {nextTool === "pan" ? "Move" : nextTool === "radius" ? "Radius" : "Draw"}
+              </button>
+            ))}
+            {tool === "radius" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPolygon(null);
+                  setDraftPoints([]);
+                  setManualCircle({ ...boundsCenter(bounds), radiusM });
+                }}
+                className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
+              >
+                Use map center
+              </button>
+            ) : null}
+            {draftPoints.length ? (
+              <button
+                type="button"
+                onClick={() => setDraftPoints((current) => current.slice(0, -1))}
+                className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
+              >
+                Undo point
+              </button>
+            ) : null}
+            {draftPoints.length >= 3 ? (
+              <button
+                type="button"
+                onClick={finishDraw}
+                className="rounded-full bg-emerald-400 px-2.5 py-1 text-xs text-slate-950 sm:text-sm"
+              >
+                Finish shape
+              </button>
+            ) : null}
+            {Boolean(circle ?? polygon) || draftPoints.length > 0 ? (
+              <button
+                type="button"
+                onClick={clearArea}
+                className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
+              >
+                Clear area
+              </button>
+            ) : null}
+          </div>
+
+          {tool === "radius" || circle ? (
+            <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-300">
+              Radius
+              <input
+                type="range"
+                min={250}
+                max={3000}
+                step={50}
+                value={radiusM}
+                onChange={(event) => setRadiusM(Number(event.target.value))}
+                className="flex-1"
+              />
+              <span className="w-14 text-right text-white">{formatRadius(radiusM)}</span>
+            </label>
+          ) : null}
+
+          {tool === "draw" ? (
+            <p className="mt-1.5 text-[11px] text-slate-400">
+              Tap the map to add corners, then Finish shape. Double-tap also
+              closes it.
+            </p>
+          ) : null}
+          {tool === "radius" && !circle ? (
+            <p className="mt-1.5 text-[11px] text-slate-400">
+              Tap the map to drop a search radius, or use map center.
+            </p>
+          ) : null}
 
           {zoom < 15 &&
+          !circle &&
+          !polygon &&
           needsListingDetails({
             salesTypes,
             areaBucketIds,
             query: parsedSearch.listingQuery,
           }) ? (
             <p className="mt-1.5 text-[11px] text-slate-400">
-              Zoom in to apply size, jeonse/monthly, and listing search to
-              individual homes.
+              Zoom in to apply size and listing-text filters to individual homes.
             </p>
           ) : null}
 
@@ -325,43 +586,89 @@ export default function MapApp() {
         </div>
       </header>
 
-      <ListingMap
-        clusters={data.clusters}
-        listings={data.listings}
-        selectedId={selected?.id}
-        focus={focus}
-        onViewport={onViewport}
-        onSelectListing={setSelected}
-        onSelectCluster={onSelectCluster}
-      />
+      <div className="relative min-h-0 flex-1">
+        {viewMode === "list" ? (
+          <div className="flex h-full min-h-0 flex-col md:flex-row">
+            <div className="hidden min-h-0 md:block md:w-[46%]">
+              <ListingMap
+                clusters={visible.clusters}
+                listings={visible.listings}
+                selectedId={selected?.id}
+                focus={focus}
+                circle={circle}
+                polygon={polygon}
+                draftPoints={draftPoints}
+                tool={tool}
+                onViewport={onViewport}
+                onSelectListing={setSelected}
+                onSelectCluster={onSelectCluster}
+                onMapClick={onMapClick}
+                onFinishDraw={finishDraw}
+              />
+            </div>
+            <div className="min-h-0 flex-1">
+              <ListingList
+                listings={visible.listings}
+                selectedId={selected?.id}
+                loading={waitingForFirst || refreshing}
+                onSelect={setSelected}
+              />
+            </div>
+          </div>
+        ) : (
+          <ListingMap
+            clusters={visible.clusters}
+            listings={visible.listings}
+            selectedId={selected?.id}
+            focus={focus}
+            circle={circle}
+            polygon={polygon}
+            draftPoints={draftPoints}
+            tool={tool}
+            onViewport={onViewport}
+            onSelectListing={setSelected}
+            onSelectCluster={onSelectCluster}
+            onMapClick={onMapClick}
+            onFinishDraw={finishDraw}
+          />
+        )}
 
-      {selected ? (
-        <ListingPanel listing={selected} onClose={() => setSelected(null)} />
-      ) : data.listings.length ? (
-        <div className="pointer-events-auto absolute bottom-4 left-4 right-16 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:right-20">
-          {data.listings.slice(0, 24).map((listing) => {
-            const price = formatPrice(listing);
-            return (
-              <button
-                key={listing.id}
-                type="button"
-                onClick={() => setSelected(listing)}
-                className="min-w-[9.5rem] shrink-0 rounded-2xl border border-white/10 bg-slate-950/92 px-3 py-2 text-left shadow-xl backdrop-blur"
-              >
-                <p className="text-[10px] uppercase tracking-wide text-slate-400">
-                  {propertyTypeLabel[listing.propertyType]}
-                  {listing.salesType
-                    ? ` · ${salesTypeFilterLabel[listing.salesType]}`
-                    : ""}
-                </p>
-                <p className="mt-1 truncate text-sm font-medium">
-                  {price ?? listing.title ?? "Open listing"}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+        {selected ? (
+          <ListingPanel listing={selected} onClose={() => setSelected(null)} />
+        ) : viewMode === "map" && visible.listings.length ? (
+          <div className="pointer-events-auto absolute bottom-4 left-4 right-16 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:right-20">
+            {visible.listings.slice(0, 24).map((listing) => {
+              const price = formatPrice(listing);
+              return (
+                <button
+                  key={listing.id}
+                  type="button"
+                  onClick={() => setSelected(listing)}
+                  className="min-w-[9.5rem] shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/92 text-left shadow-xl backdrop-blur"
+                >
+                  <ListingPhoto
+                    url={listing.thumbnail}
+                    alt=""
+                    width={240}
+                    className="h-16 w-full object-cover"
+                  />
+                  <span className="block px-3 py-2">
+                    <span className="block text-[10px] uppercase tracking-wide text-slate-400">
+                      {propertyTypeLabel[listing.propertyType]}
+                      {listing.salesType
+                        ? ` · ${salesTypeFilterLabel[listing.salesType]}`
+                        : ""}
+                    </span>
+                    <span className="mt-1 block truncate text-sm font-medium">
+                      {price ?? listing.title ?? "Open listing"}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -18,6 +18,7 @@ describe("zigbang mappers", () => {
       source: "zigbang",
       sourceId: "47814532",
       propertyType: "oneroom",
+      thumbnail: "https://ic.zigbang.com/ic/items/47814532/1.jpg",
       url: "https://www.zigbang.com/home/oneroom/items/47814532",
     });
   });
