@@ -5,6 +5,10 @@ import { env } from "~/env";
 import { appRouter } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
 
+/** Naver Land only answers from Korean IPs. */
+export const preferredRegion = "icn1";
+export const runtime = "nodejs";
+
 /**
  * This wraps the `createTRPCContext` helper and provides the required context for the tRPC API when
  * handling a HTTP request (e.g. when you make requests from Client Components).

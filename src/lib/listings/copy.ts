@@ -120,7 +120,7 @@ export function formatRoomType(value?: string): string | null {
 
 export function friendlySourceError(source: Source, message: string): string {
   if (source === "naver") {
-    return "Naver only answers from Korean IPs, so this US/EU host cannot reach it. Zigbang and Peterpan still work. Host the app in Korea to enable Naver.";
+    return "Naver only answers from Korean IPs. Zigbang and Peterpan still work. Deploy Vercel functions to Seoul (icn1) to enable Naver.";
   }
   return `${sourceLabel[source]}: ${message}`;
 }

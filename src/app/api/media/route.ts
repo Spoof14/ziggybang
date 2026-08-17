@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+/** Naver listing photos are also geo-blocked outside Korea. */
+export const preferredRegion = "icn1";
+export const runtime = "nodejs";
+
 const ALLOWED_HOSTS = new Set([
   "ic.zigbang.com",
   "landthumb-phinf.pstatic.net",
