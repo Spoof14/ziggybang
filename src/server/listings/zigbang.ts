@@ -129,7 +129,7 @@ function toComplex(item: ZigbangComplex): MapListing | null {
     lat: item.lat,
     lng: item.lng,
     propertyType: "apartment",
-    title: `단지 ${item.areaDanjiId}`,
+    title: `Apartment complex ${item.areaDanjiId}`,
     count: item.itemIds?.length ?? 1,
     url: zigbangListingUrl("apartment", String(item.areaDanjiId)),
   };
@@ -251,7 +251,7 @@ export async function fetchZigbangDetail(
       lat: 0,
       lng: 0,
       propertyType,
-      title: `단지 ${sourceId}`,
+      title: `Apartment complex ${sourceId}`,
       url: zigbangListingUrl("apartment", sourceId),
     };
   }

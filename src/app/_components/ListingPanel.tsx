@@ -2,57 +2,17 @@
 
 import { api } from "~/trpc/react";
 import {
-  type MapListing,
-  type PropertyType,
-  type SalesType,
-  type Source,
-} from "~/lib/listings/types";
-
-const sourceLabel: Record<Source, string> = {
-  zigbang: "직방",
-  naver: "네이버",
-};
-
-const typeLabel: Record<PropertyType, string> = {
-  oneroom: "원룸",
-  villa: "빌라",
-  officetel: "오피스텔",
-  apartment: "아파트",
-};
-
-const salesLabel: Record<SalesType, string> = {
-  jeonse: "전세",
-  wolse: "월세",
-  sale: "매매",
-};
-
-function formatManwon(value?: number) {
-  if (value == null) return null;
-  if (value >= 10000) {
-    const eok = Math.floor(value / 10000);
-    const rest = value % 10000;
-    return rest ? `${eok}억 ${rest.toLocaleString()}만` : `${eok}억`;
-  }
-  return `${value.toLocaleString()}만`;
-}
-
-function priceText(listing: {
-  salesType?: SalesType;
-  deposit?: number;
-  rent?: number;
-  price?: number;
-}) {
-  if (listing.salesType === "sale" && listing.price != null) {
-    return formatManwon(listing.price);
-  }
-  if (listing.salesType === "wolse" && listing.deposit != null) {
-    return `${formatManwon(listing.deposit)} / ${formatManwon(listing.rent ?? 0)}`;
-  }
-  if (listing.deposit != null) {
-    return formatManwon(listing.deposit);
-  }
-  return null;
-}
+  formatArea,
+  formatFloor,
+  formatKrwFromManwon,
+  formatPrice,
+  formatRoomType,
+  propertyTypeLabel,
+  salesTypeHint,
+  salesTypeLabel,
+  sourceLabel,
+} from "~/lib/listings/copy";
+import { type MapListing } from "~/lib/listings/types";
 
 export function ListingPanel({
   listing,
@@ -71,26 +31,36 @@ export function ListingPanel({
   );
 
   const detail = detailQuery.data ?? listing;
-  const price = priceText(detail);
+  const price = formatPrice(detail);
+  const area = formatArea(detail.areaM2);
+  const floor = formatFloor(detail.floor);
+  const roomType = formatRoomType(detail.roomType);
+  const manageCost = formatKrwFromManwon(detail.manageCost);
 
   return (
     <aside className="pointer-events-auto absolute bottom-4 left-4 right-4 z-[500] max-h-[45vh] overflow-auto rounded-2xl border border-white/10 bg-slate-950/95 p-4 text-slate-100 shadow-2xl backdrop-blur md:bottom-6 md:left-auto md:right-6 md:w-[360px]">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-400">
-            {sourceLabel[listing.source]} · {typeLabel[listing.propertyType]}
-            {detail.salesType ? ` · ${salesLabel[detail.salesType]}` : ""}
+            {sourceLabel[listing.source]} · {propertyTypeLabel[listing.propertyType]}
+            {detail.salesType ? ` · ${salesTypeLabel[detail.salesType]}` : ""}
           </p>
           <h2 className="mt-1 text-lg font-semibold leading-snug">
-            {detail.title ?? `${typeLabel[listing.propertyType]} ${listing.sourceId}`}
+            {detail.title ??
+              `${propertyTypeLabel[listing.propertyType]} ${listing.sourceId}`}
           </h2>
+          {detail.salesType ? (
+            <p className="mt-1 text-xs text-slate-400">
+              {salesTypeHint[detail.salesType]}
+            </p>
+          ) : null}
         </div>
         <button
           type="button"
           onClick={onClose}
           className="rounded-full bg-white/10 px-2 py-1 text-sm text-slate-300 hover:bg-white/20"
         >
-          닫기
+          Close
         </button>
       </div>
 
@@ -104,39 +74,51 @@ export function ListingPanel({
 
       <dl className="grid grid-cols-2 gap-2 text-sm">
         {price ? (
-          <div>
-            <dt className="text-slate-400">가격</dt>
+          <div className="col-span-2">
+            <dt className="text-slate-400">Price</dt>
             <dd className="font-medium">{price}</dd>
           </div>
         ) : null}
-        {detail.areaM2 ? (
+        {area ? (
           <div>
-            <dt className="text-slate-400">면적</dt>
-            <dd>{detail.areaM2}㎡</dd>
+            <dt className="text-slate-400">Size</dt>
+            <dd>{area}</dd>
           </div>
         ) : null}
-        {detail.floor ? (
+        {floor ? (
           <div>
-            <dt className="text-slate-400">층</dt>
-            <dd>{detail.floor}</dd>
+            <dt className="text-slate-400">Floor</dt>
+            <dd>{floor}</dd>
+          </div>
+        ) : null}
+        {roomType ? (
+          <div>
+            <dt className="text-slate-400">Layout</dt>
+            <dd>{roomType}</dd>
+          </div>
+        ) : null}
+        {manageCost ? (
+          <div>
+            <dt className="text-slate-400">Maintenance</dt>
+            <dd>{manageCost} / month</dd>
           </div>
         ) : null}
         {detail.address ? (
           <div className="col-span-2">
-            <dt className="text-slate-400">주소</dt>
+            <dt className="text-slate-400">Address</dt>
             <dd>{detail.address}</dd>
           </div>
         ) : null}
         {listing.count && listing.count > 1 ? (
           <div>
-            <dt className="text-slate-400">매물 수</dt>
-            <dd>{listing.count}</dd>
+            <dt className="text-slate-400">Listings here</dt>
+            <dd>{listing.count.toLocaleString("en-US")}</dd>
           </div>
         ) : null}
       </dl>
 
       {detailQuery.isLoading ? (
-        <p className="mt-3 text-sm text-slate-400">상세 정보를 불러오는 중…</p>
+        <p className="mt-3 text-sm text-slate-400">Loading listing details…</p>
       ) : null}
 
       <a
@@ -145,7 +127,7 @@ export function ListingPanel({
         rel="noreferrer"
         className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
       >
-        원문 보기
+        Open original listing
       </a>
     </aside>
   );

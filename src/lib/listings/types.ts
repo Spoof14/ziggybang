@@ -44,6 +44,10 @@ export type MapListing = {
   thumbnail?: string;
   url: string;
   count?: number;
+  description?: string;
+  manageCost?: number;
+  roomType?: string;
+  updatedAt?: string;
 };
 
 export type MapCluster = {
@@ -72,9 +76,4 @@ export type MapData = {
   errors: SourceError[];
 };
 
-export type ListingDetail = MapListing & {
-  description?: string;
-  manageCost?: number;
-  roomType?: string;
-  updatedAt?: string;
-};
+export type ListingDetail = MapListing;

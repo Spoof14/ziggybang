@@ -5,6 +5,11 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { api } from "~/trpc/react";
 import { overlapRatio } from "~/lib/geo/bounds";
 import {
+  friendlySourceError,
+  propertyTypeLabel,
+  sourceLabel,
+} from "~/lib/listings/copy";
+import {
   type Bounds,
   type MapCluster,
   type MapListing,
@@ -16,13 +21,6 @@ import { ListingPanel } from "./ListingPanel";
 
 const ALL_SOURCES: Source[] = ["zigbang", "naver"];
 const ALL_TYPES: PropertyType[] = ["oneroom", "villa", "officetel", "apartment"];
-
-const typeLabel: Record<PropertyType, string> = {
-  oneroom: "원룸",
-  villa: "빌라",
-  officetel: "오피스텔",
-  apartment: "아파트",
-};
 
 function toggleValue<T>(values: T[], value: T): T[] {
   return values.includes(value)
@@ -96,13 +94,14 @@ export default function MapApp() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
       <header className="pointer-events-none absolute left-0 right-0 top-0 z-[500] flex flex-col gap-3 p-4 md:flex-row md:items-start md:justify-between">
-        <div className="pointer-events-auto rounded-2xl border border-white/10 bg-slate-950/90 px-4 py-3 shadow-xl backdrop-blur">
+        <div className="pointer-events-auto max-w-md rounded-2xl border border-white/10 bg-slate-950/90 px-4 py-3 shadow-xl backdrop-blur">
           <p className="text-xs uppercase tracking-[0.2em] text-sky-300">
             Ziggybang
           </p>
-          <h1 className="text-xl font-semibold">직방 · 네이버 지도 모아보기</h1>
+          <h1 className="text-xl font-semibold">Korea rentals, in English</h1>
           <p className="mt-1 text-sm text-slate-400">
-            현재 화면만 불러오고, 멀리서는 묶어서 보여줍니다.
+            Zigbang and Naver listings on one map, with KRW prices and jeonse
+            vs monthly rent explained.
           </p>
         </div>
 
@@ -125,7 +124,7 @@ export default function MapApp() {
                   : "bg-white/10 text-slate-300"
               }`}
             >
-              {source === "naver" ? "네이버" : "직방"}
+              {sourceLabel[source]}
             </button>
           ))}
           <span className="mx-1 h-6 w-px bg-white/10" />
@@ -145,7 +144,7 @@ export default function MapApp() {
                   : "bg-white/10 text-slate-300"
               }`}
             >
-              {typeLabel[type]}
+              {propertyTypeLabel[type]}
             </button>
           ))}
         </div>
@@ -161,20 +160,20 @@ export default function MapApp() {
         onSelectCluster={onSelectCluster}
       />
 
-      <div className="pointer-events-none absolute left-4 top-36 z-[500] rounded-xl border border-white/10 bg-slate-950/85 px-3 py-2 text-sm text-slate-300 shadow-lg backdrop-blur md:top-28">
-        {mapQuery.isFetching ? "지도 영역을 불러오는 중…" : null}
+      <div className="pointer-events-none absolute left-4 top-40 z-[500] max-w-sm rounded-xl border border-white/10 bg-slate-950/85 px-3 py-2 text-sm text-slate-300 shadow-lg backdrop-blur md:top-28">
+        {mapQuery.isFetching ? "Loading this map area…" : null}
         {!mapQuery.isFetching && data ? (
           <span>
-            직방 {data.stats.zigbang.toLocaleString()} · 네이버{" "}
-            {data.stats.naver.toLocaleString()} ·{" "}
-            {data.mode === "clusters" ? "묶음" : "매물"}{" "}
-            {data.stats.returned.toLocaleString()}
-            {data.stats.truncated ? " (일부)" : ""}
+            Zigbang {data.stats.zigbang.toLocaleString("en-US")} · Naver{" "}
+            {data.stats.naver.toLocaleString("en-US")} ·{" "}
+            {data.mode === "clusters" ? "groups" : "listings"}{" "}
+            {data.stats.returned.toLocaleString("en-US")}
+            {data.stats.truncated ? " (capped)" : ""}
           </span>
         ) : null}
         {errors.map((error) => (
           <p key={error.source} className="mt-1 text-amber-300">
-            {error.source === "naver" ? "네이버" : "직방"}: {error.message}
+            {friendlySourceError(error.source, error.message)}
           </p>
         ))}
       </div>

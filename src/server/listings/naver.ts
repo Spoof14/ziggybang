@@ -284,7 +284,7 @@ export async function fetchNaverDetail(sourceId: string): Promise<MapListing> {
     lat: 0,
     lng: 0,
     propertyType: "apartment",
-    title: `네이버 매물 ${sourceId}`,
+    title: `Naver listing ${sourceId}`,
     url: naverListingUrl(sourceId),
   };
 }
