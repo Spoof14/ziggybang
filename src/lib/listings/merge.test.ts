@@ -14,7 +14,7 @@ const zigbang: MapData = {
     },
   ],
   listings: [],
-  stats: { zigbang: 17, naver: 0, returned: 1, truncated: false },
+  stats: { zigbang: 17, naver: 0, peterpan: 0, returned: 1, truncated: false },
   errors: [],
 };
 
@@ -22,7 +22,7 @@ const naverError: MapData = {
   mode: "clusters",
   clusters: [],
   listings: [],
-  stats: { zigbang: 0, naver: 0, returned: 0, truncated: false },
+  stats: { zigbang: 0, naver: 0, peterpan: 0, returned: 0, truncated: false },
   errors: [{ source: "naver", message: "Naver timed out" }],
 };
 
@@ -55,7 +55,7 @@ describe("mergeMapData", () => {
           url: "https://example.com",
         },
       ],
-      stats: { zigbang: 0, naver: 1, returned: 1, truncated: false },
+      stats: { zigbang: 0, naver: 1, peterpan: 0, returned: 1, truncated: false },
       errors: [],
     };
     const merged = mergeMapData([zigbang, naverMarkers]);

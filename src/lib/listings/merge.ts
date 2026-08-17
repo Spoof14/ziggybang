@@ -7,6 +7,7 @@ export function mergeMapData(parts: Array<MapData | undefined>): MapData {
   const errors = present.flatMap((part) => part.errors);
   const zigbang = present.reduce((sum, part) => sum + part.stats.zigbang, 0);
   const naver = present.reduce((sum, part) => sum + part.stats.naver, 0);
+  const peterpan = present.reduce((sum, part) => sum + part.stats.peterpan, 0);
   const truncated = present.some((part) => part.stats.truncated);
   const hasMarkers = present.some((part) => part.mode === "markers");
 
@@ -18,6 +19,7 @@ export function mergeMapData(parts: Array<MapData | undefined>): MapData {
       stats: {
         zigbang,
         naver,
+        peterpan,
         returned: listings.length || clusters.length,
         truncated,
       },
@@ -32,6 +34,7 @@ export function mergeMapData(parts: Array<MapData | undefined>): MapData {
     stats: {
       zigbang,
       naver,
+      peterpan,
       returned: clusters.length,
       truncated,
     },

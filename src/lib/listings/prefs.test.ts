@@ -33,6 +33,7 @@ describe("saved map prefs", () => {
       circle: { lat: 37.556, lng: 126.923, radiusM: 800 },
       polygon: null,
       view: { lat: 37.556, lng: 126.923, zoom: 15 },
+      uiCompact: true,
     });
 
     expect(loadPrefs()).toMatchObject({
@@ -42,6 +43,7 @@ describe("saved map prefs", () => {
       radiusM: 800,
       circle: { lat: 37.556, lng: 126.923, radiusM: 800 },
       view: { lat: 37.556, lng: 126.923, zoom: 15 },
+      uiCompact: true,
     });
   });
 

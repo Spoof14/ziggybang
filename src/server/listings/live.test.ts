@@ -105,4 +105,48 @@ describe("live aggregator", () => {
     },
     30000,
   );
+
+  it(
+    "keeps Dangsan radius results near Dangsan",
+    async () => {
+      const data = await getMapData({
+        bounds: gangnam,
+        zoom: 15,
+        sources: ["zigbang"],
+        propertyTypes: ["oneroom", "officetel", "villa"],
+        circle: { lat: 37.5346, lng: 126.9025, radiusM: 1200 },
+        includeListings: true,
+      });
+
+      expect(data.errors).toEqual([]);
+      expect(data.listings.length).toBeGreaterThan(0);
+      expect(
+        data.listings.every(
+          (item) =>
+            Math.abs(item.lat - 37.5346) < 0.02 &&
+            Math.abs(item.lng - 126.9025) < 0.02,
+        ),
+      ).toBe(true);
+    },
+    30000,
+  );
+
+  it(
+    "loads Peterpan listings for a Gangnam viewport",
+    async () => {
+      const data = await getMapData({
+        bounds: gangnam,
+        zoom: 16,
+        sources: ["peterpan"],
+        propertyTypes: ["villa", "oneroom", "officetel"],
+        includeListings: true,
+      });
+
+      expect(data.errors).toEqual([]);
+      expect(data.stats.peterpan).toBeGreaterThan(0);
+      expect(data.listings[0]?.source).toBe("peterpan");
+      expect(data.listings[0]?.thumbnail).toBeTruthy();
+    },
+    30000,
+  );
 });

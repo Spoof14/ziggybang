@@ -22,6 +22,7 @@ export type SavedPrefs = {
   circle: CircleFilter | null;
   polygon: LatLng[] | null;
   view: { lat: number; lng: number; zoom: number } | null;
+  uiCompact: boolean;
 };
 
 const KEY = "ziggybang:prefs:v1";
@@ -99,8 +100,15 @@ export function loadPrefs(): SavedPrefs | null {
     const nextTypes = pickKnown(parsed.propertyTypes, propertyTypes);
     const nextSales = pickKnown(parsed.salesTypes, salesTypes);
     const nextAreas = pickKnown(parsed.areaBucketIds, AREA_IDS);
+    const restoredSources =
+      nextSources.includes("zigbang") &&
+      nextSources.includes("naver") &&
+      !nextSources.includes("peterpan") &&
+      nextSources.length === 2
+        ? [...nextSources, "peterpan" as const]
+        : nextSources;
     return {
-      sources: nextSources.length ? nextSources : [...sources],
+      sources: restoredSources.length ? restoredSources : [...sources],
       propertyTypes: nextTypes.length ? nextTypes : [...propertyTypes],
       salesTypes: nextSales.length ? nextSales : [...salesTypes],
       areaBucketIds: nextAreas,
@@ -116,6 +124,7 @@ export function loadPrefs(): SavedPrefs | null {
       circle: asCircle(parsed.circle),
       polygon: asPolygon(parsed.polygon),
       view: asView(parsed.view),
+      uiCompact: parsed.uiCompact === true,
     };
   } catch {
     return null;

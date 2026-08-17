@@ -217,15 +217,50 @@ export function matchPlace(query: string): Place | undefined {
   return best?.place;
 }
 
+const FILTER_TOKENS = new Set(
+  [
+    ...Object.keys(SYNONYMS),
+    ...Object.values(SYNONYMS).flat(),
+    "oneroom",
+    "one-room",
+    "studio",
+    "villa",
+    "officetel",
+    "apartment",
+    "jeonse",
+    "wolse",
+    "monthly",
+    "sale",
+  ].map(normalizeSearch),
+);
+
+export function looksLikePlaceQuery(query: string): boolean {
+  const tokens = normalizeSearch(query).split(" ").filter(Boolean);
+  if (!tokens.length) return false;
+  return tokens.some((token) => token.length >= 2 && !FILTER_TOKENS.has(token));
+}
+
+export function placeSearchToken(query: string): string | undefined {
+  const tokens = query.trim().split(/\s+/).filter(Boolean);
+  return tokens.find((token) => looksLikePlaceQuery(token));
+}
+
+export function stripPlaceFromQuery(query: string, place: Place): string {
+  let rest = query;
+  for (const name of [...place.names].sort((a, b) => b.length - a.length)) {
+    rest = rest.replace(
+      new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"),
+      " ",
+    );
+  }
+  return rest.replace(/\s+/g, " ").trim();
+}
+
 export function parseSearchQuery(query: string): {
   place?: Place;
   listingQuery: string;
 } {
   const place = matchPlace(query);
   if (!place) return { listingQuery: query.trim() };
-  let rest = query;
-  for (const name of [...place.names].sort((a, b) => b.length - a.length)) {
-    rest = rest.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), " ");
-  }
-  return { place, listingQuery: rest.replace(/\s+/g, " ").trim() };
+  return { place, listingQuery: stripPlaceFromQuery(query, place) };
 }

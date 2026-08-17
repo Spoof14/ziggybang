@@ -19,11 +19,19 @@ import { type MapCluster, type MapListing } from "~/lib/listings/types";
 
 const SEOUL: [number, number] = [37.5665, 126.978];
 
-function sourceColor(sources: Partial<Record<"zigbang" | "naver", number>>) {
-  const hasZigbang = (sources.zigbang ?? 0) > 0;
-  const hasNaver = (sources.naver ?? 0) > 0;
-  if (hasZigbang && hasNaver) return "#6366f1";
-  if (hasNaver) return "#03c75a";
+function sourceColor(sources: Partial<Record<"zigbang" | "naver" | "peterpan", number>>) {
+  const active = (["zigbang", "naver", "peterpan"] as const).filter(
+    (source) => (sources[source] ?? 0) > 0,
+  );
+  if (active.length > 1) return "#6366f1";
+  if (active[0] === "naver") return "#03c75a";
+  if (active[0] === "peterpan") return "#f59e0b";
+  return "#ff6b2c";
+}
+
+function listingColor(source: MapListing["source"]) {
+  if (source === "naver") return "#03c75a";
+  if (source === "peterpan") return "#f59e0b";
   return "#ff6b2c";
 }
 
@@ -185,7 +193,7 @@ function MarkerLayer({
           pathOptions={{
             color: "#0f172a",
             weight: selectedId === listing.id ? 2 : 1,
-            fillColor: listing.source === "naver" ? "#03c75a" : "#ff6b2c",
+            fillColor: listingColor(listing.source),
             fillOpacity: 0.92,
           }}
           eventHandlers={{

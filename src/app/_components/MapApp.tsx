@@ -24,7 +24,12 @@ import {
 import { needsListingDetails } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
 import { loadPrefs, savePrefs, type ViewMode } from "~/lib/listings/prefs";
-import { parseSearchQuery } from "~/lib/listings/search";
+import {
+  looksLikePlaceQuery,
+  parseSearchQuery,
+  placeSearchToken,
+  stripPlaceFromQuery,
+} from "~/lib/listings/search";
 import {
   type Bounds,
   type MapCluster,
@@ -38,7 +43,7 @@ import { ListingMap } from "./ListingMap";
 import { ListingPanel } from "./ListingPanel";
 import { ListingPhoto } from "./ListingPhoto";
 
-const ALL_SOURCES: Source[] = ["zigbang", "naver"];
+const ALL_SOURCES: Source[] = ["zigbang", "naver", "peterpan"];
 const ALL_TYPES: PropertyType[] = ["oneroom", "villa", "officetel", "apartment"];
 const ALL_SALES: SalesType[] = ["jeonse", "wolse", "sale"];
 const DEFAULT_RADIUS_M = 1200;
@@ -98,6 +103,7 @@ export default function MapApp() {
     token: number;
   } | null>(null);
   const [dismissedNaver, setDismissedNaver] = useState(false);
+  const [uiCompact, setUiCompact] = useState(false);
   const lastViewportKey = useRef<string | null>(null);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPlaceId = useRef<string | null>(null);
@@ -107,17 +113,35 @@ export default function MapApp() {
     () => parseSearchQuery(debouncedQuery),
     [debouncedQuery],
   );
+  const geoToken =
+    !parsedSearch.place && looksLikePlaceQuery(debouncedQuery)
+      ? (placeSearchToken(debouncedQuery) ?? debouncedQuery)
+      : undefined;
+  const geocodeQuery = api.listings.geocode.useQuery(
+    { query: geoToken ?? "" },
+    {
+      enabled: Boolean(geoToken),
+      staleTime: 60 * 60 * 1000,
+      retry: false,
+    },
+  );
+  const place = parsedSearch.place ?? geocodeQuery.data ?? undefined;
+  const listingQuery = place
+    ? stripPlaceFromQuery(debouncedQuery, place)
+    : looksLikePlaceQuery(debouncedQuery)
+      ? ""
+      : parsedSearch.listingQuery;
 
   const circle = useMemo<CircleFilter | null>(() => {
     if (polygon) return null;
     if (manualCircle) return { ...manualCircle, radiusM };
-    if (!parsedSearch.place) return null;
+    if (!place) return null;
     return {
-      lat: parsedSearch.place.lat,
-      lng: parsedSearch.place.lng,
+      lat: place.lat,
+      lng: place.lng,
       radiusM,
     };
-  }, [manualCircle, parsedSearch.place, polygon, radiusM]);
+  }, [manualCircle, place, polygon, radiusM]);
 
   useEffect(() => {
     const saved = loadPrefs();
@@ -132,6 +156,7 @@ export default function MapApp() {
       setRadiusM(saved.radiusM);
       setManualCircle(saved.circle);
       setPolygon(saved.polygon);
+      setUiCompact(saved.uiCompact);
       if (saved.view && !parseSearchQuery(saved.searchInput).place) {
         setZoom(Math.round(saved.view.zoom));
         setFocus({
@@ -162,6 +187,7 @@ export default function MapApp() {
         lng: (bounds.west + bounds.east) / 2,
         zoom,
       },
+      uiCompact,
     });
   }, [
     areaBucketIds,
@@ -174,6 +200,7 @@ export default function MapApp() {
     salesTypes,
     searchInput,
     sources,
+    uiCompact,
     viewMode,
     zoom,
   ]);
@@ -184,7 +211,6 @@ export default function MapApp() {
   }, [searchInput]);
 
   useEffect(() => {
-    const place = parsedSearch.place;
     if (!place) {
       lastPlaceId.current = null;
       return;
@@ -200,7 +226,7 @@ export default function MapApp() {
       zoom: Math.max(place.zoom, 15),
       token: Date.now(),
     });
-  }, [parsedSearch.place]);
+  }, [place]);
 
   const sharedInput = useMemo(
     () => ({
@@ -208,7 +234,7 @@ export default function MapApp() {
       zoom,
       propertyTypes: propertyTypes.length ? propertyTypes : ALL_TYPES,
       salesTypes: salesTypes.length ? salesTypes : ALL_SALES,
-      query: parsedSearch.listingQuery || undefined,
+      query: listingQuery || undefined,
       areaBucketIds: isAllAreaBuckets(areaBucketIds) ? undefined : areaBucketIds,
       circle: circle ?? undefined,
       polygon: polygon && polygon.length >= 3 ? polygon : undefined,
@@ -218,7 +244,7 @@ export default function MapApp() {
       areaBucketIds,
       bounds,
       circle,
-      parsedSearch.listingQuery,
+      listingQuery,
       polygon,
       propertyTypes,
       salesTypes,
@@ -245,13 +271,24 @@ export default function MapApp() {
     },
   );
 
+  const peterpanQuery = api.listings.getMap.useQuery(
+    { ...sharedInput, sources: ["peterpan"] },
+    {
+      enabled: sources.includes("peterpan"),
+      placeholderData: (previous) => previous,
+      refetchOnWindowFocus: false,
+      retry: false,
+    },
+  );
+
   const data = useMemo(
     () =>
       mergeMapData([
         sources.includes("zigbang") ? zigbangQuery.data : undefined,
         sources.includes("naver") ? naverQuery.data : undefined,
+        sources.includes("peterpan") ? peterpanQuery.data : undefined,
       ]),
-    [naverQuery.data, sources, zigbangQuery.data],
+    [naverQuery.data, peterpanQuery.data, sources, zigbangQuery.data],
   );
 
   const visible = useMemo(() => {
@@ -269,6 +306,7 @@ export default function MapApp() {
 
   const waitingForFirst =
     (sources.includes("zigbang") && zigbangQuery.isLoading) ||
+    (sources.includes("peterpan") && peterpanQuery.isLoading && !zigbangQuery.data) ||
     (sources.includes("naver") && naverQuery.isLoading && !zigbangQuery.data);
   const refreshing = zigbangQuery.isFetching && !zigbangQuery.isLoading;
 
@@ -320,7 +358,7 @@ export default function MapApp() {
     setPolygon(null);
     setDraftPoints([]);
     setManualCircle(null);
-    if (parsedSearch.place) {
+    if (place) {
       setSearchInput("");
       setDebouncedQuery("");
     }
@@ -332,15 +370,19 @@ export default function MapApp() {
 
   const statusLabel = waitingForFirst
     ? "Loading…"
-    : `Zigbang ${visible.stats.zigbang.toLocaleString("en-US")} · Naver ${visible.stats.naver.toLocaleString("en-US")}`;
+    : `Zigbang ${visible.stats.zigbang.toLocaleString("en-US")} · Naver ${visible.stats.naver.toLocaleString("en-US")} · Peterpan ${visible.stats.peterpan.toLocaleString("en-US")}`;
 
-  const areaHint = parsedSearch.place
-    ? `${parsedSearch.place.names[1] ?? parsedSearch.place.names[0]} · ${formatRadius(radiusM)}`
+  const areaHint = place
+    ? `${place.names[1] ?? place.names[0]} · ${formatRadius(radiusM)}`
     : circle
       ? `Within ${formatRadius(radiusM)}`
       : polygon
         ? "Inside drawn area"
-        : null;
+        : geocodeQuery.isFetching
+          ? `Looking up ${debouncedQuery}…`
+          : geoToken && geocodeQuery.isFetched && !geocodeQuery.data
+            ? `No neighborhood named “${debouncedQuery}”. Try the Korean name, or drop a radius.`
+            : null;
 
   return (
     <div className="flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
@@ -360,11 +402,22 @@ export default function MapApp() {
                 Korea rentals, in English
               </h1>
             </div>
-            <p className="max-w-[46%] shrink-0 pt-0.5 text-right text-[11px] leading-tight text-slate-400">
-              {statusLabel}
-            </p>
+            <div className="flex shrink-0 items-start gap-2">
+              <p className="max-w-[11rem] pt-0.5 text-right text-[11px] leading-tight text-slate-400 sm:max-w-[46%]">
+                {statusLabel}
+              </p>
+              <button
+                type="button"
+                onClick={() => setUiCompact((current) => !current)}
+                className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
+              >
+                {uiCompact ? "Show filters" : "Hide filters"}
+              </button>
+            </div>
           </div>
 
+          {!uiCompact ? (
+          <>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {ALL_SOURCES.map((source) => (
               <button
@@ -380,7 +433,9 @@ export default function MapApp() {
                   sources.includes(source)
                     ? source === "naver"
                       ? "bg-emerald-500 text-slate-950"
-                      : "bg-orange-500 text-slate-950"
+                      : source === "peterpan"
+                        ? "bg-amber-400 text-slate-950"
+                        : "bg-orange-500 text-slate-950"
                     : "bg-white/10 text-slate-300"
                 }`}
               >
@@ -428,6 +483,8 @@ export default function MapApp() {
               </button>
             ))}
           </div>
+          </>
+          ) : null}
 
           <label className="relative mt-2 block">
             <span className="sr-only">Search neighborhoods or listings</span>
@@ -459,6 +516,23 @@ export default function MapApp() {
             <p className="mt-1 text-[11px] text-sky-300">{areaHint}</p>
           ) : null}
 
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {(["map", "list"] as ViewMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setViewMode(mode)}
+                className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
+                  viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+
+          {!uiCompact ? (
+          <>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {areaBuckets.map((bucket) => {
               const active = areaBucketIds.includes(bucket.id);
@@ -481,18 +555,6 @@ export default function MapApp() {
           </div>
 
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {(["map", "list"] as ViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setViewMode(mode)}
-                className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
-                  viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
             {(["pan", "radius", "draw"] as const).map((nextTool) => (
               <button
                 key={nextTool}
@@ -581,11 +643,13 @@ export default function MapApp() {
           needsListingDetails({
             salesTypes,
             areaBucketIds,
-            query: parsedSearch.listingQuery,
+            query: listingQuery,
           }) ? (
             <p className="mt-1.5 text-[11px] text-slate-400">
               Zoom in to apply size and listing-text filters to individual homes.
             </p>
+          ) : null}
+          </>
           ) : null}
 
           {naverError ? (

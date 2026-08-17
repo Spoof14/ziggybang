@@ -4,7 +4,8 @@ const ALLOWED_HOSTS = new Set([
   "ic.zigbang.com",
   "landthumb-phinf.pstatic.net",
   "ssl.pstatic.net",
-  "zigbang.com",
+  "img.peterpanz.com",
+  "peterpanz.com",
 ]);
 
 export async function GET(request: Request) {
@@ -27,7 +28,9 @@ export async function GET(request: Request) {
 
   const referer = host.includes("pstatic") || host.includes("naver")
     ? "https://m.land.naver.com/"
-    : "https://www.zigbang.com/";
+    : host.includes("peterpanz")
+      ? "https://www.peterpanz.com/"
+      : "https://www.zigbang.com/";
 
   const upstream = await fetch(target.toString(), {
     headers: {

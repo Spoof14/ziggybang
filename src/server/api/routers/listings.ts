@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getListingDetail, getMapData } from "~/server/listings/aggregate";
+import { geocodeKorea } from "~/server/listings/geocode";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 
 const boundsSchema = z.object({
@@ -9,7 +10,7 @@ const boundsSchema = z.object({
   east: z.number(),
 });
 
-const sourceSchema = z.enum(["zigbang", "naver"]);
+const sourceSchema = z.enum(["zigbang", "naver", "peterpan"]);
 const propertyTypeSchema = z.enum([
   "oneroom",
   "villa",
@@ -57,4 +58,8 @@ export const listingsRouter = createTRPCRouter({
       }),
     )
     .query(({ input }) => getListingDetail(input)),
+
+  geocode: publicProcedure
+    .input(z.object({ query: z.string().min(1).max(80) }))
+    .query(({ input }) => geocodeKorea(input.query)),
 });

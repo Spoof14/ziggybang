@@ -1,4 +1,4 @@
-export const sources = ["zigbang", "naver"] as const;
+export const sources = ["zigbang", "naver", "peterpan"] as const;
 export type Source = (typeof sources)[number];
 
 export const propertyTypes = [
@@ -80,6 +80,7 @@ export type MapData = {
   stats: {
     zigbang: number;
     naver: number;
+    peterpan: number;
     returned: number;
     truncated: boolean;
   };

@@ -7,6 +7,7 @@ import {
 export const sourceLabel: Record<Source, string> = {
   zigbang: "Zigbang",
   naver: "Naver",
+  peterpan: "Peterpan",
 };
 
 export const propertyTypeLabel: Record<PropertyType, string> = {
@@ -119,7 +120,7 @@ export function formatRoomType(value?: string): string | null {
 
 export function friendlySourceError(source: Source, message: string): string {
   if (source === "naver") {
-    return "Naver listings are unavailable right now.";
+    return "Naver only answers from Korean IPs, so this US/EU host cannot reach it. Zigbang and Peterpan still work. Host the app in Korea to enable Naver.";
   }
   return `${sourceLabel[source]}: ${message}`;
 }

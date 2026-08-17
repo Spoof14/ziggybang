@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { listingMatchesArea } from "./area";
-import { listingMatchesQuery, matchPlace, parseSearchQuery, romanizeHangul } from "./search";
+import { listingMatchesQuery, looksLikePlaceQuery, matchPlace, parseSearchQuery, romanizeHangul } from "./search";
 import { type MapListing } from "./types";
 
 function listing(partial: Partial<MapListing> = {}): MapListing {
@@ -40,6 +40,17 @@ describe("bilingual fuzzy search", () => {
     const parsed = parseSearchQuery("hongdae");
     expect(parsed.place?.id).toBe("hongdae");
     expect(parsed.listingQuery).toBe("");
+  });
+
+  it("does not treat studio or jeonse as a neighborhood name", () => {
+    expect(looksLikePlaceQuery("studio")).toBe(false);
+    expect(looksLikePlaceQuery("dangsan")).toBe(true);
+  });
+
+  it("matches Dangsan in English and Korean", () => {
+    expect(matchPlace("dangsan")?.id).toBe("dangsan");
+    expect(matchPlace("당산")?.id).toBe("dangsan");
+    expect(parseSearchQuery("당산").listingQuery).toBe("");
   });
 });
 

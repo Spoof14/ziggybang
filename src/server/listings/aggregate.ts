@@ -19,19 +19,23 @@ import { filterListings, needsListingDetails } from "~/lib/listings/filter";
 import { parseSearchQuery } from "~/lib/listings/search";
 import { settledError, withTimeout } from "./http";
 import { fetchNaverDetail, fetchNaverListings } from "./naver";
+import { fetchPeterpanDetail, fetchPeterpanListings } from "./peterpan";
 import { fetchZigbangDetail, fetchZigbangListings } from "./zigbang";
 
 const MAX_MARKERS = 400;
 const NAVER_BUDGET_MS = 2500;
+const PETERPAN_BUDGET_MS = 4000;
 
 export type ListingAdapters = {
   zigbang: typeof fetchZigbangListings;
   naver: typeof fetchNaverListings;
+  peterpan?: typeof fetchPeterpanListings;
 };
 
 const defaultAdapters: ListingAdapters = {
   zigbang: fetchZigbangListings,
   naver: fetchNaverListings,
+  peterpan: fetchPeterpanListings,
 };
 
 function dedupeListings(listings: MapListing[]): MapListing[] {
@@ -50,7 +54,7 @@ export async function getMapData(
     throw new Error("Invalid map bounds");
   }
 
-  const sources = query.sources.length > 0 ? query.sources : (["zigbang", "naver"] as Source[]);
+  const sources = query.sources.length > 0 ? query.sources : (["zigbang", "naver", "peterpan"] as Source[]);
   const propertyTypes =
     query.propertyTypes.length > 0
       ? query.propertyTypes
@@ -112,6 +116,22 @@ export async function getMapData(
       ),
     );
   }
+  if (sources.includes("peterpan")) {
+    jobSources.push("peterpan");
+    jobs.push(
+      withTimeout(
+        (adapters.peterpan ?? fetchPeterpanListings)({
+          bounds: fetchBounds,
+          zoom: query.zoom,
+          propertyTypes,
+          salesTypes: selectedSalesTypes,
+          needsDetails: requireDetails || Boolean(query.includeListings),
+        }),
+        PETERPAN_BUDGET_MS,
+        "Peterpan",
+      ),
+    );
+  }
 
   const results = await Promise.allSettled(jobs);
   const listings: MapListing[] = [];
@@ -140,6 +160,7 @@ export async function getMapData(
   }
   const zigbang = unique.filter((item) => item.source === "zigbang").length;
   const naver = unique.filter((item) => item.source === "naver").length;
+  const peterpan = unique.filter((item) => item.source === "peterpan").length;
   const cluster =
     !query.includeListings &&
     shouldCluster(query.zoom, unique.length, MAX_MARKERS);
@@ -153,6 +174,7 @@ export async function getMapData(
       stats: {
         zigbang,
         naver,
+        peterpan,
         returned: clusters.length,
         truncated: false,
       },
@@ -168,6 +190,7 @@ export async function getMapData(
     stats: {
       zigbang,
       naver,
+      peterpan,
       returned: Math.min(unique.length, MAX_MARKERS),
       truncated,
     },
@@ -182,6 +205,9 @@ export async function getListingDetail(input: {
 }): Promise<ListingDetail> {
   if (input.source === "zigbang") {
     return fetchZigbangDetail(input.sourceId, input.propertyType);
+  }
+  if (input.source === "peterpan") {
+    return fetchPeterpanDetail(input.sourceId);
   }
   return fetchNaverDetail(input.sourceId);
 }
