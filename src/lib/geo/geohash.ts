@@ -128,7 +128,7 @@ export function geohashesInBounds(
 }
 
 export function precisionForZoom(zoom: number): number {
-  if (zoom >= 16) return 6;
+  // Zigbang's map APIs return empty results for geohash precision 6+.
   if (zoom >= 13) return 5;
   return 4;
 }

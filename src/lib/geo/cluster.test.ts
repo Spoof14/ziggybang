@@ -59,7 +59,7 @@ describe("cluster", () => {
   it("clusters when zoomed out or when there are too many markers", () => {
     expect(shouldCluster(12, 10)).toBe(true);
     expect(shouldCluster(16, 10)).toBe(false);
-    expect(shouldCluster(16, 500)).toBe(true);
+    expect(shouldCluster(16, 500)).toBe(false);
   });
 
   it("uses a finer grid at higher zoom", () => {

@@ -13,12 +13,12 @@ export function mergeMapData(parts: Array<MapData | undefined>): MapData {
   if (hasMarkers) {
     return {
       mode: "markers",
-      clusters: [],
+      clusters,
       listings,
       stats: {
         zigbang,
         naver,
-        returned: listings.length,
+        returned: listings.length || clusters.length,
         truncated,
       },
       errors,

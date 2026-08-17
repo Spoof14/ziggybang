@@ -114,6 +114,27 @@ describe("getMapData", () => {
     expect(data.errors[0]?.source).toBe("naver");
   }, 5000);
 
+  it("filters to matching sales types once listings have that data", async () => {
+    const data = await getMapData(
+      {
+        bounds: seoulBounds,
+        zoom: 16,
+        sources: ["zigbang"],
+        propertyTypes: ["oneroom"],
+        salesTypes: ["jeonse"],
+      },
+      {
+        zigbang: async () => [
+          { ...listing("z1", "zigbang"), salesType: "jeonse" },
+          { ...listing("z2", "zigbang"), salesType: "wolse" },
+        ],
+        naver: async () => [],
+      },
+    );
+
+    expect(data.listings.map((item) => item.id)).toEqual(["z1"]);
+  });
+
   it("rejects invalid bounds", async () => {
     await expect(
       getMapData({

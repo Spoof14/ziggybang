@@ -39,4 +39,27 @@ describe("mergeMapData", () => {
     expect(merged.clusters).toHaveLength(1);
     expect(merged.errors).toHaveLength(1);
   });
+
+  it("keeps Zigbang clusters when Naver already returned markers", () => {
+    const naverMarkers: MapData = {
+      mode: "markers",
+      clusters: [],
+      listings: [
+        {
+          id: "n1",
+          source: "naver",
+          sourceId: "n1",
+          lat: 37.5,
+          lng: 127,
+          propertyType: "oneroom",
+          url: "https://example.com",
+        },
+      ],
+      stats: { zigbang: 0, naver: 1, returned: 1, truncated: false },
+      errors: [],
+    };
+    const merged = mergeMapData([zigbang, naverMarkers]);
+    expect(merged.clusters).toHaveLength(1);
+    expect(merged.listings).toHaveLength(1);
+  });
 });

@@ -4,8 +4,10 @@ import "leaflet/dist/leaflet.css";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { api } from "~/trpc/react";
 import {
+  formatPrice,
   friendlySourceError,
   propertyTypeLabel,
+  salesTypeFilterLabel,
   sourceLabel,
 } from "~/lib/listings/copy";
 import { mergeMapData } from "~/lib/listings/merge";
@@ -14,6 +16,7 @@ import {
   type MapCluster,
   type MapListing,
   type PropertyType,
+  type SalesType,
   type Source,
 } from "~/lib/listings/types";
 import { ListingMap } from "./ListingMap";
@@ -21,6 +24,7 @@ import { ListingPanel } from "./ListingPanel";
 
 const ALL_SOURCES: Source[] = ["zigbang", "naver"];
 const ALL_TYPES: PropertyType[] = ["oneroom", "villa", "officetel", "apartment"];
+const ALL_SALES: SalesType[] = ["jeonse", "wolse", "sale"];
 
 function roundCoord(value: number) {
   return Math.round(value * 10_000) / 10_000;
@@ -28,7 +32,7 @@ function roundCoord(value: number) {
 
 function viewportKey(next: Bounds & { zoom: number }) {
   return [
-    next.zoom,
+    Math.round(next.zoom),
     roundCoord(next.south),
     roundCoord(next.west),
     roundCoord(next.north),
@@ -52,6 +56,7 @@ export default function MapApp() {
   const [zoom, setZoom] = useState(13);
   const [sources, setSources] = useState<Source[]>(ALL_SOURCES);
   const [propertyTypes, setPropertyTypes] = useState<PropertyType[]>(ALL_TYPES);
+  const [salesTypes, setSalesTypes] = useState<SalesType[]>(ALL_SALES);
   const [selected, setSelected] = useState<MapListing | null>(null);
   const [focus, setFocus] = useState<{
     lat: number;
@@ -67,8 +72,9 @@ export default function MapApp() {
       bounds,
       zoom,
       propertyTypes: propertyTypes.length ? propertyTypes : ALL_TYPES,
+      salesTypes: salesTypes.length ? salesTypes : ALL_SALES,
     }),
-    [bounds, propertyTypes, zoom],
+    [bounds, propertyTypes, salesTypes, zoom],
   );
 
   const zigbangQuery = api.listings.getMap.useQuery(
@@ -117,7 +123,7 @@ export default function MapApp() {
         north: roundCoord(next.north),
         east: roundCoord(next.east),
       });
-      setZoom(next.zoom);
+      setZoom(Math.round(next.zoom));
     }, 280);
   }, []);
 
@@ -199,11 +205,39 @@ export default function MapApp() {
               </button>
             ))}
           </div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {ALL_SALES.map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() =>
+                  setSalesTypes((current) => {
+                    const next = toggleValue(current, type);
+                    return next.length ? next : current;
+                  })
+                }
+                className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+                  salesTypes.includes(type)
+                    ? "bg-sky-400 text-slate-950"
+                    : "bg-white/10 text-slate-300"
+                }`}
+              >
+                {salesTypeFilterLabel[type]}
+              </button>
+            ))}
+          </div>
 
           <p className="mt-1.5 hidden text-xs text-slate-400 sm:block">
             Zigbang and Naver listings on one map, with KRW prices and jeonse vs
             monthly rent explained.
           </p>
+
+          {zoom < 15 && salesTypes.length < ALL_SALES.length ? (
+            <p className="mt-1.5 text-[11px] text-slate-400">
+              Zoom in to apply jeonse / monthly / sale filters to individual
+              listings.
+            </p>
+          ) : null}
 
           {naverError ? (
             <p className="mt-1.5 flex items-start justify-between gap-2 text-[11px] text-amber-300">
@@ -232,6 +266,30 @@ export default function MapApp() {
 
       {selected ? (
         <ListingPanel listing={selected} onClose={() => setSelected(null)} />
+      ) : data.listings.length ? (
+        <div className="pointer-events-auto absolute bottom-4 left-4 right-16 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:right-20">
+          {data.listings.slice(0, 24).map((listing) => {
+            const price = formatPrice(listing);
+            return (
+              <button
+                key={listing.id}
+                type="button"
+                onClick={() => setSelected(listing)}
+                className="min-w-[9.5rem] shrink-0 rounded-2xl border border-white/10 bg-slate-950/92 px-3 py-2 text-left shadow-xl backdrop-blur"
+              >
+                <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                  {propertyTypeLabel[listing.propertyType]}
+                  {listing.salesType
+                    ? ` · ${salesTypeFilterLabel[listing.salesType]}`
+                    : ""}
+                </p>
+                <p className="mt-1 truncate text-sm font-medium">
+                  {price ?? listing.title ?? "Open listing"}
+                </p>
+              </button>
+            );
+          })}
+        </div>
       ) : null}
     </div>
   );

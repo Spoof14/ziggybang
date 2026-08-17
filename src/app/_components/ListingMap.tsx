@@ -192,6 +192,8 @@ export function ListingMap({
     <MapContainer
       center={SEOUL}
       zoom={13}
+      minZoom={7}
+      maxZoom={18}
       className="h-full w-full"
       zoomControl={false}
       preferCanvas

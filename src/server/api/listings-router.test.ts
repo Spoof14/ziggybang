@@ -10,6 +10,7 @@ describe("listings router", () => {
         zoom: 13,
         sources: ["zigbang"],
         propertyTypes: ["oneroom"],
+        salesTypes: ["jeonse"],
       }),
     ).rejects.toThrow(/Invalid map bounds/);
   });

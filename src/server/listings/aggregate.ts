@@ -7,7 +7,9 @@ import {
   type MapQuery,
   type PropertyType,
   type Source,
+  salesTypes as allSalesTypes,
 } from "~/lib/listings/types";
+import { filterBySalesTypes, isAllSalesTypes } from "~/lib/listings/filter";
 import { settledError, withTimeout } from "./http";
 import { fetchNaverDetail, fetchNaverListings } from "./naver";
 import { fetchZigbangDetail, fetchZigbangListings } from "./zigbang";
@@ -46,6 +48,10 @@ export async function getMapData(
     query.propertyTypes.length > 0
       ? query.propertyTypes
       : (["oneroom", "villa", "officetel", "apartment"] as PropertyType[]);
+  const selectedSalesTypes =
+    query.salesTypes && query.salesTypes.length > 0
+      ? query.salesTypes
+      : [...allSalesTypes];
 
   const jobs: Promise<MapListing[]>[] = [];
   const jobSources: Source[] = [];
@@ -57,6 +63,7 @@ export async function getMapData(
         bounds: query.bounds,
         zoom: query.zoom,
         propertyTypes,
+        salesTypes: selectedSalesTypes,
       }),
     );
   }
@@ -68,6 +75,7 @@ export async function getMapData(
           bounds: query.bounds,
           zoom: query.zoom,
           propertyTypes,
+          salesTypes: selectedSalesTypes,
         }),
         NAVER_BUDGET_MS,
         "Naver",
@@ -89,7 +97,11 @@ export async function getMapData(
     }
   });
 
-  const unique = dedupeListings(listings);
+  const unique = filterBySalesTypes(
+    dedupeListings(listings),
+    selectedSalesTypes,
+    query.zoom >= 15 && !isAllSalesTypes(selectedSalesTypes),
+  );
   const zigbang = unique.filter((item) => item.source === "zigbang").length;
   const naver = unique.filter((item) => item.source === "naver").length;
   const cluster = shouldCluster(query.zoom, unique.length, MAX_MARKERS);

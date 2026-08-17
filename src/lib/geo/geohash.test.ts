@@ -44,8 +44,8 @@ describe("geohash", () => {
     expect(tiles.every((tile) => tile.length <= 6)).toBe(true);
   });
 
-  it("picks a coarser geohash when the map is zoomed out", () => {
-    expect(precisionForZoom(17)).toBe(6);
+  it("caps geohash precision at 5 so zoomed-in Zigbang tiles still return listings", () => {
+    expect(precisionForZoom(17)).toBe(5);
     expect(precisionForZoom(13)).toBe(5);
     expect(precisionForZoom(10)).toBe(4);
   });

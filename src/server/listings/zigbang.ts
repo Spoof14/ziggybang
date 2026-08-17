@@ -3,10 +3,12 @@ import {
   geohashesInBounds,
   precisionForZoom,
 } from "~/lib/geo/geohash";
+import { isAllSalesTypes } from "~/lib/listings/filter";
 import {
   type Bounds,
   type MapListing,
   type PropertyType,
+  type SalesType,
 } from "~/lib/listings/types";
 import { cached } from "./cache";
 import { fetchJson } from "./http";
@@ -162,6 +164,7 @@ export async function fetchZigbangListings(input: {
   bounds: Bounds;
   zoom: number;
   propertyTypes: PropertyType[];
+  salesTypes?: SalesType[];
 }): Promise<MapListing[]> {
   const precision = precisionForZoom(input.zoom);
   const tiles = geohashesInBounds(input.bounds, precision, MAX_TILES);
@@ -207,7 +210,50 @@ export async function fetchZigbangListings(input: {
   }
 
   await runPool(jobs, 8);
+  if (input.zoom >= 15 && input.salesTypes && !isAllSalesTypes(input.salesTypes)) {
+    return hydrateZigbangListings(listings);
+  }
   return listings;
+}
+
+const HYDRATE_LIMIT = 80;
+
+export async function hydrateZigbangListings(
+  listings: MapListing[],
+): Promise<MapListing[]> {
+  const targets = listings
+    .map((listing, index) => ({ listing, index }))
+    .filter(
+      ({ listing }) =>
+        listing.source === "zigbang" &&
+        listing.propertyType !== "apartment" &&
+        !listing.salesType,
+    )
+    .slice(0, HYDRATE_LIMIT);
+
+  const next = listings.slice();
+  await runPool(
+    targets.map(({ listing, index }) => async () => {
+      try {
+        const detail = await fetchZigbangDetail(
+          listing.sourceId,
+          listing.propertyType,
+        );
+        next[index] = {
+          ...listing,
+          ...detail,
+          id: listing.id,
+          lat: listing.lat,
+          lng: listing.lng,
+          url: listing.url,
+        };
+      } catch {
+        /* keep the map pin even if details fail */
+      }
+    }),
+    8,
+  );
+  return next;
 }
 
 async function runPool(jobs: Array<() => Promise<void>>, limit: number) {
@@ -256,44 +302,46 @@ export async function fetchZigbangDetail(
     };
   }
 
-  const data = await fetchJson<ZigbangItemDetail>(
-    `${ZIGBANG_ORIGIN}/v3/items/${sourceId}`,
-    { timeoutMs: 8000 },
-  );
-  const item = data.item;
-  if (!item?.itemId) {
-    throw new Error(`Zigbang item ${sourceId} was not found`);
-  }
+  return cached(`zb:detail:${propertyType}:${sourceId}`, TILE_TTL_MS, async () => {
+    const data = await fetchJson<ZigbangItemDetail>(
+      `${ZIGBANG_ORIGIN}/v3/items/${sourceId}`,
+      { timeoutMs: 8000 },
+    );
+    const item = data.item;
+    if (!item?.itemId) {
+      throw new Error(`Zigbang item ${sourceId} was not found`);
+    }
 
-  const area = item.area
-    ? Object.values(item.area).find((value) => typeof value === "number")
-    : undefined;
+    const area = item.area
+      ? Object.values(item.area).find((value) => typeof value === "number")
+      : undefined;
 
-  return {
-    id: `zigbang:${propertyType}:${item.itemId}`,
-    source: "zigbang",
-    sourceId: String(item.itemId),
-    lat: item.location?.lat ?? 0,
-    lng: item.location?.lng ?? 0,
-    propertyType: mapZigbangPropertyType(item.serviceType) || propertyType,
-    salesType: mapZigbangSalesType(item.salesType),
-    title: item.title,
-    deposit: item.price?.deposit,
-    rent: item.price?.rent,
-    price: item.price?.sellPrice,
-    areaM2: area,
-    floor:
-      item.floor?.floor && item.floor.allFloors
-        ? `${item.floor.floor}/${item.floor.allFloors}`
-        : item.floor?.floor,
-    address: item.addressOrigin?.fullText ?? item.jibunAddress,
-    thumbnail: item.imageThumbnail,
-    url: zigbangListingUrl(propertyType, String(item.itemId)),
-    description: item.description,
-    manageCost: item.manageCost?.amount,
-    roomType: item.roomType,
-    updatedAt: item.updatedAt,
-  };
+    return {
+      id: `zigbang:${propertyType}:${item.itemId}`,
+      source: "zigbang",
+      sourceId: String(item.itemId),
+      lat: item.location?.lat ?? 0,
+      lng: item.location?.lng ?? 0,
+      propertyType: mapZigbangPropertyType(item.serviceType) || propertyType,
+      salesType: mapZigbangSalesType(item.salesType),
+      title: item.title,
+      deposit: item.price?.deposit,
+      rent: item.price?.rent,
+      price: item.price?.sellPrice,
+      areaM2: area,
+      floor:
+        item.floor?.floor && item.floor.allFloors
+          ? `${item.floor.floor}/${item.floor.allFloors}`
+          : item.floor?.floor,
+      address: item.addressOrigin?.fullText ?? item.jibunAddress,
+      thumbnail: item.imageThumbnail,
+      url: zigbangListingUrl(propertyType, String(item.itemId)),
+      description: item.description,
+      manageCost: item.manageCost?.amount,
+      roomType: item.roomType,
+      updatedAt: item.updatedAt,
+    };
+  });
 }
 
 export { toMarker as zigbangMarkerToListing, toComplex as zigbangComplexToListing };

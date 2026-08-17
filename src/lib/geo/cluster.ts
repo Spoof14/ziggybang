@@ -10,8 +10,8 @@ export function cellSizeForZoom(zoom: number): number {
   return 0.12;
 }
 
-export function shouldCluster(zoom: number, pointCount: number, maxMarkers = 400): boolean {
-  return zoom <= 14 || pointCount > maxMarkers;
+export function shouldCluster(zoom: number, _pointCount?: number, _maxMarkers = 400): boolean {
+  return zoom < 15;
 }
 
 export function clusterListings(

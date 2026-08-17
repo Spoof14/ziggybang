@@ -25,6 +25,10 @@ export const listingsRouter = createTRPCRouter({
         zoom: z.number().min(1).max(20),
         sources: z.array(sourceSchema).min(1),
         propertyTypes: z.array(propertyTypeSchema).min(1),
+        salesTypes: z
+          .array(z.enum(["jeonse", "wolse", "sale"]))
+          .min(1)
+          .default(["jeonse", "wolse", "sale"]),
       }),
     )
     .query(({ input }) => getMapData(input)),

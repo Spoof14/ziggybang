@@ -165,14 +165,26 @@ export function articleToListing(article: NaverArticle): MapListing | null {
   };
 }
 
+const naverSalesCodes: Record<SalesType, string> = {
+  sale: "A1",
+  jeonse: "B1",
+  wolse: "B2",
+};
+
 function propertyQuery(types: PropertyType[]): string {
   return types.map((type) => naverPropertyCodes[type]).join(":");
+}
+
+function salesQuery(types?: SalesType[]): string {
+  const selected = types?.length ? types : (["sale", "jeonse", "wolse"] as SalesType[]);
+  return selected.map((type) => naverSalesCodes[type]).join(":");
 }
 
 async function fetchClusterList(input: {
   bounds: Bounds;
   zoom: number;
   propertyTypes: PropertyType[];
+  salesTypes?: SalesType[];
 }): Promise<MapListing[]> {
   const center = boundsCenter(input.bounds);
   const z = naverZoom(input.zoom);
@@ -184,13 +196,14 @@ async function fetchClusterList(input: {
     input.bounds.north.toFixed(3),
     input.bounds.east.toFixed(3),
     propertyQuery(input.propertyTypes),
+    salesQuery(input.salesTypes),
   ].join(":");
 
   return cached(key, TILE_TTL_MS, async () => {
     const params = new URLSearchParams({
       view: "atcl",
       rletTpCd: propertyQuery(input.propertyTypes),
-      tradTpCd: "A1:B1:B2",
+      tradTpCd: salesQuery(input.salesTypes),
       z: String(z),
       lat: String(center.lat),
       lon: String(center.lng),
@@ -215,6 +228,7 @@ async function fetchArticleList(input: {
   bounds: Bounds;
   zoom: number;
   propertyTypes: PropertyType[];
+  salesTypes?: SalesType[];
 }): Promise<MapListing[]> {
   const center = boundsCenter(input.bounds);
   const z = naverZoom(input.zoom);
@@ -230,12 +244,13 @@ async function fetchArticleList(input: {
       input.bounds.north.toFixed(3),
       input.bounds.east.toFixed(3),
       propertyQuery(input.propertyTypes),
+      salesQuery(input.salesTypes),
     ].join(":");
 
     const pageItems = await cached(key, TILE_TTL_MS, async () => {
       const params = new URLSearchParams({
         rletTpCd: propertyQuery(input.propertyTypes),
-        tradTpCd: "A1:B1:B2",
+        tradTpCd: salesQuery(input.salesTypes),
         z: String(z),
         lat: String(center.lat),
         lon: String(center.lng),
@@ -265,6 +280,7 @@ export async function fetchNaverListings(input: {
   bounds: Bounds;
   zoom: number;
   propertyTypes: PropertyType[];
+  salesTypes?: SalesType[];
 }): Promise<MapListing[]> {
   const listings =
     input.zoom >= 15

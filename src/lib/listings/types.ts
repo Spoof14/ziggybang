@@ -24,6 +24,7 @@ export type MapQuery = {
   zoom: number;
   sources: Source[];
   propertyTypes: PropertyType[];
+  salesTypes?: SalesType[];
 };
 
 export type MapListing = {

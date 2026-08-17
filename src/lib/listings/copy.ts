@@ -22,6 +22,12 @@ export const salesTypeLabel: Record<SalesType, string> = {
   sale: "For sale",
 };
 
+export const salesTypeFilterLabel: Record<SalesType, string> = {
+  jeonse: "Jeonse",
+  wolse: "Monthly",
+  sale: "Sale",
+};
+
 export const salesTypeHint: Record<SalesType, string> = {
   jeonse: "Large refundable deposit, no monthly rent",
   wolse: "Smaller deposit plus monthly rent",
