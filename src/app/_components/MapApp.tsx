@@ -1,8 +1,13 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "~/trpc/react";
+import {
+  areaBuckets,
+  isAllAreaBuckets,
+  type AreaBucketId,
+} from "~/lib/listings/area";
 import {
   formatPrice,
   friendlySourceError,
@@ -10,7 +15,9 @@ import {
   salesTypeFilterLabel,
   sourceLabel,
 } from "~/lib/listings/copy";
+import { needsListingDetails } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
+import { parseSearchQuery } from "~/lib/listings/search";
 import {
   type Bounds,
   type MapCluster,
@@ -57,15 +64,41 @@ export default function MapApp() {
   const [sources, setSources] = useState<Source[]>(ALL_SOURCES);
   const [propertyTypes, setPropertyTypes] = useState<PropertyType[]>(ALL_TYPES);
   const [salesTypes, setSalesTypes] = useState<SalesType[]>(ALL_SALES);
+  const [areaBucketIds, setAreaBucketIds] = useState<AreaBucketId[]>([]);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selected, setSelected] = useState<MapListing | null>(null);
   const [focus, setFocus] = useState<{
     lat: number;
     lng: number;
+    zoom?: number;
     token: number;
   } | null>(null);
   const [dismissedNaver, setDismissedNaver] = useState(false);
   const lastViewportKey = useRef<string | null>(null);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPlaceId = useRef<string | null>(null);
+
+  const parsedSearch = useMemo(
+    () => parseSearchQuery(debouncedQuery),
+    [debouncedQuery],
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchInput), 320);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    const place = parsedSearch.place;
+    if (!place) {
+      lastPlaceId.current = null;
+      return;
+    }
+    if (lastPlaceId.current === place.id) return;
+    lastPlaceId.current = place.id;
+    setFocus({ lat: place.lat, lng: place.lng, zoom: place.zoom, token: Date.now() });
+  }, [parsedSearch.place]);
 
   const sharedInput = useMemo(
     () => ({
@@ -73,8 +106,10 @@ export default function MapApp() {
       zoom,
       propertyTypes: propertyTypes.length ? propertyTypes : ALL_TYPES,
       salesTypes: salesTypes.length ? salesTypes : ALL_SALES,
+      query: parsedSearch.listingQuery || undefined,
+      areaBucketIds: isAllAreaBuckets(areaBucketIds) ? undefined : areaBucketIds,
     }),
-    [bounds, propertyTypes, salesTypes, zoom],
+    [areaBucketIds, bounds, parsedSearch.listingQuery, propertyTypes, salesTypes, zoom],
   );
 
   const zigbangQuery = api.listings.getMap.useQuery(
@@ -227,15 +262,51 @@ export default function MapApp() {
             ))}
           </div>
 
+          <label className="mt-2 block">
+            <span className="sr-only">Search neighborhoods or listings</span>
+            <input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="Search Hongdae, 연남동, studio…"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-sky-400"
+            />
+          </label>
+
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {areaBuckets.map((bucket) => {
+              const active = areaBucketIds.includes(bucket.id);
+              return (
+                <button
+                  key={bucket.id}
+                  type="button"
+                  title={bucket.hint}
+                  onClick={() =>
+                    setAreaBucketIds((current) => toggleValue(current, bucket.id))
+                  }
+                  className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+                    active ? "bg-violet-400 text-slate-950" : "bg-white/10 text-slate-300"
+                  }`}
+                >
+                  {bucket.label}
+                </button>
+              );
+            })}
+          </div>
+
           <p className="mt-1.5 hidden text-xs text-slate-400 sm:block">
             Zigbang and Naver listings on one map, with KRW prices and jeonse vs
             monthly rent explained.
           </p>
 
-          {zoom < 15 && salesTypes.length < ALL_SALES.length ? (
+          {zoom < 15 &&
+          needsListingDetails({
+            salesTypes,
+            areaBucketIds,
+            query: parsedSearch.listingQuery,
+          }) ? (
             <p className="mt-1.5 text-[11px] text-slate-400">
-              Zoom in to apply jeonse / monthly / sale filters to individual
-              listings.
+              Zoom in to apply size, jeonse/monthly, and listing search to
+              individual homes.
             </p>
           ) : null}
 

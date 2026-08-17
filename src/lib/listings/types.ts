@@ -25,6 +25,8 @@ export type MapQuery = {
   sources: Source[];
   propertyTypes: PropertyType[];
   salesTypes?: SalesType[];
+  query?: string;
+  areaBucketIds?: Array<"xs" | "s" | "m" | "l">;
 };
 
 export type MapListing = {

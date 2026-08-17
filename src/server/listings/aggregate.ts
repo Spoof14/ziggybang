@@ -9,7 +9,9 @@ import {
   type Source,
   salesTypes as allSalesTypes,
 } from "~/lib/listings/types";
-import { filterBySalesTypes, isAllSalesTypes } from "~/lib/listings/filter";
+import { filterListings, needsListingDetails } from "~/lib/listings/filter";
+import { parseSearchQuery } from "~/lib/listings/search";
+import { type AreaBucketId } from "~/lib/listings/area";
 import { settledError, withTimeout } from "./http";
 import { fetchNaverDetail, fetchNaverListings } from "./naver";
 import { fetchZigbangDetail, fetchZigbangListings } from "./zigbang";
@@ -52,6 +54,14 @@ export async function getMapData(
     query.salesTypes && query.salesTypes.length > 0
       ? query.salesTypes
       : [...allSalesTypes];
+  const areaBucketIds = (query.areaBucketIds ?? []) as AreaBucketId[];
+  const { listingQuery } = parseSearchQuery(query.query ?? "");
+  const detailFilters = {
+    salesTypes: selectedSalesTypes,
+    areaBucketIds,
+    query: listingQuery,
+  };
+  const requireDetails = query.zoom >= 15 && needsListingDetails(detailFilters);
 
   const jobs: Promise<MapListing[]>[] = [];
   const jobSources: Source[] = [];
@@ -64,6 +74,9 @@ export async function getMapData(
         zoom: query.zoom,
         propertyTypes,
         salesTypes: selectedSalesTypes,
+        query: listingQuery,
+        areaBucketIds,
+        needsDetails: requireDetails,
       }),
     );
   }
@@ -97,11 +110,10 @@ export async function getMapData(
     }
   });
 
-  const unique = filterBySalesTypes(
-    dedupeListings(listings),
-    selectedSalesTypes,
-    query.zoom >= 15 && !isAllSalesTypes(selectedSalesTypes),
-  );
+  const unique = filterListings(dedupeListings(listings), {
+    ...detailFilters,
+    requireDetails,
+  });
   const zigbang = unique.filter((item) => item.source === "zigbang").length;
   const naver = unique.filter((item) => item.source === "naver").length;
   const cluster = shouldCluster(query.zoom, unique.length, MAX_MARKERS);

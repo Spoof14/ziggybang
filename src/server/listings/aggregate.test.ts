@@ -135,6 +135,38 @@ describe("getMapData", () => {
     expect(data.listings.map((item) => item.id)).toEqual(["z1"]);
   });
 
+  it("filters by size bucket and bilingual search text", async () => {
+    const data = await getMapData(
+      {
+        bounds: seoulBounds,
+        zoom: 16,
+        sources: ["zigbang"],
+        propertyTypes: ["oneroom"],
+        query: "yeonnam studio",
+        areaBucketIds: ["s"],
+      },
+      {
+        zigbang: async () => [
+          {
+            ...listing("z1", "zigbang"),
+            address: "서울 마포구 연남동",
+            areaM2: 26,
+            propertyType: "oneroom",
+          },
+          {
+            ...listing("z2", "zigbang"),
+            address: "서울 강남구 역삼동",
+            areaM2: 80,
+            propertyType: "villa",
+          },
+        ],
+        naver: async () => [],
+      },
+    );
+
+    expect(data.listings.map((item) => item.id)).toEqual(["z1"]);
+  });
+
   it("rejects invalid bounds", async () => {
     await expect(
       getMapData({

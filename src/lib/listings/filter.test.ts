@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterBySalesTypes, isAllSalesTypes } from "./filter";
+import { filterBySalesTypes, filterListings, isAllSalesTypes } from "./filter";
 import { type MapListing } from "./types";
 
 function listing(id: string, salesType?: MapListing["salesType"]): MapListing {
@@ -34,5 +34,24 @@ describe("sales type filters", () => {
     expect(filterBySalesTypes(listings, ["jeonse"], true).map((item) => item.id)).toEqual(
       ["a"],
     );
+  });
+
+  it("applies size and search together", () => {
+    const listings = [
+      listing("a", "jeonse"),
+      {
+        ...listing("b", "jeonse"),
+        address: "연남동",
+        areaM2: 24,
+      },
+    ];
+    expect(
+      filterListings(listings, {
+        salesTypes: ["jeonse"],
+        areaBucketIds: ["s"],
+        query: "yeonnam",
+        requireDetails: true,
+      }).map((item) => item.id),
+    ).toEqual(["b"]);
   });
 });

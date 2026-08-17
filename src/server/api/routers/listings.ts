@@ -29,6 +29,8 @@ export const listingsRouter = createTRPCRouter({
           .array(z.enum(["jeonse", "wolse", "sale"]))
           .min(1)
           .default(["jeonse", "wolse", "sale"]),
+        query: z.string().max(80).optional(),
+        areaBucketIds: z.array(z.enum(["xs", "s", "m", "l"])).optional(),
       }),
     )
     .query(({ input }) => getMapData(input)),

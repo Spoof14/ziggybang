@@ -54,7 +54,7 @@ function MapEvents({
     east: number;
     zoom: number;
   }) => void;
-  focus: { lat: number; lng: number; token: number } | null;
+  focus: { lat: number; lng: number; zoom?: number; token: number } | null;
 }) {
   const map = useMap();
 
@@ -64,6 +64,10 @@ function MapEvents({
 
   useEffect(() => {
     if (!focus) return;
+    if (focus.zoom) {
+      map.setView([focus.lat, focus.lng], focus.zoom, { animate: true });
+      return;
+    }
     const pad = 0.0008;
     map.flyToBounds(
       [
@@ -162,7 +166,7 @@ export function ListingMap({
   clusters: MapCluster[];
   listings: MapListing[];
   selectedId?: string;
-  focus: { lat: number; lng: number; token: number } | null;
+  focus: { lat: number; lng: number; zoom?: number; token: number } | null;
   onViewport: (next: {
     south: number;
     west: number;
@@ -199,8 +203,10 @@ export function ListingMap({
       preferCanvas
     >
       <TileLayer
-        attribution="Tiles © Esri"
-        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+        attribution="© OpenStreetMap © CARTO"
+        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+        subdomains={["a", "b", "c", "d"]}
+        maxZoom={20}
       />
       <ZoomControl position="bottomright" />
       <MapEvents onViewport={onViewport} focus={focus} />

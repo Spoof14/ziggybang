@@ -3,7 +3,8 @@ import {
   geohashesInBounds,
   precisionForZoom,
 } from "~/lib/geo/geohash";
-import { isAllSalesTypes } from "~/lib/listings/filter";
+import { needsListingDetails } from "~/lib/listings/filter";
+import { type AreaBucketId } from "~/lib/listings/area";
 import {
   type Bounds,
   type MapListing,
@@ -165,6 +166,9 @@ export async function fetchZigbangListings(input: {
   zoom: number;
   propertyTypes: PropertyType[];
   salesTypes?: SalesType[];
+  query?: string;
+  areaBucketIds?: AreaBucketId[];
+  needsDetails?: boolean;
 }): Promise<MapListing[]> {
   const precision = precisionForZoom(input.zoom);
   const tiles = geohashesInBounds(input.bounds, precision, MAX_TILES);
@@ -210,13 +214,21 @@ export async function fetchZigbangListings(input: {
   }
 
   await runPool(jobs, 8);
-  if (input.zoom >= 15 && input.salesTypes && !isAllSalesTypes(input.salesTypes)) {
+  const shouldHydrate =
+    input.needsDetails ??
+    (input.zoom >= 15 &&
+      needsListingDetails({
+        salesTypes: input.salesTypes ?? [],
+        areaBucketIds: input.areaBucketIds ?? [],
+        query: input.query ?? "",
+      }));
+  if (input.zoom >= 15 && shouldHydrate) {
     return hydrateZigbangListings(listings);
   }
   return listings;
 }
 
-const HYDRATE_LIMIT = 80;
+const HYDRATE_LIMIT = 120;
 
 export async function hydrateZigbangListings(
   listings: MapListing[],
