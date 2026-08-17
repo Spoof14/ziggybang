@@ -113,7 +113,7 @@ export function formatRoomType(value?: string): string | null {
 
 export function friendlySourceError(source: Source, message: string): string {
   if (source === "naver") {
-    return "Naver is blocked from this server. Zigbang listings still show.";
+    return "Naver listings are unavailable right now.";
   }
   return `${sourceLabel[source]}: ${message}`;
 }

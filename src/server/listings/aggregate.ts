@@ -8,11 +8,12 @@ import {
   type PropertyType,
   type Source,
 } from "~/lib/listings/types";
-import { settledError } from "./http";
+import { settledError, withTimeout } from "./http";
 import { fetchNaverDetail, fetchNaverListings } from "./naver";
 import { fetchZigbangDetail, fetchZigbangListings } from "./zigbang";
 
 const MAX_MARKERS = 400;
+const NAVER_BUDGET_MS = 2500;
 
 export type ListingAdapters = {
   zigbang: typeof fetchZigbangListings;
@@ -62,11 +63,15 @@ export async function getMapData(
   if (sources.includes("naver")) {
     jobSources.push("naver");
     jobs.push(
-      adapters.naver({
-        bounds: query.bounds,
-        zoom: query.zoom,
-        propertyTypes,
-      }),
+      withTimeout(
+        adapters.naver({
+          bounds: query.bounds,
+          zoom: query.zoom,
+          propertyTypes,
+        }),
+        NAVER_BUDGET_MS,
+        "Naver",
+      ),
     );
   }
 

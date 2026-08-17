@@ -4,12 +4,13 @@ import { useEffect, useMemo } from "react";
 import {
   CircleMarker,
   MapContainer,
+  Marker,
   TileLayer,
-  Tooltip,
+  ZoomControl,
   useMap,
   useMapEvents,
 } from "react-leaflet";
-import { type Map as LeafletMap } from "leaflet";
+import { DivIcon, type Map as LeafletMap } from "leaflet";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
 
 const SEOUL: [number, number] = [37.5665, 126.978];
@@ -63,14 +64,36 @@ function MapEvents({
 
   useEffect(() => {
     if (!focus) return;
-    map.setView([focus.lat, focus.lng], Math.min(map.getZoom() + 2, 17));
+    const pad = 0.0008;
+    map.flyToBounds(
+      [
+        [focus.lat - pad, focus.lng - pad],
+        [focus.lat + pad, focus.lng + pad],
+      ],
+      {
+        maxZoom: Math.min(map.getZoom() + 2, 17),
+        paddingTopLeft: [0, 150],
+        duration: 0.35,
+      },
+    );
   }, [focus, map]);
 
   useMapEvents({
     moveend: () => emitViewport(map, onViewport),
+    zoomend: () => emitViewport(map, onViewport),
   });
 
   return null;
+}
+
+function clusterIcon(count: number, color: string) {
+  const size = Math.min(44, 26 + Math.log2(count + 1) * 5);
+  return new DivIcon({
+    className: "listing-cluster",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    html: `<span class="listing-cluster-inner" style="--cluster-size:${size}px;--cluster-color:${color}">${count.toLocaleString("en-US")}</span>`,
+  });
 }
 
 function ClusterLayer({
@@ -82,29 +105,16 @@ function ClusterLayer({
 }) {
   return (
     <>
-      {clusters.map((cluster) => {
-        const radius = Math.min(28, 10 + Math.log2(cluster.count + 1) * 4);
-        return (
-          <CircleMarker
-            key={cluster.id}
-            center={[cluster.lat, cluster.lng]}
-            radius={radius}
-            pathOptions={{
-              color: "#0f172a",
-              weight: 1,
-              fillColor: sourceColor(cluster.sources),
-              fillOpacity: 0.86,
-            }}
-            eventHandlers={{
-              click: () => onSelect(cluster),
-            }}
-          >
-            <Tooltip direction="top" offset={[0, -8]} opacity={1} permanent>
-              {cluster.count.toLocaleString()}
-            </Tooltip>
-          </CircleMarker>
-        );
-      })}
+      {clusters.map((cluster) => (
+        <Marker
+          key={cluster.id}
+          position={[cluster.lat, cluster.lng]}
+          icon={clusterIcon(cluster.count, sourceColor(cluster.sources))}
+          eventHandlers={{
+            click: () => onSelect(cluster),
+          }}
+        />
+      ))}
     </>
   );
 }
@@ -134,11 +144,7 @@ function MarkerLayer({
           eventHandlers={{
             click: () => onSelect(listing),
           }}
-        >
-          <Tooltip direction="top" offset={[0, -6]}>
-            {listing.title ?? listing.sourceId}
-          </Tooltip>
-        </CircleMarker>
+        />
       ))}
     </>
   );
@@ -187,13 +193,14 @@ export function ListingMap({
       center={SEOUL}
       zoom={13}
       className="h-full w-full"
-      zoomControl
+      zoomControl={false}
       preferCanvas
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution="Tiles © Esri"
+        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
       />
+      <ZoomControl position="bottomright" />
       <MapEvents onViewport={onViewport} focus={focus} />
       {clusterLayer}
       {markerLayer}

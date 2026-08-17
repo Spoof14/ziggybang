@@ -38,7 +38,7 @@ export function ListingPanel({
   const manageCost = formatKrwFromManwon(detail.manageCost);
 
   return (
-    <aside className="pointer-events-auto absolute bottom-4 left-4 right-4 z-[500] max-h-[45vh] overflow-auto rounded-2xl border border-white/10 bg-slate-950/95 p-4 text-slate-100 shadow-2xl backdrop-blur md:bottom-6 md:left-auto md:right-6 md:w-[360px]">
+    <aside className="pointer-events-auto absolute bottom-4 left-4 right-16 z-[1100] max-h-[38vh] overflow-auto rounded-2xl border border-white/10 bg-slate-950/95 p-4 text-slate-100 shadow-2xl backdrop-blur md:bottom-6 md:left-auto md:right-20 md:w-[360px]">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-400">

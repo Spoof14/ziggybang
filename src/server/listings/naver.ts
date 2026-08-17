@@ -203,7 +203,7 @@ async function fetchClusterList(input: {
     });
     const payload = await fetchJson<NaverClusterResponse>(
       `${NAVER_ORIGIN}/cluster/clusterList?${params.toString()}`,
-      { headers: NAVER_HEADERS, timeoutMs: 8000 },
+      { headers: NAVER_HEADERS, timeoutMs: 2500 },
     );
     return extractClusters(payload)
       .map(clusterToListing)
@@ -247,7 +247,7 @@ async function fetchArticleList(input: {
       });
       const payload = await fetchJson<NaverArticleResponse>(
         `${NAVER_ORIGIN}/cluster/ajax/articleList?${params.toString()}`,
-        { headers: NAVER_HEADERS, timeoutMs: 8000 },
+        { headers: NAVER_HEADERS, timeoutMs: 2500 },
       );
       return (payload.body ?? [])
         .map(articleToListing)

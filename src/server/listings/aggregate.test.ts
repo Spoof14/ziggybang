@@ -92,6 +92,28 @@ describe("getMapData", () => {
     ]);
   });
 
+  it("does not wait on a hanging Naver request", async () => {
+    const started = Date.now();
+    const data = await getMapData(
+      {
+        bounds: seoulBounds,
+        zoom: 16,
+        sources: ["zigbang", "naver"],
+        propertyTypes: ["oneroom"],
+      },
+      {
+        zigbang: async () => [listing("z1", "zigbang")],
+        naver: async () =>
+          new Promise(() => {
+            /* hang */
+          }),
+      },
+    );
+    expect(Date.now() - started).toBeLessThan(4000);
+    expect(data.listings).toHaveLength(1);
+    expect(data.errors[0]?.source).toBe("naver");
+  }, 5000);
+
   it("rejects invalid bounds", async () => {
     await expect(
       getMapData({

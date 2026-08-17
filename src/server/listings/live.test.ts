@@ -75,6 +75,6 @@ describe("live aggregator", () => {
         expect(data.errors.some((error) => error.source === "naver")).toBe(true);
       }
     },
-    20000,
+    12000,
   );
 });
