@@ -21,6 +21,7 @@ export type SavedPrefs = {
   radiusM: number;
   circle: CircleFilter | null;
   polygon: LatLng[] | null;
+  view: { lat: number; lng: number; zoom: number } | null;
 };
 
 const KEY = "ziggybang:prefs:v1";
@@ -48,6 +49,23 @@ function asCircle(value: unknown): CircleFilter | null {
     lat: circle.lat,
     lng: circle.lng,
     radiusM: Math.min(20_000, Math.max(50, circle.radiusM)),
+  };
+}
+
+function asView(value: unknown): SavedPrefs["view"] {
+  if (!value || typeof value !== "object") return null;
+  const view = value as { lat?: number; lng?: number; zoom?: number };
+  if (
+    typeof view.lat !== "number" ||
+    typeof view.lng !== "number" ||
+    typeof view.zoom !== "number"
+  ) {
+    return null;
+  }
+  return {
+    lat: view.lat,
+    lng: view.lng,
+    zoom: Math.min(18, Math.max(7, view.zoom)),
   };
 }
 
@@ -97,6 +115,7 @@ export function loadPrefs(): SavedPrefs | null {
           : 1200,
       circle: asCircle(parsed.circle),
       polygon: asPolygon(parsed.polygon),
+      view: asView(parsed.view),
     };
   } catch {
     return null;

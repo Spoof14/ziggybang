@@ -101,7 +101,7 @@ export default function MapApp() {
   const lastViewportKey = useRef<string | null>(null);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPlaceId = useRef<string | null>(null);
-  const prefsReady = useRef(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   const parsedSearch = useMemo(
     () => parseSearchQuery(debouncedQuery),
@@ -132,12 +132,21 @@ export default function MapApp() {
       setRadiusM(saved.radiusM);
       setManualCircle(saved.circle);
       setPolygon(saved.polygon);
+      if (saved.view && !parseSearchQuery(saved.searchInput).place) {
+        setZoom(Math.round(saved.view.zoom));
+        setFocus({
+          lat: saved.view.lat,
+          lng: saved.view.lng,
+          zoom: saved.view.zoom,
+          token: Date.now(),
+        });
+      }
     }
-    prefsReady.current = true;
+    setPrefsLoaded(true);
   }, []);
 
   useEffect(() => {
-    if (!prefsReady.current) return;
+    if (!prefsLoaded) return;
     savePrefs({
       sources,
       propertyTypes,
@@ -148,17 +157,25 @@ export default function MapApp() {
       radiusM,
       circle: manualCircle,
       polygon,
+      view: {
+        lat: (bounds.south + bounds.north) / 2,
+        lng: (bounds.west + bounds.east) / 2,
+        zoom,
+      },
     });
   }, [
     areaBucketIds,
+    bounds,
     manualCircle,
     polygon,
+    prefsLoaded,
     propertyTypes,
     radiusM,
     salesTypes,
     searchInput,
     sources,
     viewMode,
+    zoom,
   ]);
 
   useEffect(() => {
