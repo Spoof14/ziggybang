@@ -190,6 +190,36 @@ describe("getMapData", () => {
     expect(data.listings.map((item) => item.id)).toEqual(["near"]);
   });
 
+  it("list view keeps clusters and a short page instead of dumping every pin", async () => {
+    const many = Array.from({ length: 80 }, (_, index) =>
+      listing(`z${index}`, "zigbang", 37.56, 126.97 + index * 0.001),
+    );
+    let requestedDetails: boolean | undefined;
+    const data = await getMapData(
+      {
+        bounds: seoulBounds,
+        zoom: 12,
+        sources: ["zigbang"],
+        propertyTypes: ["oneroom"],
+        includeListings: true,
+      },
+      {
+        zigbang: async (input) => {
+          requestedDetails = input.needsDetails;
+          return many;
+        },
+        naver: async () => [],
+      },
+    );
+
+    expect(requestedDetails).toBe(false);
+    expect(data.clusters.length).toBeGreaterThan(0);
+    expect(data.listings.length).toBeGreaterThan(0);
+    expect(data.listings.length).toBeLessThanOrEqual(60);
+    expect(data.stats.truncated).toBe(true);
+    expect(data.stats.zigbang).toBe(80);
+  });
+
   it("rejects invalid bounds", async () => {
     await expect(
       getMapData({

@@ -259,6 +259,7 @@ export default function MapApp() {
       enabled: prefsLoaded && sources.includes("zigbang"),
       placeholderData: (previous) => previous,
       refetchOnWindowFocus: false,
+      retry: false,
     },
   );
   const naverQuery = api.listings.getMap.useQuery(
@@ -667,39 +668,17 @@ export default function MapApp() {
         </div>
       </header>
 
-      <div className="relative min-h-0 flex-1">
-        {viewMode === "list" ? (
-          <div className="flex h-full min-h-0 flex-col md:flex-row">
-            <div className="hidden min-h-0 md:block md:w-[46%]">
-              <ListingMap
-                clusters={visible.clusters}
-                listings={visible.listings}
-                selectedId={selected?.id}
-                focus={focus}
-                circle={circle}
-                polygon={polygon}
-                draftPoints={draftPoints}
-                tool={tool}
-                onViewport={onViewport}
-                onSelectListing={setSelected}
-                onSelectCluster={onSelectCluster}
-                onMapClick={onMapClick}
-                onFinishDraw={finishDraw}
-              />
-            </div>
-            <div className="min-h-0 flex-1">
-              <ListingList
-                listings={visible.listings}
-                selectedId={selected?.id}
-                loading={waitingForFirst || refreshing}
-                onSelect={setSelected}
-              />
-            </div>
-          </div>
-        ) : (
+      <div className="relative flex min-h-0 flex-1">
+        <div
+          className={
+            viewMode === "list"
+              ? "hidden h-full min-h-0 md:block md:w-[46%]"
+              : "h-full min-h-0 min-w-0 flex-1"
+          }
+        >
           <ListingMap
             clusters={visible.clusters}
-            listings={visible.listings}
+            listings={viewMode === "list" && visible.clusters.length ? [] : visible.listings}
             selectedId={selected?.id}
             focus={focus}
             circle={circle}
@@ -712,7 +691,19 @@ export default function MapApp() {
             onMapClick={onMapClick}
             onFinishDraw={finishDraw}
           />
-        )}
+        </div>
+        {viewMode === "list" ? (
+          <div className="h-full min-h-0 flex-1">
+            <ListingList
+              listings={visible.listings}
+              selectedId={selected?.id}
+              loading={waitingForFirst && visible.listings.length === 0}
+              truncated={visible.stats.truncated}
+              totalCount={visible.stats.zigbang + visible.stats.naver + visible.stats.peterpan}
+              onSelect={setSelected}
+            />
+          </div>
+        ) : null}
 
         {selected ? (
           <ListingPanel listing={selected} onClose={() => setSelected(null)} />

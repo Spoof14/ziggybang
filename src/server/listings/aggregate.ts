@@ -20,11 +20,17 @@ import { parseSearchQuery } from "~/lib/listings/search";
 import { settledError, withTimeout } from "./http";
 import { fetchNaverDetail, fetchNaverListings } from "./naver";
 import { fetchPeterpanDetail, fetchPeterpanListings } from "./peterpan";
-import { fetchZigbangDetail, fetchZigbangListings } from "./zigbang";
+import {
+  fetchZigbangDetail,
+  fetchZigbangListings,
+  hydrateZigbangListings,
+} from "./zigbang";
 
 const MAX_MARKERS = 400;
+const MAX_LIST_ITEMS = 60;
 const NAVER_BUDGET_MS = 2500;
 const PETERPAN_BUDGET_MS = 4000;
+const ZIGBANG_DETAIL_BUDGET_MS = 3500;
 
 export type ListingAdapters = {
   zigbang: typeof fetchZigbangListings;
@@ -97,7 +103,7 @@ export async function getMapData(
         salesTypes: selectedSalesTypes,
         query: listingQuery,
         areaBucketIds,
-        needsDetails: requireDetails || Boolean(query.includeListings),
+        needsDetails: requireDetails,
       }),
     );
   }
@@ -125,7 +131,7 @@ export async function getMapData(
           zoom: query.zoom,
           propertyTypes,
           salesTypes: selectedSalesTypes,
-          needsDetails: requireDetails || Boolean(query.includeListings),
+          needsDetails: requireDetails,
         }),
         PETERPAN_BUDGET_MS,
         "Peterpan",
@@ -134,20 +140,20 @@ export async function getMapData(
   }
 
   const results = await Promise.allSettled(jobs);
-  const listings: MapListing[] = [];
+  const fetched: MapListing[] = [];
   const errors: MapData["errors"] = [];
 
   results.forEach((result, index) => {
     const source = jobSources[index]!;
     if (result.status === "fulfilled") {
-      listings.push(...result.value);
+      fetched.push(...result.value);
     } else {
       const message = settledError(result) ?? `${source} failed`;
       errors.push({ source, message });
     }
   });
 
-  let unique = filterListings(dedupeListings(listings), {
+  let unique = filterListings(dedupeListings(fetched), {
     ...detailFilters,
     requireDetails,
   });
@@ -161,12 +167,40 @@ export async function getMapData(
   const zigbang = unique.filter((item) => item.source === "zigbang").length;
   const naver = unique.filter((item) => item.source === "naver").length;
   const peterpan = unique.filter((item) => item.source === "peterpan").length;
-  const cluster =
-    !query.includeListings &&
-    shouldCluster(query.zoom, unique.length, MAX_MARKERS);
+  const clustered = shouldCluster(query.zoom, unique.length, MAX_MARKERS);
+  const clusters = clustered
+    ? clusterListings(unique, cellSizeForZoom(query.zoom))
+    : [];
+  const listingCap =
+    query.includeListings === true && clustered ? MAX_LIST_ITEMS : MAX_MARKERS;
+  let listings: MapListing[] =
+    query.includeListings === true || !clustered
+      ? unique.slice(0, listingCap)
+      : [];
 
-  if (cluster) {
-    const clusters = clusterListings(unique, cellSizeForZoom(query.zoom));
+  if (
+    query.includeListings === true &&
+    query.includeListings &&
+    listings.some(
+      (item) =>
+        item.source === "zigbang" &&
+        item.propertyType !== "apartment" &&
+        !item.salesType &&
+        /^\d+$/.test(item.sourceId),
+    )
+  ) {
+    try {
+      listings = await withTimeout(
+        hydrateZigbangListings(listings),
+        ZIGBANG_DETAIL_BUDGET_MS,
+        "Zigbang details",
+      );
+    } catch {
+      /* list still works with unhydrated pins */
+    }
+  }
+
+  if (clustered && !query.includeListings) {
     return {
       mode: "clusters",
       clusters,
@@ -182,16 +216,16 @@ export async function getMapData(
     };
   }
 
-  const truncated = unique.length > MAX_MARKERS;
+  const truncated = unique.length > listings.length;
   return {
-    mode: "markers",
-    clusters: [],
-    listings: unique.slice(0, MAX_MARKERS),
+    mode: clustered ? "clusters" : "markers",
+    clusters,
+    listings,
     stats: {
       zigbang,
       naver,
       peterpan,
-      returned: Math.min(unique.length, MAX_MARKERS),
+      returned: listings.length || clusters.length,
       truncated,
     },
     errors,

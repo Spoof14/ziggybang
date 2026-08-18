@@ -9,33 +9,17 @@ export function mergeMapData(parts: Array<MapData | undefined>): MapData {
   const naver = present.reduce((sum, part) => sum + part.stats.naver, 0);
   const peterpan = present.reduce((sum, part) => sum + part.stats.peterpan, 0);
   const truncated = present.some((part) => part.stats.truncated);
-  const hasMarkers = present.some((part) => part.mode === "markers");
-
-  if (hasMarkers) {
-    return {
-      mode: "markers",
-      clusters,
-      listings,
-      stats: {
-        zigbang,
-        naver,
-        peterpan,
-        returned: listings.length || clusters.length,
-        truncated,
-      },
-      errors,
-    };
-  }
+  const hasListings = listings.length > 0;
 
   return {
-    mode: "clusters",
+    mode: hasListings && clusters.length === 0 ? "markers" : clusters.length ? "clusters" : "markers",
     clusters,
-    listings: [],
+    listings,
     stats: {
       zigbang,
       naver,
       peterpan,
-      returned: clusters.length,
+      returned: hasListings ? listings.length : clusters.length,
       truncated,
     },
     errors,

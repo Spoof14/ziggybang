@@ -62,4 +62,28 @@ describe("mergeMapData", () => {
     expect(merged.clusters).toHaveLength(1);
     expect(merged.listings).toHaveLength(1);
   });
+
+  it("keeps list-page homes even when the other source is clustered", () => {
+    const listPage: MapData = {
+      mode: "clusters",
+      clusters: zigbang.clusters,
+      listings: [
+        {
+          id: "z-home",
+          source: "zigbang",
+          sourceId: "z-home",
+          lat: 37.5,
+          lng: 127,
+          propertyType: "oneroom",
+          url: "https://example.com",
+        },
+      ],
+      stats: { zigbang: 17, naver: 0, peterpan: 0, returned: 1, truncated: true },
+      errors: [],
+    };
+    const merged = mergeMapData([listPage, undefined]);
+    expect(merged.clusters).toHaveLength(1);
+    expect(merged.listings).toHaveLength(1);
+    expect(merged.stats.truncated).toBe(true);
+  });
 });

@@ -92,10 +92,9 @@ describe("live aggregator", () => {
       });
 
       expect(data.errors).toEqual([]);
-      expect(data.mode).toBe("markers");
-      expect(data.listings.length).toBeGreaterThan(0);
-      expect(
-        data.listings.every(
+    expect(data.listings.length).toBeGreaterThan(0);
+    expect(
+      data.listings.every(
           (item) =>
             Math.abs(item.lat - 37.556) < 0.02 &&
             Math.abs(item.lng - 126.923) < 0.02,

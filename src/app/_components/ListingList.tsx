@@ -23,11 +23,15 @@ export function ListingList({
   listings,
   selectedId,
   loading,
+  truncated,
+  totalCount,
   onSelect,
 }: {
   listings: MapListing[];
   selectedId?: string;
   loading?: boolean;
+  truncated?: boolean;
+  totalCount?: number;
   onSelect: (listing: MapListing) => void;
 }) {
   const [sort, setSort] = useState<ListSort>("featured");
@@ -41,11 +45,17 @@ export function ListingList({
     return items;
   }, [listings, sort]);
 
+  const countLabel = loading
+    ? "Loading homes…"
+    : truncated && totalCount && totalCount > sorted.length
+      ? `${sorted.length.toLocaleString("en-US")} of ${totalCount.toLocaleString("en-US")} homes · zoom in to refine`
+      : `${sorted.length.toLocaleString("en-US")} homes`;
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-950">
       <div className="flex items-center justify-between gap-2 px-3 pt-2">
         <p className="text-xs text-slate-400">
-          {loading ? "Updating list…" : `${sorted.length.toLocaleString("en-US")} homes`}
+          {countLabel}
         </p>
         <div className="flex gap-1">
           {(["featured", "price", "size"] as ListSort[]).map((option) => (
@@ -64,8 +74,9 @@ export function ListingList({
       </div>
       {!sorted.length ? (
         <div className="flex flex-1 items-center justify-center p-6 text-sm text-slate-400">
-          No listings in this area. Search a neighborhood, draw a shape, or zoom
-          in.
+          {loading
+            ? "Loading homes in this area…"
+            : "No listings in this area. Search a neighborhood, draw a shape, or zoom in."}
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto p-3">
