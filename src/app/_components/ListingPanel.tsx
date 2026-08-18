@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { api } from "~/trpc/react";
 import {
   formatArea,
@@ -15,7 +14,7 @@ import {
 } from "~/lib/listings/copy";
 import { englishAddressLine, englishCardTitle } from "~/lib/listings/english";
 import { type MapListing } from "~/lib/listings/types";
-import { ListingPhoto } from "./ListingPhoto";
+import { ListingGallery } from "./ListingGallery";
 
 export function ListingPanel({
   listing,
@@ -45,11 +44,6 @@ export function ListingPanel({
       ),
     ),
   ];
-  const [photoIndex, setPhotoIndex] = useState(0);
-  useEffect(() => {
-    setPhotoIndex(0);
-  }, [listing.id]);
-  const photo = photos[Math.min(photoIndex, Math.max(photos.length - 1, 0))];
   const price = formatPrice(detail);
   const area = formatArea(detail.areaM2);
   const floor = formatFloor(detail.floor);
@@ -101,36 +95,7 @@ export function ListingPanel({
         </div>
       </div>
 
-      <div className="relative px-4">
-        <ListingPhoto
-          url={photo}
-          alt={detail.title ?? "listing"}
-          className="h-52 w-full rounded-xl object-cover"
-        />
-        {photos.length > 1 ? (
-          <>
-            <button
-              type="button"
-              className="absolute left-6 top-1/2 -translate-y-1/2 rounded-full bg-slate-950/70 px-2 py-1 text-sm"
-              onClick={() =>
-                setPhotoIndex((current) => (current - 1 + photos.length) % photos.length)
-              }
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              className="absolute right-6 top-1/2 -translate-y-1/2 rounded-full bg-slate-950/70 px-2 py-1 text-sm"
-              onClick={() => setPhotoIndex((current) => (current + 1) % photos.length)}
-            >
-              ›
-            </button>
-            <p className="mt-1 text-center text-[11px] text-slate-400">
-              {Math.min(photoIndex + 1, photos.length)} / {photos.length}
-            </p>
-          </>
-        ) : null}
-      </div>
+      <ListingGallery urls={photos} alt={detail.title ?? "listing"} />
 
       <dl className="grid grid-cols-2 gap-2 p-4 text-sm">
         {price ? (
