@@ -27,7 +27,8 @@ import {
 } from "./zigbang";
 
 const MAX_MARKERS = 400;
-const MAX_LIST_ITEMS = 60;
+const MIN_LIST_ITEMS = 60;
+const MAX_LIST_ITEMS = 300;
 const NAVER_BUDGET_MS = 2500;
 const PETERPAN_BUDGET_MS = 4000;
 const ZIGBANG_DETAIL_BUDGET_MS = 3500;
@@ -172,7 +173,12 @@ export async function getMapData(
     ? clusterListings(unique, cellSizeForZoom(query.zoom))
     : [];
   const listingCap =
-    query.includeListings === true && clustered ? MAX_LIST_ITEMS : MAX_MARKERS;
+    query.includeListings === true && clustered
+      ? Math.min(
+          MAX_LIST_ITEMS,
+          Math.max(MIN_LIST_ITEMS, query.listingLimit ?? MIN_LIST_ITEMS),
+        )
+      : MAX_MARKERS;
   let listings: MapListing[] =
     query.includeListings === true || !clustered
       ? unique.slice(0, listingCap)

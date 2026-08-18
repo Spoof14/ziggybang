@@ -34,6 +34,7 @@ export type MapQuery = {
   };
   polygon?: Array<{ lat: number; lng: number }>;
   includeListings?: boolean;
+  listingLimit?: number;
 };
 
 export type MapListing = {
@@ -58,6 +59,7 @@ export type MapListing = {
   manageCost?: number;
   roomType?: string;
   updatedAt?: string;
+  photos?: string[];
 };
 
 export type MapCluster = {

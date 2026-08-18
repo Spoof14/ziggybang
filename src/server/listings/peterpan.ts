@@ -160,6 +160,7 @@ export function houseToListing(house: PeterpanHouse): MapListing | null {
     floor: house.floor?.floor_text_detail,
     address: house.location?.address?.text,
     thumbnail: house.info?.thumbnail,
+    photos: house.info?.thumbnail ? [house.info.thumbnail] : undefined,
     url: peterpanListingUrl(String(id)),
     manageCost: krwToManwon(house.price?.maintenance_cost),
     roomType: house.info?.room_type,

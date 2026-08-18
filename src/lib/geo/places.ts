@@ -4,17 +4,18 @@ export type Place = {
   lat: number;
   lng: number;
   zoom: number;
+  radiusM?: number;
 };
 
 export const places: Place[] = [
-  { id: "gangnam", names: ["gangnam", "강남", "강남구", "gangnam-gu"], lat: 37.498, lng: 127.028, zoom: 14 },
+  { id: "gangnam", names: ["gangnam", "강남", "강남구", "gangnam-gu", "gangnam station", "강남역"], lat: 37.498, lng: 127.028, zoom: 15, radiusM: 800 },
   { id: "seocho", names: ["seocho", "서초", "서초구"], lat: 37.484, lng: 127.033, zoom: 14 },
   { id: "jamsil", names: ["jamsil", "잠실", "송파", "songpa"], lat: 37.513, lng: 127.102, zoom: 14 },
   { id: "seongsu", names: ["seongsu", "성수", "seongdong", "성동"], lat: 37.544, lng: 127.056, zoom: 15 },
   { id: "konkuk", names: ["konkuk", "건대", "건대입구", "gundae"], lat: 37.54, lng: 127.07, zoom: 15 },
-  { id: "hongdae", names: ["hongdae", "hongik", "홍대", "홍익", "서교", "seogyo"], lat: 37.556, lng: 126.923, zoom: 15 },
-  { id: "hapjeong", names: ["hapjeong", "합정", "망원", "mangwon"], lat: 37.549, lng: 126.914, zoom: 15 },
-  { id: "dangsan", names: ["dangsan", "당산", "당산동", "당산역"], lat: 37.5346, lng: 126.9025, zoom: 15 },
+  { id: "hongdae", names: ["hongdae", "hongik", "홍대", "홍익", "서교", "seogyo", "hongdae station", "홍대입구역", "hongik university station"], lat: 37.556, lng: 126.923, zoom: 16, radiusM: 800 },
+  { id: "hapjeong", names: ["hapjeong", "합정", "망원", "mangwon", "hapjeong station", "합정역"], lat: 37.549, lng: 126.914, zoom: 16, radiusM: 800 },
+  { id: "dangsan", names: ["dangsan", "당산", "당산동", "당산역", "dangsan station"], lat: 37.5346, lng: 126.9025, zoom: 16, radiusM: 800 },
   { id: "yeongdeungpo", names: ["yeongdeungpo", "영등포", "영등포구", "yeongdeungpogu"], lat: 37.517, lng: 126.907, zoom: 14 },
   { id: "munrae", names: ["munrae", "mullae", "문래", "문래동"], lat: 37.517, lng: 126.896, zoom: 16 },
   { id: "singil", names: ["singil", "신길", "신길동"], lat: 37.513, lng: 126.921, zoom: 15 },
@@ -26,7 +27,7 @@ export const places: Place[] = [
   { id: "seongnam", names: ["seongnam", "성남", "모란", "moran"], lat: 37.42, lng: 127.127, zoom: 13 },
   { id: "yeonnam", names: ["yeonnam", "연남", "연남동", "yeonnam-dong"], lat: 37.566, lng: 126.922, zoom: 16 },
   { id: "mapo", names: ["mapo", "마포", "마포구"], lat: 37.566, lng: 126.902, zoom: 14 },
-  { id: "sinchon", names: ["sinchon", "신촌", "이대", "ewha"], lat: 37.559, lng: 126.937, zoom: 15 },
+  { id: "sinchon", names: ["sinchon", "신촌", "이대", "ewha", "sinchon station", "신촌역"], lat: 37.559, lng: 126.937, zoom: 16, radiusM: 800 },
   { id: "itaewon", names: ["itaewon", "이태원", "한남", "hannam", "haebangchon", "hbc", "경리단", "gyeongnidan"], lat: 37.534, lng: 126.994, zoom: 15 },
   { id: "yongsan", names: ["yongsan", "용산", "용산구"], lat: 37.532, lng: 126.965, zoom: 14 },
   { id: "yeouido", names: ["yeouido", "여의도", "여의"], lat: 37.521, lng: 126.924, zoom: 15 },

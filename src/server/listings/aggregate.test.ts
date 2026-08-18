@@ -220,6 +220,28 @@ describe("getMapData", () => {
     expect(data.stats.zigbang).toBe(80);
   });
 
+  it("can page more list homes when listingLimit is raised", async () => {
+    const many = Array.from({ length: 80 }, (_, index) =>
+      listing(`z${index}`, "zigbang", 37.56, 126.97 + index * 0.001),
+    );
+    const data = await getMapData(
+      {
+        bounds: seoulBounds,
+        zoom: 12,
+        sources: ["zigbang"],
+        propertyTypes: ["oneroom"],
+        includeListings: true,
+        listingLimit: 120,
+      },
+      {
+        zigbang: async () => many,
+        naver: async () => [],
+      },
+    );
+    expect(data.listings.length).toBe(80);
+    expect(data.stats.truncated).toBe(false);
+  });
+
   it("rejects invalid bounds", async () => {
     await expect(
       getMapData({

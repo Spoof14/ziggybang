@@ -47,10 +47,13 @@ describe("bilingual fuzzy search", () => {
     expect(looksLikePlaceQuery("dangsan")).toBe(true);
   });
 
-  it("matches Dangsan in English and Korean", () => {
-    expect(matchPlace("dangsan")?.id).toBe("dangsan");
-    expect(matchPlace("당산")?.id).toBe("dangsan");
-    expect(parseSearchQuery("당산").listingQuery).toBe("");
+  it("matches Dangsan station as a walk-radius place, not listing text", () => {
+    expect(matchPlace("dangsan station")?.id).toBe("dangsan");
+    expect(matchPlace("당산역")?.id).toBe("dangsan");
+    expect(parseSearchQuery("dangsan station studio").listingQuery.toLowerCase()).toContain(
+      "studio",
+    );
+    expect(parseSearchQuery("dangsan station").listingQuery).toBe("");
   });
 });
 

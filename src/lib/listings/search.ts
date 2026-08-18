@@ -186,8 +186,23 @@ export function listingMatchesQuery(listing: MapListing, query: string): boolean
   });
 }
 
+export function stripStationWords(query: string): string {
+  return query
+    .replace(/\b(station|subway|yeok|walk|minutes?|min)\b/gi, " ")
+    .replace(/역/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function isStationQuery(query: string): boolean {
+  return /station|subway|yeok|역/i.test(query);
+}
+
 export function matchPlace(query: string): Place | undefined {
-  const tokens = normalizeSearch(query).split(" ").filter(Boolean);
+  const tokens = [
+    ...normalizeSearch(query).split(" ").filter(Boolean),
+    ...normalizeSearch(stripStationWords(query)).split(" ").filter(Boolean),
+  ];
   if (!tokens.length) return undefined;
   let best: { place: Place; score: number } | undefined;
   for (const place of places) {
@@ -261,6 +276,6 @@ export function parseSearchQuery(query: string): {
   listingQuery: string;
 } {
   const place = matchPlace(query);
-  if (!place) return { listingQuery: query.trim() };
-  return { place, listingQuery: stripPlaceFromQuery(query, place) };
+  if (!place) return { listingQuery: stripStationWords(query.trim()) };
+  return { place, listingQuery: stripStationWords(stripPlaceFromQuery(query, place)) };
 }

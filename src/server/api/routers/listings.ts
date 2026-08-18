@@ -45,6 +45,7 @@ export const listingsRouter = createTRPCRouter({
           .max(32)
           .optional(),
         includeListings: z.boolean().optional(),
+        listingLimit: z.number().int().min(20).max(300).optional(),
       }),
     )
     .query(({ input }) => getMapData(input)),

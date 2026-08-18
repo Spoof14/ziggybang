@@ -57,6 +57,8 @@ type ZigbangItemDetail = {
     roomType?: string;
     jibunAddress?: string;
     imageThumbnail?: string;
+    images?: Array<{ url?: string } | string>;
+    imageCount?: number;
     description?: string;
     updatedAt?: string;
     price?: ZigbangPrice;
@@ -77,8 +79,23 @@ const verticalByType: Record<
   officetel: "officetels",
 };
 
-export function zigbangItemImageUrl(itemId: string | number): string {
-  return `https://ic.zigbang.com/ic/items/${itemId}/1.jpg`;
+export function zigbangItemImageUrl(itemId: string | number, index = 1): string {
+  return `https://ic.zigbang.com/ic/items/${itemId}/${index}.jpg`;
+}
+
+function zigbangPhotos(
+  item: NonNullable<ZigbangItemDetail["item"]>,
+  itemId: string | number,
+): string[] {
+  const fromApi = (item.images ?? [])
+    .map((image) => (typeof image === "string" ? image : image.url))
+    .filter((url): url is string => Boolean(url))
+    .map((url) => (url.startsWith("//") ? `https:${url}` : url));
+  if (fromApi.length) return [...new Set(fromApi)];
+  const count = Math.min(Math.max(item.imageCount ?? 6, 1), 12);
+  return Array.from({ length: count }, (_, index) =>
+    zigbangItemImageUrl(itemId, index + 1),
+  );
 }
 
 function normalizeZigbangThumbnail(
@@ -362,6 +379,7 @@ export async function fetchZigbangDetail(
           : item.floor?.floor,
       address: item.addressOrigin?.fullText ?? item.jibunAddress,
       thumbnail: normalizeZigbangThumbnail(item.imageThumbnail, item.itemId),
+      photos: zigbangPhotos(item, item.itemId),
       url: zigbangListingUrl(propertyType, String(item.itemId)),
       description: item.description,
       manageCost: item.manageCost?.amount,

@@ -24,13 +24,26 @@ import {
 } from "~/lib/listings/copy";
 import { needsListingDetails } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
-import { loadPrefs, savePrefs, type ViewMode } from "~/lib/listings/prefs";
+import { loadPrefs, savePrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
 import {
+  isStationQuery,
   looksLikePlaceQuery,
   parseSearchQuery,
   placeSearchToken,
   stripPlaceFromQuery,
 } from "~/lib/listings/search";
+import { englishCardTitle } from "~/lib/listings/english";
+import {
+  isSavedHome,
+  loadSavedHomes,
+  saveSavedHomes,
+  toggleSavedHome,
+} from "~/lib/listings/saved";
+import {
+  buildAppSearch,
+  hasAppUrlState,
+  parseAppUrl,
+} from "~/lib/listings/url-state";
 import {
   type Bounds,
   type MapCluster,
@@ -91,6 +104,9 @@ export default function MapApp() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("map");
+  const [listSort, setListSort] = useState<ListSort>("featured");
+  const [listingLimit, setListingLimit] = useState(60);
+  const [savedHomes, setSavedHomes] = useState<MapListing[]>([]);
   const [tool, setTool] = useState<"pan" | "radius" | "draw">("pan");
   const [radiusM, setRadiusM] = useState(DEFAULT_RADIUS_M);
   const [manualCircle, setManualCircle] = useState<CircleFilter | null>(null);
@@ -137,37 +153,44 @@ export default function MapApp() {
     if (polygon) return null;
     if (manualCircle) return { ...manualCircle, radiusM };
     if (!place) return null;
+    const stationWalk = isStationQuery(debouncedQuery) ? (place.radiusM ?? 800) : radiusM;
     return {
       lat: place.lat,
       lng: place.lng,
-      radiusM,
+      radiusM: stationWalk,
     };
-  }, [manualCircle, place, polygon, radiusM]);
+  }, [debouncedQuery, manualCircle, place, polygon, radiusM]);
 
   useEffect(() => {
     const saved = loadPrefs();
-    if (saved) {
-      setSources(saved.sources);
-      setPropertyTypes(saved.propertyTypes);
-      setSalesTypes(saved.salesTypes);
-      setAreaBucketIds(saved.areaBucketIds);
-      setSearchInput(saved.searchInput);
-      setDebouncedQuery(saved.searchInput);
-      setViewMode(saved.viewMode);
-      setRadiusM(saved.radiusM);
-      setManualCircle(saved.circle);
-      setPolygon(saved.polygon);
-      setUiCompact(saved.uiCompact);
-      if (saved.view && !parseSearchQuery(saved.searchInput).place) {
-        setZoom(Math.round(saved.view.zoom));
-        setFocus({
-          lat: saved.view.lat,
-          lng: saved.view.lng,
-          zoom: saved.view.zoom,
-          token: Date.now(),
-        });
-      }
+    const url = typeof window !== "undefined" && hasAppUrlState(window.location.search)
+      ? parseAppUrl(window.location.search)
+      : {};
+    const base = saved;
+    setSources(url.sources ?? base?.sources ?? ALL_SOURCES);
+    setPropertyTypes(url.propertyTypes ?? base?.propertyTypes ?? ALL_TYPES);
+    setSalesTypes(url.salesTypes ?? base?.salesTypes ?? ALL_SALES);
+    setAreaBucketIds(url.areaBucketIds ?? base?.areaBucketIds ?? []);
+    setSearchInput(url.searchInput ?? base?.searchInput ?? "");
+    setDebouncedQuery(url.searchInput ?? base?.searchInput ?? "");
+    setViewMode(url.viewMode ?? base?.viewMode ?? "map");
+    setListSort(url.listSort ?? base?.listSort ?? "featured");
+    setRadiusM(url.radiusM ?? base?.radiusM ?? DEFAULT_RADIUS_M);
+    setManualCircle(base?.circle ?? null);
+    setPolygon(base?.polygon ?? null);
+    setUiCompact(base?.uiCompact === true);
+    const view = url.view ?? base?.view;
+    const searchText = url.searchInput ?? base?.searchInput ?? "";
+    if (view && !parseSearchQuery(searchText).place) {
+      setZoom(Math.round(view.zoom));
+      setFocus({
+        lat: view.lat,
+        lng: view.lng,
+        zoom: view.zoom,
+        token: Date.now(),
+      });
     }
+    setSavedHomes(loadSavedHomes());
     setPrefsLoaded(true);
   }, []);
 
@@ -189,6 +212,7 @@ export default function MapApp() {
         zoom,
       },
       uiCompact,
+      listSort,
     });
   }, [
     areaBucketIds,
@@ -202,6 +226,42 @@ export default function MapApp() {
     searchInput,
     sources,
     uiCompact,
+    viewMode,
+    zoom,
+    listSort,
+  ]);
+
+  useEffect(() => {
+    if (!prefsLoaded || typeof window === "undefined") return;
+    const next = buildAppSearch({
+      searchInput,
+      viewMode,
+      sources,
+      propertyTypes,
+      salesTypes,
+      areaBucketIds,
+      radiusM,
+      view: {
+        lat: (bounds.south + bounds.north) / 2,
+        lng: (bounds.west + bounds.east) / 2,
+        zoom,
+      },
+      listSort,
+    });
+    const url = `${window.location.pathname}${next}`;
+    if (`${window.location.pathname}${window.location.search}` !== url) {
+      window.history.replaceState(null, "", url);
+    }
+  }, [
+    areaBucketIds,
+    bounds,
+    listSort,
+    prefsLoaded,
+    propertyTypes,
+    radiusM,
+    salesTypes,
+    searchInput,
+    sources,
     viewMode,
     zoom,
   ]);
@@ -227,7 +287,10 @@ export default function MapApp() {
       zoom: Math.max(place.zoom, 15),
       token: Date.now(),
     });
-  }, [place]);
+    if (isStationQuery(debouncedQuery) || place.radiusM) {
+      setRadiusM(place.radiusM ?? 800);
+    }
+  }, [debouncedQuery, place]);
 
   const sharedInput = useMemo(
     () => ({
@@ -240,11 +303,13 @@ export default function MapApp() {
       circle: circle ?? undefined,
       polygon: polygon && polygon.length >= 3 ? polygon : undefined,
       includeListings: viewMode === "list" || Boolean(circle ?? polygon),
+      listingLimit: viewMode === "list" ? listingLimit : undefined,
     }),
     [
       areaBucketIds,
       bounds,
       circle,
+      listingLimit,
       listingQuery,
       polygon,
       propertyTypes,
@@ -367,6 +432,20 @@ export default function MapApp() {
     }
   };
 
+  useEffect(() => {
+    setListingLimit(60);
+  }, [bounds, debouncedQuery, viewMode]);
+
+  const onToggleSave = useCallback((listing: MapListing) => {
+    setSavedHomes((current) => {
+      const next = toggleSavedHome(current, listing);
+      saveSavedHomes(next);
+      return next;
+    });
+  }, []);
+
+  const showList = viewMode === "list" || viewMode === "saved";
+  const listListings = viewMode === "saved" ? savedHomes : visible.listings;
   const naverError = dismissedNaver
     ? undefined
     : visible.errors.find((error) => error.source === "naver");
@@ -376,7 +455,7 @@ export default function MapApp() {
     : `Zigbang ${visible.stats.zigbang.toLocaleString("en-US")} · Naver ${visible.stats.naver.toLocaleString("en-US")} · Peterpan ${visible.stats.peterpan.toLocaleString("en-US")}`;
 
   const areaHint = place
-    ? `${place.names[1] ?? place.names[0]} · ${formatRadius(radiusM)}`
+    ? `${place.names[1] ?? place.names[0]} · ${formatRadius(circle?.radiusM ?? radiusM)}`
     : circle
       ? `Within ${formatRadius(radiusM)}`
       : polygon
@@ -497,7 +576,7 @@ export default function MapApp() {
               onKeyDown={(event) => {
                 if (event.key === "Enter") setDebouncedQuery(searchInput);
               }}
-              placeholder="Search Hongdae, 연남동, studio…"
+              placeholder="Search Hongdae, Dangsan station, studio…"
               autoComplete="off"
               spellCheck={false}
               className="search-input w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-1.5 pr-16 text-sm text-slate-100 caret-white outline-none focus:border-sky-400"
@@ -520,7 +599,7 @@ export default function MapApp() {
           ) : null}
 
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {(["map", "list"] as ViewMode[]).map((mode) => (
+            {(["map", "list", "saved"] as ViewMode[]).map((mode) => (
               <button
                 key={mode}
                 type="button"
@@ -529,7 +608,7 @@ export default function MapApp() {
                   viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
                 }`}
               >
-                {mode}
+                {mode === "saved" ? `Saved${savedHomes.length ? ` ${savedHomes.length}` : ""}` : mode}
               </button>
             ))}
           </div>
@@ -673,14 +752,14 @@ export default function MapApp() {
       <div className="relative flex min-h-0 flex-1">
         <div
           className={
-            viewMode === "list"
+            showList
               ? "pointer-events-none invisible absolute inset-0 z-0 h-full md:visible md:pointer-events-auto md:static md:z-auto md:w-[46%]"
               : "h-full min-h-0 min-w-0 flex-1"
           }
         >
           <ListingMap
             clusters={visible.clusters}
-            listings={viewMode === "list" && visible.clusters.length ? [] : visible.listings}
+            listings={showList && visible.clusters.length ? [] : visible.listings}
             selectedId={selected?.id}
             focus={focus}
             circle={circle}
@@ -694,24 +773,44 @@ export default function MapApp() {
             onFinishDraw={finishDraw}
           />
         </div>
-        {viewMode === "list" ? (
+        {showList ? (
           <div
             data-list-panel="portrait"
             className="relative z-[1200] h-full min-h-0 w-full min-w-0 flex-1 bg-slate-950"
           >
             <ListingList
-              listings={visible.listings}
+              listings={listListings}
               selectedId={selected?.id}
-              loading={waitingForFirst && visible.listings.length === 0}
-              truncated={visible.stats.truncated}
-              totalCount={visible.stats.zigbang + visible.stats.naver + visible.stats.peterpan}
+              loading={viewMode === "saved" ? false : waitingForFirst && listListings.length === 0}
+              truncated={viewMode === "saved" ? false : visible.stats.truncated}
+              totalCount={
+                viewMode === "saved"
+                  ? savedHomes.length
+                  : visible.stats.zigbang + visible.stats.naver + visible.stats.peterpan
+              }
+              sort={listSort}
+              savedIds={savedHomes.map((item) => item.id)}
+              canLoadMore={viewMode === "list" && visible.stats.truncated && listingLimit < 300}
+              emptyHint={
+                viewMode === "saved"
+                  ? "No saved homes yet. Tap the heart on a listing to keep it here."
+                  : undefined
+              }
+              onSort={setListSort}
               onSelect={setSelected}
+              onToggleSave={onToggleSave}
+              onLoadMore={() => setListingLimit((current) => Math.min(300, current + 60))}
             />
           </div>
         ) : null}
 
         {selected ? (
-          <ListingPanel listing={selected} onClose={() => setSelected(null)} />
+          <ListingPanel
+            listing={selected}
+            saved={isSavedHome(savedHomes, selected.id)}
+            onClose={() => setSelected(null)}
+            onToggleSave={onToggleSave}
+          />
         ) : viewMode === "map" && visible.listings.length ? (
           <div className="pointer-events-auto absolute bottom-4 left-4 right-16 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:right-20">
             {visible.listings.slice(0, 24).map((listing) => {
@@ -737,7 +836,7 @@ export default function MapApp() {
                         : ""}
                     </span>
                     <span className="mt-1 block truncate text-sm font-medium">
-                      {price ?? listing.title ?? "Open listing"}
+                      {price ?? englishCardTitle(listing)}
                     </span>
                   </span>
                 </button>

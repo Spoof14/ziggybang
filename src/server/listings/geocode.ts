@@ -65,12 +65,14 @@ export async function geocodeKorea(query: string): Promise<Place | null> {
         continue;
       }
       const hangul = hit.name ?? trimmed;
+      const station = /station|subway|역/i.test(trimmed);
       return {
         id: `geo:${lat.toFixed(4)},${lng.toFixed(4)}`,
         names: [...new Set([trimmed, hangul, romanizeHangul(hangul)].filter(Boolean))],
         lat,
         lng,
-        zoom: zoomFromBox(hit.boundingbox),
+        zoom: station ? 16 : zoomFromBox(hit.boundingbox),
+        radiusM: station ? 800 : undefined,
       };
     }
     return null;
