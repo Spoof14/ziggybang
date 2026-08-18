@@ -4,7 +4,8 @@ import {
   isEmptyPriceFilter,
   listingMatchesPrice,
   normalizePriceFilter,
-  parseOptionalManwon,
+  formatWonInput,
+  parseWonToManwon,
 } from "./price";
 
 describe("price filters", () => {
@@ -18,8 +19,13 @@ describe("price filters", () => {
       }),
     ).toEqual({ minDeposit: 500, maxDeposit: 2000, maxRent: 80 });
     expect(isEmptyPriceFilter({})).toBe(true);
-    expect(parseOptionalManwon(" 2,000 ")).toBe(2000);
-    expect(parseOptionalManwon("")).toBeUndefined();
+    expect(parseWonToManwon("20,000,000")).toBe(2000);
+    expect(parseWonToManwon("₩800,000")).toBe(80);
+    expect(parseWonToManwon("20 million")).toBe(2000);
+    expect(parseWonToManwon("80")).toBeUndefined();
+    expect(parseWonToManwon("")).toBeUndefined();
+    expect(formatWonInput(2000)).toBe("20,000,000");
+    expect(formatWonInput(80)).toBe("800,000");
   });
 
   it("keeps unpriced listings until details are required", () => {

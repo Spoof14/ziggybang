@@ -91,12 +91,29 @@ export function listingMatchesPrice(
   return true;
 }
 
-export function parseOptionalManwon(raw: string): number | undefined {
-  const trimmed = raw.trim().replace(/,/g, "");
+export function manwonToKrw(manwon: number): number {
+  return Math.round(manwon * 10_000);
+}
+
+export function formatWonInput(manwon?: number): string {
+  if (manwon == null || !Number.isFinite(manwon)) return "";
+  return manwonToKrw(manwon).toLocaleString("en-US");
+}
+
+export function parseWonToManwon(raw: string): number | undefined {
+  const trimmed = raw.trim().replace(/₩/g, "").replace(/,/g, "").replace(/\s+/g, " ");
   if (!trimmed) return undefined;
-  const value = Number(trimmed);
+  const million = trimmed.match(/^(\d+(?:\.\d+)?)\s*(m|mil|million)$/i);
+  if (million) {
+    const krw = Number(million[1]) * 1_000_000;
+    if (!Number.isFinite(krw) || krw < 0) return undefined;
+    return Math.max(1, Math.round(krw / 10_000));
+  }
+  const value = Number(trimmed.replace(/[^\d.]/g, ""));
   if (!Number.isFinite(value) || value < 0) return undefined;
-  return Math.round(value);
+  const manwon = Math.round(value / 10_000);
+  if (value > 0 && manwon <= 0) return undefined;
+  return manwon;
 }
 
 function boundLabel(min?: number, max?: number): string | null {
