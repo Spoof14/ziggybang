@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getListingDetail, getMapData } from "~/server/listings/aggregate";
+import { askListings, isOpenAiConfigured } from "~/server/listings/ask";
 import { geocodeKorea } from "~/server/listings/geocode";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 
@@ -17,6 +18,19 @@ const propertyTypeSchema = z.enum([
   "officetel",
   "apartment",
 ]);
+const salesTypeSchema = z.enum(["jeonse", "wolse", "sale"]);
+const snapshotSchema = z.object({
+  searchInput: z.string().max(120),
+  propertyTypes: z.array(propertyTypeSchema).min(1),
+  salesTypes: z.array(salesTypeSchema).min(1),
+  areaBucketIds: z.array(z.enum(["xs", "s", "m", "l"])),
+  radiusM: z.number().min(250).max(3000),
+  viewMode: z.enum(["map", "list", "saved"]),
+  minDeposit: z.number().min(0).max(1_000_000).optional(),
+  maxDeposit: z.number().min(0).max(1_000_000).optional(),
+  minRent: z.number().min(0).max(50_000).optional(),
+  maxRent: z.number().min(0).max(50_000).optional(),
+});
 
 export const listingsRouter = createTRPCRouter({
   getMap: publicProcedure
@@ -46,6 +60,10 @@ export const listingsRouter = createTRPCRouter({
           .optional(),
         includeListings: z.boolean().optional(),
         listingLimit: z.number().int().min(20).max(300).optional(),
+        minDeposit: z.number().min(0).max(1_000_000).optional(),
+        maxDeposit: z.number().min(0).max(1_000_000).optional(),
+        minRent: z.number().min(0).max(50_000).optional(),
+        maxRent: z.number().min(0).max(50_000).optional(),
       }),
     )
     .query(({ input }) => getMapData(input)),
@@ -63,4 +81,23 @@ export const listingsRouter = createTRPCRouter({
   geocode: publicProcedure
     .input(z.object({ query: z.string().min(1).max(80) }))
     .query(({ input }) => geocodeKorea(input.query)),
+
+  aiStatus: publicProcedure.query(() => ({ openai: isOpenAiConfigured() })),
+
+  ask: publicProcedure
+    .input(
+      z.object({
+        messages: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              content: z.string().min(1).max(1500),
+            }),
+          )
+          .min(1)
+          .max(12),
+        current: snapshotSchema,
+      }),
+    )
+    .mutation(({ input }) => askListings(input.messages, input.current)),
 });

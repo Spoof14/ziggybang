@@ -4,7 +4,21 @@ import {
   listingMatchesArea,
   type AreaBucketId,
 } from "./area";
+import {
+  hasDepositBound,
+  hasRentBound,
+  isEmptyPriceFilter,
+  listingMatchesPrice,
+  type PriceFilter,
+} from "./price";
 import { listingMatchesQuery } from "./search";
+
+export type ListingFilterInput = {
+  salesTypes: SalesType[];
+  areaBucketIds: AreaBucketId[];
+  query: string;
+  requireDetails: boolean;
+} & PriceFilter;
 
 export function isAllSalesTypes(selected: SalesType[]): boolean {
   if (selected.length === 0) return true;
@@ -25,12 +39,7 @@ export function filterBySalesTypes(
 
 export function filterListings(
   listings: MapListing[],
-  input: {
-    salesTypes: SalesType[];
-    areaBucketIds: AreaBucketId[];
-    query: string;
-    requireDetails: boolean;
-  },
+  input: ListingFilterInput,
 ): MapListing[] {
   return listings.filter((listing) => {
     if (!filterBySalesTypes([listing], input.salesTypes, input.requireDetails).length) {
@@ -45,6 +54,16 @@ export function filterListings(
     ) {
       return false;
     }
+    if (
+      !listingMatchesPrice(
+        listing,
+        input,
+        input.requireDetails &&
+          (hasDepositBound(input) || hasRentBound(input)),
+      )
+    ) {
+      return false;
+    }
     if (input.query && !listingMatchesQuery(listing, input.query)) {
       return false;
     }
@@ -52,14 +71,13 @@ export function filterListings(
   });
 }
 
-export function needsListingDetails(input: {
-  salesTypes: SalesType[];
-  areaBucketIds: AreaBucketId[];
-  query: string;
-}): boolean {
+export function needsListingDetails(
+  input: Omit<ListingFilterInput, "requireDetails">,
+): boolean {
   return (
     !isAllSalesTypes(input.salesTypes) ||
     !isAllAreaBuckets(input.areaBucketIds) ||
-    Boolean(input.query.trim())
+    Boolean(input.query.trim()) ||
+    !isEmptyPriceFilter(input)
   );
 }

@@ -76,6 +76,10 @@ export async function getMapData(
     salesTypes: selectedSalesTypes,
     areaBucketIds,
     query: listingQuery,
+    minDeposit: query.minDeposit,
+    maxDeposit: query.maxDeposit,
+    minRent: query.minRent,
+    maxRent: query.maxRent,
   };
   const requireDetails =
     (query.zoom >= 15 || Boolean(query.includeListings)) &&

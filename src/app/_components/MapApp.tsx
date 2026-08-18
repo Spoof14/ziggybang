@@ -25,6 +25,7 @@ import {
 import { needsListingDetails } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
 import { loadPrefs, savePrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
+import { describePriceFilter, type PriceFilter } from "~/lib/listings/price";
 import {
   isStationQuery,
   looksLikePlaceQuery,
@@ -33,6 +34,7 @@ import {
   stripPlaceFromQuery,
 } from "~/lib/listings/search";
 import { englishCardTitle } from "~/lib/listings/english";
+import { type SearchSnapshot } from "~/lib/listings/ai-search";
 import {
   isSavedHome,
   loadSavedHomes,
@@ -56,6 +58,8 @@ import { ListingList } from "./ListingList";
 import { ListingMap } from "./ListingMap";
 import { ListingPanel } from "./ListingPanel";
 import { ListingPhoto } from "./ListingPhoto";
+import { AskSearch } from "./AskSearch";
+import { PriceFilters } from "./PriceFilters";
 
 const ALL_SOURCES: Source[] = ["zigbang", "naver", "peterpan"];
 const ALL_TYPES: PropertyType[] = ["oneroom", "villa", "officetel", "apartment"];
@@ -106,6 +110,11 @@ export default function MapApp() {
   const [viewMode, setViewMode] = useState<ViewMode>("map");
   const [listSort, setListSort] = useState<ListSort>("featured");
   const [listingLimit, setListingLimit] = useState(60);
+  const [minDeposit, setMinDeposit] = useState<number | undefined>();
+  const [maxDeposit, setMaxDeposit] = useState<number | undefined>();
+  const [minRent, setMinRent] = useState<number | undefined>();
+  const [maxRent, setMaxRent] = useState<number | undefined>();
+  const [askOpen, setAskOpen] = useState(false);
   const [savedHomes, setSavedHomes] = useState<MapListing[]>([]);
   const [tool, setTool] = useState<"pan" | "radius" | "draw">("pan");
   const [radiusM, setRadiusM] = useState(DEFAULT_RADIUS_M);
@@ -175,6 +184,10 @@ export default function MapApp() {
     setDebouncedQuery(url.searchInput ?? base?.searchInput ?? "");
     setViewMode(url.viewMode ?? base?.viewMode ?? "map");
     setListSort(url.listSort ?? base?.listSort ?? "featured");
+    setMinDeposit(url.minDeposit ?? base?.minDeposit);
+    setMaxDeposit(url.maxDeposit ?? base?.maxDeposit);
+    setMinRent(url.minRent ?? base?.minRent);
+    setMaxRent(url.maxRent ?? base?.maxRent);
     setRadiusM(url.radiusM ?? base?.radiusM ?? DEFAULT_RADIUS_M);
     setManualCircle(base?.circle ?? null);
     setPolygon(base?.polygon ?? null);
@@ -213,10 +226,18 @@ export default function MapApp() {
       },
       uiCompact,
       listSort,
+      minDeposit,
+      maxDeposit,
+      minRent,
+      maxRent,
     });
   }, [
     areaBucketIds,
     bounds,
+    maxDeposit,
+    maxRent,
+    minDeposit,
+    minRent,
     manualCircle,
     polygon,
     prefsLoaded,
@@ -247,6 +268,10 @@ export default function MapApp() {
         zoom,
       },
       listSort,
+      minDeposit,
+      maxDeposit,
+      minRent,
+      maxRent,
     });
     const url = `${window.location.pathname}${next}`;
     if (`${window.location.pathname}${window.location.search}` !== url) {
@@ -256,6 +281,10 @@ export default function MapApp() {
     areaBucketIds,
     bounds,
     listSort,
+    maxDeposit,
+    maxRent,
+    minDeposit,
+    minRent,
     prefsLoaded,
     propertyTypes,
     radiusM,
@@ -304,6 +333,10 @@ export default function MapApp() {
       polygon: polygon && polygon.length >= 3 ? polygon : undefined,
       includeListings: viewMode === "list" || Boolean(circle ?? polygon),
       listingLimit: viewMode === "list" ? listingLimit : undefined,
+      minDeposit,
+      maxDeposit,
+      minRent,
+      maxRent,
     }),
     [
       areaBucketIds,
@@ -311,6 +344,10 @@ export default function MapApp() {
       circle,
       listingLimit,
       listingQuery,
+      maxDeposit,
+      maxRent,
+      minDeposit,
+      minRent,
       polygon,
       propertyTypes,
       salesTypes,
@@ -434,15 +471,62 @@ export default function MapApp() {
 
   useEffect(() => {
     setListingLimit(60);
-  }, [bounds, debouncedQuery, viewMode]);
+  }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent]);
 
   const onToggleSave = useCallback((listing: MapListing) => {
-    setSavedHomes((current) => {
-      const next = toggleSavedHome(current, listing);
+    setSavedHomes((currentHomes) => {
+      const next = toggleSavedHome(currentHomes, listing);
       saveSavedHomes(next);
       return next;
     });
   }, []);
+
+  const applySearchSnapshot = useCallback((snapshot: SearchSnapshot) => {
+    setSearchInput(snapshot.searchInput);
+    setDebouncedQuery(snapshot.searchInput);
+    setPropertyTypes(snapshot.propertyTypes.length ? snapshot.propertyTypes : ALL_TYPES);
+    setSalesTypes(snapshot.salesTypes.length ? snapshot.salesTypes : ALL_SALES);
+    setAreaBucketIds(snapshot.areaBucketIds);
+    setMinDeposit(snapshot.minDeposit);
+    setMaxDeposit(snapshot.maxDeposit);
+    setMinRent(snapshot.minRent);
+    setMaxRent(snapshot.maxRent);
+    setRadiusM(snapshot.radiusM);
+    setViewMode(snapshot.viewMode);
+  }, []);
+
+  const searchSnapshot = useMemo<SearchSnapshot>(
+    () => ({
+      searchInput,
+      propertyTypes,
+      salesTypes,
+      areaBucketIds,
+      radiusM,
+      viewMode,
+      minDeposit,
+      maxDeposit,
+      minRent,
+      maxRent,
+    }),
+    [
+      areaBucketIds,
+      maxDeposit,
+      maxRent,
+      minDeposit,
+      minRent,
+      propertyTypes,
+      radiusM,
+      salesTypes,
+      searchInput,
+      viewMode,
+    ],
+  );
+
+  const priceFilter = useMemo<PriceFilter>(
+    () => ({ minDeposit, maxDeposit, minRent, maxRent }),
+    [maxDeposit, maxRent, minDeposit, minRent],
+  );
+  const priceHint = describePriceFilter(priceFilter);
 
   const showList = viewMode === "list" || viewMode === "saved";
   const listListings = viewMode === "saved" ? savedHomes : visible.listings;
@@ -488,6 +572,13 @@ export default function MapApp() {
               <p className="max-w-[11rem] pt-0.5 text-right text-[11px] leading-tight text-slate-400 sm:max-w-[46%]">
                 {statusLabel}
               </p>
+              <button
+                type="button"
+                onClick={() => setAskOpen(true)}
+                className="rounded-full bg-sky-400 px-2.5 py-1 text-[11px] font-medium text-slate-950 hover:bg-sky-300"
+              >
+                Ask
+              </button>
               <button
                 type="button"
                 onClick={() => setUiCompact((current) => !current)}
@@ -597,6 +688,9 @@ export default function MapApp() {
           {areaHint ? (
             <p className="mt-1 text-[11px] text-sky-300">{areaHint}</p>
           ) : null}
+          {priceHint ? (
+            <p className="mt-1 text-[11px] text-violet-300">{priceHint}</p>
+          ) : null}
 
           <div className="mt-2 flex flex-wrap gap-1.5">
             {(["map", "list", "saved"] as ViewMode[]).map((mode) => (
@@ -635,6 +729,16 @@ export default function MapApp() {
               );
             })}
           </div>
+
+          <PriceFilters
+            value={priceFilter}
+            onChange={(next) => {
+              setMinDeposit(next.minDeposit);
+              setMaxDeposit(next.maxDeposit);
+              setMinRent(next.minRent);
+              setMaxRent(next.maxRent);
+            }}
+          />
 
           <div className="mt-2 flex flex-wrap gap-1.5">
             {(["pan", "radius", "draw"] as const).map((nextTool) => (
@@ -726,9 +830,13 @@ export default function MapApp() {
             salesTypes,
             areaBucketIds,
             query: listingQuery,
+            minDeposit,
+            maxDeposit,
+            minRent,
+            maxRent,
           }) ? (
             <p className="mt-1.5 text-[11px] text-slate-400">
-              Zoom in to apply size and listing-text filters to individual homes.
+              Zoom in to apply size, price, and listing-text filters to individual homes.
             </p>
           ) : null}
           </>
@@ -845,6 +953,12 @@ export default function MapApp() {
           </div>
         ) : null}
       </div>
+      <AskSearch
+        open={askOpen}
+        current={searchSnapshot}
+        onClose={() => setAskOpen(false)}
+        onApply={applySearchSnapshot}
+      />
     </div>
   );
 }

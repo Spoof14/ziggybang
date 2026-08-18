@@ -1,5 +1,6 @@
 import { areaBuckets, type AreaBucketId } from "./area";
 import { type ListSort, type ViewMode } from "./prefs";
+import { normalizePriceFilter, type PriceFilter } from "./price";
 import {
   propertyTypes,
   salesTypes,
@@ -19,7 +20,7 @@ export type AppUrlState = {
   radiusM?: number;
   view?: { lat: number; lng: number; zoom: number };
   listSort?: ListSort;
-};
+} & PriceFilter;
 
 const VIEW_MODES: ViewMode[] = ["map", "list", "saved"];
 const LIST_SORTS: ListSort[] = ["featured", "newest", "deposit", "monthly", "size"];
@@ -68,7 +69,22 @@ export function parseAppUrl(search: string): AppUrlState {
   if (sort && LIST_SORTS.includes(sort as ListSort)) {
     next.listSort = sort as ListSort;
   }
+  Object.assign(
+    next,
+    normalizePriceFilter({
+      minDeposit: optionalNumber(params.get("dmin")),
+      maxDeposit: optionalNumber(params.get("dmax")),
+      minRent: optionalNumber(params.get("rmin")),
+      maxRent: optionalNumber(params.get("rmax")),
+    }),
+  );
   return next;
+}
+
+function optionalNumber(value: string | null): number | undefined {
+  if (value == null || value.trim() === "") return undefined;
+  const next = Number(value);
+  return Number.isFinite(next) ? next : undefined;
 }
 
 export function buildAppSearch(state: {
@@ -81,7 +97,7 @@ export function buildAppSearch(state: {
   radiusM: number;
   view: { lat: number; lng: number; zoom: number };
   listSort: ListSort;
-}): string {
+} & PriceFilter): string {
   const params = new URLSearchParams();
   if (state.searchInput.trim()) params.set("q", state.searchInput.trim());
   if (state.viewMode !== "map") params.set("view", state.viewMode);
@@ -100,13 +116,18 @@ export function buildAppSearch(state: {
   params.set("lng", state.view.lng.toFixed(4));
   params.set("z", String(Math.round(state.view.zoom)));
   if (state.listSort !== "featured") params.set("sort", state.listSort);
+  const price = normalizePriceFilter(state);
+  if (price.minDeposit != null) params.set("dmin", String(price.minDeposit));
+  if (price.maxDeposit != null) params.set("dmax", String(price.maxDeposit));
+  if (price.minRent != null) params.set("rmin", String(price.minRent));
+  if (price.maxRent != null) params.set("rmax", String(price.maxRent));
   const text = params.toString();
   return text ? `?${text}` : "";
 }
 
 export function hasAppUrlState(search: string): boolean {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort"].some(
+  return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort", "dmin", "dmax", "rmin", "rmax"].some(
     (key) => params.has(key),
   );
 }

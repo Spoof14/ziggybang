@@ -190,6 +190,27 @@ describe("getMapData", () => {
     expect(data.listings.map((item) => item.id)).toEqual(["near"]);
   });
 
+  it("filters by deposit and monthly rent once prices are present", async () => {
+    const data = await getMapData(
+      {
+        bounds: seoulBounds,
+        zoom: 16,
+        sources: ["zigbang"],
+        propertyTypes: ["oneroom"],
+        maxDeposit: 800,
+        maxRent: 60,
+      },
+      {
+        zigbang: async () => [
+          { ...listing("cheap", "zigbang"), salesType: "wolse", deposit: 500, rent: 50 },
+          { ...listing("pricey", "zigbang"), salesType: "wolse", deposit: 2000, rent: 90 },
+        ],
+        naver: async () => [],
+      },
+    );
+    expect(data.listings.map((item) => item.id)).toEqual(["cheap"]);
+  });
+
   it("list view keeps clusters and a short page instead of dumping every pin", async () => {
     const many = Array.from({ length: 80 }, (_, index) =>
       listing(`z${index}`, "zigbang", 37.56, 126.97 + index * 0.001),

@@ -1,5 +1,6 @@
 import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
 import { areaBuckets, type AreaBucketId } from "./area";
+import { normalizePriceFilter, type PriceFilter } from "./price";
 import {
   propertyTypes,
   salesTypes,
@@ -25,7 +26,7 @@ export type SavedPrefs = {
   view: { lat: number; lng: number; zoom: number } | null;
   uiCompact: boolean;
   listSort: ListSort;
-};
+} & PriceFilter;
 
 const KEY = "ziggybang:prefs:v1";
 const AREA_IDS = areaBuckets.map((bucket) => bucket.id);
@@ -132,6 +133,12 @@ export function loadPrefs(): SavedPrefs | null {
         parsed.listSort && LIST_SORTS.includes(parsed.listSort)
           ? parsed.listSort
           : "featured",
+      ...normalizePriceFilter({
+        minDeposit: parsed.minDeposit,
+        maxDeposit: parsed.maxDeposit,
+        minRent: parsed.minRent,
+        maxRent: parsed.maxRent,
+      }),
     };
   } catch {
     return null;

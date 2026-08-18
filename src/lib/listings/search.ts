@@ -210,10 +210,14 @@ export function matchPlace(query: string): Place | undefined {
       const normalizedName = normalizeSearch(name);
       const romanName = normalizeSearch(romanizeHangul(name));
       for (const token of tokens) {
+        if (token.length < 2) continue;
         const romanToken = normalizeSearch(romanizeHangul(token));
         let score = 0;
         if (token === normalizedName || romanToken === romanName) score = 100 + name.length;
-        else if (normalizedName.includes(token) || romanName.includes(romanToken)) {
+        else if (
+          token.length >= 3 &&
+          (normalizedName.includes(token) || romanName.includes(romanToken))
+        ) {
           score = 60 + token.length;
         } else if (token.length >= 4 && levenshtein(token, normalizedName) <= 1) {
           score = 50;
@@ -246,13 +250,25 @@ const FILTER_TOKENS = new Set(
     "wolse",
     "monthly",
     "sale",
+    "deposit",
+    "rent",
+    "budget",
+    "million",
+    "under",
+    "max",
+    "min",
+    "보증금",
+    "월세",
+    "만원",
   ].map(normalizeSearch),
 );
 
 export function looksLikePlaceQuery(query: string): boolean {
   const tokens = normalizeSearch(query).split(" ").filter(Boolean);
   if (!tokens.length) return false;
-  return tokens.some((token) => token.length >= 2 && !FILTER_TOKENS.has(token));
+  return tokens.some(
+    (token) => token.length >= 2 && !FILTER_TOKENS.has(token) && !/^\d+$/.test(token),
+  );
 }
 
 export function placeSearchToken(query: string): string | undefined {

@@ -54,4 +54,22 @@ describe("sales type filters", () => {
       }).map((item) => item.id),
     ).toEqual(["b"]);
   });
+
+  it("drops homes outside deposit and rent bounds once prices are known", () => {
+    const listings = [
+      { ...listing("cheap", "wolse"), deposit: 500, rent: 50 },
+      { ...listing("mid", "wolse"), deposit: 1000, rent: 70 },
+      listing("unknown", "wolse"),
+    ];
+    expect(
+      filterListings(listings, {
+        salesTypes: ["wolse"],
+        areaBucketIds: [],
+        query: "",
+        requireDetails: true,
+        maxDeposit: 800,
+        maxRent: 60,
+      }).map((item) => item.id),
+    ).toEqual(["cheap"]);
+  });
 });

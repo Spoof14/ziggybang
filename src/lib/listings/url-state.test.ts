@@ -13,14 +13,20 @@ describe("shareable search URLs", () => {
       radiusM: 800,
       view: { lat: 37.556, lng: 126.923, zoom: 15 },
       listSort: "deposit",
+      maxDeposit: 2000,
+      maxRent: 80,
     });
     expect(search).toContain("q=hongdae");
     expect(search).toContain("view=list");
+    expect(search).toContain("dmax=2000");
+    expect(search).toContain("rmax=80");
     const parsed = parseAppUrl(search);
     expect(parsed.searchInput).toBe("hongdae");
     expect(parsed.viewMode).toBe("list");
     expect(parsed.salesTypes).toEqual(["wolse"]);
     expect(parsed.listSort).toBe("deposit");
     expect(parsed.radiusM).toBe(800);
+    expect(parsed.maxDeposit).toBe(2000);
+    expect(parsed.maxRent).toBe(80);
   });
 });

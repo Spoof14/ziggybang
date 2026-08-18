@@ -45,6 +45,8 @@ describe("bilingual fuzzy search", () => {
   it("does not treat studio or jeonse as a neighborhood name", () => {
     expect(looksLikePlaceQuery("studio")).toBe(false);
     expect(looksLikePlaceQuery("dangsan")).toBe(true);
+    expect(matchPlace("a bit cheaper")).toBeUndefined();
+    expect(looksLikePlaceQuery("deposit 2000")).toBe(false);
   });
 
   it("matches Dangsan station as a walk-radius place, not listing text", () => {

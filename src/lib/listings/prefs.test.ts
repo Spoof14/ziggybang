@@ -35,6 +35,8 @@ describe("saved map prefs", () => {
       view: { lat: 37.556, lng: 126.923, zoom: 15 },
       uiCompact: true,
       listSort: "deposit",
+      maxDeposit: 2000,
+      maxRent: 80,
     });
 
     expect(loadPrefs()).toMatchObject({
@@ -46,6 +48,8 @@ describe("saved map prefs", () => {
       view: { lat: 37.556, lng: 126.923, zoom: 15 },
       uiCompact: true,
       listSort: "deposit",
+      maxDeposit: 2000,
+      maxRent: 80,
     });
   });
 

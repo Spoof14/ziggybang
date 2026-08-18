@@ -35,6 +35,10 @@ export type MapQuery = {
   polygon?: Array<{ lat: number; lng: number }>;
   includeListings?: boolean;
   listingLimit?: number;
+  minDeposit?: number;
+  maxDeposit?: number;
+  minRent?: number;
+  maxRent?: number;
 };
 
 export type MapListing = {
