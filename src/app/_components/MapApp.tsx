@@ -674,7 +674,7 @@ export default function MapApp() {
         <div
           className={
             viewMode === "list"
-              ? "pointer-events-none absolute inset-0 h-full md:pointer-events-auto md:static md:w-[46%]"
+              ? "pointer-events-none invisible absolute inset-0 z-0 h-full md:visible md:pointer-events-auto md:static md:z-auto md:w-[46%]"
               : "h-full min-h-0 min-w-0 flex-1"
           }
         >
@@ -695,7 +695,10 @@ export default function MapApp() {
           />
         </div>
         {viewMode === "list" ? (
-          <div className="relative z-[1] h-full min-h-0 flex-1 bg-slate-950">
+          <div
+            data-list-panel="portrait"
+            className="relative z-[1200] h-full min-h-0 w-full min-w-0 flex-1 bg-slate-950"
+          >
             <ListingList
               listings={visible.listings}
               selectedId={selected?.id}
