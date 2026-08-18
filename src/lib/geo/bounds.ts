@@ -15,6 +15,14 @@ export function isValidBounds(bounds: Bounds): boolean {
   );
 }
 
+/** Leaflet reports empty/world boxes when the map container is display:none or 0×0. */
+export function isUsableMapViewport(
+  size: { x: number; y: number },
+  bounds: Bounds,
+): boolean {
+  return size.x >= 80 && size.y >= 80 && isValidBounds(bounds);
+}
+
 export function containsPoint(
   bounds: Bounds,
   lat: number,

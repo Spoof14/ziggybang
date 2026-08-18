@@ -3,6 +3,7 @@
 import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "~/trpc/react";
+import { isValidBounds } from "~/lib/geo/bounds";
 import {
   type CircleFilter,
   type LatLng,
@@ -312,6 +313,7 @@ export default function MapApp() {
   const refreshing = zigbangQuery.isFetching && !zigbangQuery.isLoading;
 
   const onViewport = useCallback((next: Bounds & { zoom: number }) => {
+    if (!isValidBounds(next)) return;
     if (viewportTimer.current) clearTimeout(viewportTimer.current);
     viewportTimer.current = setTimeout(() => {
       const key = viewportKey(next);
@@ -672,7 +674,7 @@ export default function MapApp() {
         <div
           className={
             viewMode === "list"
-              ? "hidden h-full min-h-0 md:block md:w-[46%]"
+              ? "pointer-events-none absolute inset-0 h-full md:pointer-events-auto md:static md:w-[46%]"
               : "h-full min-h-0 min-w-0 flex-1"
           }
         >
@@ -693,7 +695,7 @@ export default function MapApp() {
           />
         </div>
         {viewMode === "list" ? (
-          <div className="h-full min-h-0 flex-1">
+          <div className="relative z-[1] h-full min-h-0 flex-1 bg-slate-950">
             <ListingList
               listings={visible.listings}
               selectedId={selected?.id}

@@ -14,6 +14,7 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import { DivIcon, DomEvent, type Map as LeafletMap } from "leaflet";
+import { isUsableMapViewport } from "~/lib/geo/bounds";
 import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
 
@@ -45,12 +46,17 @@ function emitViewport(
     zoom: number;
   }) => void,
 ) {
-  const bounds = map.getBounds();
+  const size = map.getSize();
+  const leafletBounds = map.getBounds();
+  const bounds = {
+    south: leafletBounds.getSouth(),
+    west: leafletBounds.getWest(),
+    north: leafletBounds.getNorth(),
+    east: leafletBounds.getEast(),
+  };
+  if (!isUsableMapViewport(size, bounds)) return;
   onViewport({
-    south: bounds.getSouth(),
-    west: bounds.getWest(),
-    north: bounds.getNorth(),
-    east: bounds.getEast(),
+    ...bounds,
     zoom: map.getZoom(),
   });
 }
@@ -88,7 +94,11 @@ function MapEvents({
     } else {
       map.doubleClickZoom.disable();
     }
-    const observer = new ResizeObserver(() => map.invalidateSize());
+    const observer = new ResizeObserver(() => {
+      const size = map.getSize();
+      if (size.x < 80 || size.y < 80) return;
+      map.invalidateSize();
+    });
     observer.observe(container);
     return () => {
       observer.disconnect();

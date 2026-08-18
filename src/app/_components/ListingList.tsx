@@ -76,7 +76,7 @@ export function ListingList({
         <div className="flex flex-1 items-center justify-center p-6 text-sm text-slate-400">
           {loading
             ? "Loading homes in this area…"
-            : "No listings in this area. Search a neighborhood, draw a shape, or zoom in."}
+            : "No homes in the current map area. Search a neighborhood, draw a shape, or zoom in."}
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto p-3">

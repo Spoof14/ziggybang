@@ -4,6 +4,7 @@ import {
   boundsCenter,
   containsPoint,
   expandBounds,
+  isUsableMapViewport,
   isValidBounds,
   overlapRatio,
 } from "./bounds";
@@ -20,6 +21,13 @@ describe("bounds", () => {
     expect(isValidBounds(seoul)).toBe(true);
     expect(isValidBounds({ ...seoul, north: 37.5 })).toBe(false);
     expect(isValidBounds({ ...seoul, east: 126.9 })).toBe(false);
+    expect(
+      isUsableMapViewport({ x: 390, y: 700 }, seoul),
+    ).toBe(true);
+    expect(isUsableMapViewport({ x: 0, y: 0 }, seoul)).toBe(false);
+    expect(
+      isUsableMapViewport({ x: 400, y: 400 }, { ...seoul, north: 37.5 }),
+    ).toBe(false);
   });
 
   it("tests point containment and center", () => {
