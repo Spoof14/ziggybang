@@ -12,12 +12,9 @@ An English-language map of Zigbang, Naver, and Peterpan Korea rentals. Built as 
 
 ## Naver from outside Korea
 
-Naver Land blocks non-Korean IPs. Zigbang and Peterpan still work from US/EU hosts.
+Naver Land blocks non-Korean **and cloud** IPs. Zigbang and Peterpan still work from Vercel.
 
-To get Naver listings:
-
-1. Deploy Vercel functions in Seoul. This repo pins them with `vercel.json` `"regions": ["icn1"]`.
-2. Locally, run the app from a Korean network, VPN, or jump host. There is no API key.
+Seoul (`icn1` in `vercel.json`) only places the function in AWS Korea. Outbound requests still use Amazon datacenter IPs, which Naver drops (the request hangs, then times out). A Korean home ISP, mobile hotspot, or residential proxy works; Vercel/AWS does not.
 
 ## Develop
 

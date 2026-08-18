@@ -42,6 +42,6 @@ describe("English listing copy", () => {
   it("uses English product labels", () => {
     expect(propertyTypeLabel.oneroom).toBe("Studio");
     expect(salesTypeLabel.jeonse).toBe("Jeonse");
-    expect(friendlySourceError("naver", "fetch failed")).toContain("Korean IPs");
+    expect(friendlySourceError("naver", "fetch failed")).toContain("cloud IPs");
   });
 });
