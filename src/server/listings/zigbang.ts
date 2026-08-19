@@ -7,6 +7,7 @@ import { needsListingDetails } from "~/lib/listings/filter";
 import { type AreaBucketId } from "~/lib/listings/area";
 import {
   type Bounds,
+  type ListingDetail,
   type MapListing,
   type PropertyType,
   type SalesType,
@@ -48,6 +49,14 @@ type ZigbangPrice = {
   sellPrice?: number;
 };
 
+type ZigbangNamed = { name?: string; title?: string; description?: string };
+type ZigbangPoi = {
+  exists?: boolean;
+  poiType?: string;
+  distance?: number;
+  transport?: string;
+  timeTaken?: number;
+};
 type ZigbangItemDetail = {
   item?: {
     itemId?: number;
@@ -61,13 +70,43 @@ type ZigbangItemDetail = {
     imageCount?: number;
     description?: string;
     updatedAt?: string;
+    approveDate?: string;
+    moveinDate?: string;
+    elevator?: boolean;
+    bathroomCount?: number;
+    parkingAvailableText?: string;
+    roomDirection?: string;
+    residenceType?: string;
+    options?: string[];
     price?: ZigbangPrice;
     location?: { lat?: number; lng?: number };
     area?: Record<string, number>;
     floor?: { floor?: string; allFloors?: string };
-    manageCost?: { amount?: number };
+    manageCost?: {
+      amount?: number;
+      includes?: string[];
+      notIncludes?: string[];
+    };
     addressOrigin?: { fullText?: string; localText?: string };
+    neighborhoods?: {
+      amenities?: ZigbangNamed[];
+      nearbyPois?: ZigbangPoi[];
+    };
   };
+  realtor?: {
+    name?: string;
+    officeTitle?: string;
+    officePhone?: string;
+    phone?: string;
+    officeAddress?: string;
+  };
+  agent?: {
+    agentName?: string;
+    agentTitle?: string;
+    agentPhone?: string;
+    agentAddress?: string;
+  };
+  subways?: Array<{ name?: string; description?: string }>;
 };
 
 const verticalByType: Record<
@@ -329,10 +368,89 @@ export function mapZigbangPropertyType(value?: string): PropertyType {
   return "oneroom";
 }
 
+export function mapZigbangItemDetail(
+  data: ZigbangItemDetail,
+  propertyType: PropertyType,
+): ListingDetail | null {
+  const item = data.item;
+  if (!item?.itemId) return null;
+  const area = item.area
+    ? Object.values(item.area).find((value) => typeof value === "number")
+    : undefined;
+  const realtor = data.realtor;
+  const agent = data.agent;
+  const nearby = (item.neighborhoods?.nearbyPois ?? [])
+    .filter((poi) => poi.exists && poi.poiType && typeof poi.distance === "number")
+    .map((poi) => ({
+      type: poi.poiType!,
+      meters: poi.distance!,
+      walkMinutes:
+        poi.transport === "foot" && typeof poi.timeTaken === "number"
+          ? Math.max(1, Math.round(poi.timeTaken / 60))
+          : undefined,
+    }));
+  return {
+    id: `zigbang:${propertyType}:${item.itemId}`,
+    source: "zigbang",
+    sourceId: String(item.itemId),
+    lat: item.location?.lat ?? 0,
+    lng: item.location?.lng ?? 0,
+    propertyType: mapZigbangPropertyType(item.serviceType) || propertyType,
+    salesType: mapZigbangSalesType(item.salesType),
+    title: item.title,
+    deposit: item.price?.deposit,
+    rent: item.price?.rent,
+    price: item.price?.sellPrice,
+    areaM2: area,
+    floor:
+      item.floor?.floor && item.floor.allFloors
+        ? `${item.floor.floor}/${item.floor.allFloors}`
+        : item.floor?.floor,
+    address: item.addressOrigin?.fullText ?? item.jibunAddress,
+    thumbnail: normalizeZigbangThumbnail(item.imageThumbnail, item.itemId),
+    photos: zigbangPhotos(item, item.itemId),
+    url: zigbangListingUrl(propertyType, String(item.itemId)),
+    description: item.description,
+    manageCost: item.manageCost?.amount,
+    roomType: item.roomType,
+    updatedAt: item.updatedAt,
+    parking: item.parkingAvailableText,
+    elevator: item.elevator,
+    bathrooms: item.bathroomCount,
+    moveIn: item.moveinDate,
+    approveDate: item.approveDate,
+    direction: item.roomDirection,
+    options: item.options?.filter(Boolean),
+    manageIncludes: item.manageCost?.includes?.filter(Boolean),
+    manageExcludes: item.manageCost?.notIncludes?.filter(Boolean),
+    residenceType: item.residenceType,
+    agent:
+      (realtor ?? agent)
+        ? {
+            name: realtor?.name ?? agent?.agentName,
+            office: realtor?.officeTitle ?? agent?.agentTitle,
+            phone: realtor?.officePhone ?? agent?.agentPhone,
+            mobile: realtor?.phone,
+            address: realtor?.officeAddress ?? agent?.agentAddress,
+          }
+        : undefined,
+    subways: (data.subways ?? [])
+      .filter((station) => station.name)
+      .map((station) => ({
+        name: station.name!,
+        line: station.description,
+      })),
+    amenities: (item.neighborhoods?.amenities ?? [])
+      .map((entry) => entry.title ?? entry.name ?? entry.description)
+      .filter((value): value is string => Boolean(value)),
+    nearby,
+  };
+}
+
 export async function fetchZigbangDetail(
   sourceId: string,
   propertyType: PropertyType,
-): Promise<MapListing & { description?: string; manageCost?: number; roomType?: string; updatedAt?: string }> {
+): Promise<ListingDetail> {
   if (propertyType === "apartment") {
     return {
       id: `zigbang:apartment:${sourceId}`,
@@ -351,41 +469,11 @@ export async function fetchZigbangDetail(
       `${ZIGBANG_ORIGIN}/v3/items/${sourceId}`,
       { timeoutMs: 8000 },
     );
-    const item = data.item;
-    if (!item?.itemId) {
+    const listing = mapZigbangItemDetail(data, propertyType);
+    if (!listing) {
       throw new Error(`Zigbang item ${sourceId} was not found`);
     }
-
-    const area = item.area
-      ? Object.values(item.area).find((value) => typeof value === "number")
-      : undefined;
-
-    return {
-      id: `zigbang:${propertyType}:${item.itemId}`,
-      source: "zigbang",
-      sourceId: String(item.itemId),
-      lat: item.location?.lat ?? 0,
-      lng: item.location?.lng ?? 0,
-      propertyType: mapZigbangPropertyType(item.serviceType) || propertyType,
-      salesType: mapZigbangSalesType(item.salesType),
-      title: item.title,
-      deposit: item.price?.deposit,
-      rent: item.price?.rent,
-      price: item.price?.sellPrice,
-      areaM2: area,
-      floor:
-        item.floor?.floor && item.floor.allFloors
-          ? `${item.floor.floor}/${item.floor.allFloors}`
-          : item.floor?.floor,
-      address: item.addressOrigin?.fullText ?? item.jibunAddress,
-      thumbnail: normalizeZigbangThumbnail(item.imageThumbnail, item.itemId),
-      photos: zigbangPhotos(item, item.itemId),
-      url: zigbangListingUrl(propertyType, String(item.itemId)),
-      description: item.description,
-      manageCost: item.manageCost?.amount,
-      roomType: item.roomType,
-      updatedAt: item.updatedAt,
-    };
+    return listing;
   });
 }
 

@@ -18,6 +18,7 @@ import {
   englishCardTitle,
   koreanAddressForTaxi,
 } from "~/lib/listings/english";
+import { listingPagePath, stashListing } from "~/lib/listings/path";
 import { type MapListing } from "~/lib/listings/types";
 import { ListingGallery } from "./ListingGallery";
 
@@ -192,19 +193,28 @@ export function ListingPanel({
 
       <div className="mt-auto flex flex-col gap-2 p-4">
         <a
+          href={listingPagePath(detail)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => stashListing(detail)}
+          className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
+        >
+          Open full page
+        </a>
+        <a
           href={detail.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
+          className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/20"
         >
           Open on {sourceLabel[listing.source]}
         </a>
         <button
           type="button"
-          onClick={() => void copy("link", detail.url)}
+          onClick={() => void copy("link", `${window.location.origin}${listingPagePath(detail)}`)}
           className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/20"
         >
-          {copied === "link" ? "Listing link copied" : "Copy listing link"}
+          {copied === "link" ? "Page link copied" : "Copy page link"}
         </button>
       </div>
     </aside>

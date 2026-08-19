@@ -93,4 +93,38 @@ export type MapData = {
   errors: SourceError[];
 };
 
-export type ListingDetail = MapListing;
+export type ListingAgent = {
+  name?: string;
+  office?: string;
+  phone?: string;
+  mobile?: string;
+  address?: string;
+};
+
+export type ListingSubway = {
+  name: string;
+  line?: string;
+};
+
+export type ListingNearby = {
+  type: string;
+  meters: number;
+  walkMinutes?: number;
+};
+
+export type ListingDetail = MapListing & {
+  parking?: string;
+  elevator?: boolean;
+  bathrooms?: number;
+  moveIn?: string;
+  approveDate?: string;
+  direction?: string;
+  options?: string[];
+  manageIncludes?: string[];
+  manageExcludes?: string[];
+  residenceType?: string;
+  agent?: ListingAgent;
+  subways?: ListingSubway[];
+  amenities?: string[];
+  nearby?: ListingNearby[];
+};

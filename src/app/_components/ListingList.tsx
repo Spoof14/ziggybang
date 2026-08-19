@@ -8,6 +8,7 @@ import {
   sourceLabel,
 } from "~/lib/listings/copy";
 import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
+import { listingPagePath, stashListing } from "~/lib/listings/path";
 import { type ListSort } from "~/lib/listings/prefs";
 import { type RankedListing } from "~/lib/listings/recommend";
 import { type MapListing } from "~/lib/listings/types";
@@ -217,10 +218,19 @@ export function ListingList({
                         {saved ? "♥" : "♡"}
                       </button>
                       <a
+                        href={listingPagePath(listing)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => stashListing(listing)}
+                        className="rounded-full bg-white/10 px-2 py-1 text-center text-[11px] text-sky-300"
+                      >
+                        Page ↗
+                      </a>
+                      <a
                         href={listing.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded-full bg-white/10 px-2 py-1 text-center text-[11px] text-sky-300"
+                        className="rounded-full bg-white/10 px-2 py-1 text-center text-[11px] text-slate-300"
                       >
                         {sourceLabel[listing.source]} ↗
                       </a>
