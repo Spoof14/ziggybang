@@ -76,7 +76,9 @@ describe("getMapData", () => {
         propertyTypes: ["villa"],
       },
       {
-        zigbang: async () => [listing("z1", "zigbang")],
+        zigbang: async () => [
+          { ...listing("z1", "zigbang"), propertyType: "villa" },
+        ],
         naver: async () => {
           throw new Error("Timed out fetching https://m.land.naver.com");
         },
@@ -209,6 +211,30 @@ describe("getMapData", () => {
       },
     );
     expect(data.listings.map((item) => item.id)).toEqual(["cheap"]);
+  });
+
+  it("drops apartment complexes from clusters when that type is unchecked", async () => {
+    const data = await getMapData(
+      {
+        bounds: seoulBounds,
+        zoom: 12,
+        sources: ["zigbang"],
+        propertyTypes: ["oneroom"],
+      },
+      {
+        zigbang: async () => [
+          listing("studio", "zigbang"),
+          {
+            ...listing("apt", "zigbang"),
+            propertyType: "apartment",
+            count: 80,
+          },
+        ],
+        naver: async () => [],
+      },
+    );
+    expect(data.clusters[0]?.count).toBe(1);
+    expect(data.stats.zigbang).toBe(1);
   });
 
   it("list view keeps clusters and a short page instead of dumping every pin", async () => {

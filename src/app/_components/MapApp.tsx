@@ -4,12 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "~/trpc/react";
 import { isValidBounds } from "~/lib/geo/bounds";
-import {
-  type CircleFilter,
-  type LatLng,
-  formatRadius,
-  listingInArea,
-} from "~/lib/geo/shape";
+import { type CircleFilter, type LatLng, formatRadius } from "~/lib/geo/shape";
 import {
   areaBuckets,
   isAllAreaBuckets,
@@ -22,10 +17,14 @@ import {
   salesTypeFilterLabel,
   sourceLabel,
 } from "~/lib/listings/copy";
-import { needsListingDetails } from "~/lib/listings/filter";
+import {
+  isAllPropertyTypes,
+  needsHydratedFilters,
+} from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
+import { describeActiveFilters, filterKeyOf, mapLayersForFilters } from "~/lib/listings/visible";
 import { loadPrefs, savePrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
-import { describePriceFilter, type PriceFilter } from "~/lib/listings/price";
+import { type PriceFilter } from "~/lib/listings/price";
 import {
   isStationQuery,
   looksLikePlaceQuery,
@@ -50,6 +49,7 @@ import {
 import {
   type Bounds,
   type MapCluster,
+  type MapData,
   type MapListing,
   type PropertyType,
   type SalesType,
@@ -70,6 +70,12 @@ const DEFAULT_SOURCES: Source[] = ["zigbang", "peterpan"];
 const DEFAULT_SALES: SalesType[] = ["jeonse", "wolse"];
 const DEFAULT_RADIUS_M = 1200;
 const NAVER_HIDE_KEY = "ziggybang:hide-naver-error";
+const TYPE_CHIP_ON: Record<PropertyType, string> = {
+  oneroom: "bg-orange-500 text-slate-950",
+  villa: "bg-amber-300 text-slate-950",
+  officetel: "bg-violet-500 text-white",
+  apartment: "bg-sky-400 text-slate-950",
+};
 
 function roundCoord(value: number) {
   return Math.round(value * 10_000) / 10_000;
@@ -145,6 +151,7 @@ export default function MapApp() {
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPlaceId = useRef<string | null>(null);
   const inspectedPhotos = useRef<string>("");
+  const filterKeyRef = useRef<string>("");
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [visionById, setVisionById] = useState<Record<string, PhotoScoreInput>>({});
 
@@ -370,6 +377,31 @@ export default function MapApp() {
     }
   }, [debouncedQuery, place]);
 
+  const filtersNeedHomes =
+    !isAllPropertyTypes(propertyTypes.length ? propertyTypes : ALL_TYPES) ||
+    needsHydratedFilters({
+      salesTypes,
+      areaBucketIds,
+      query: listingQuery,
+      minDeposit,
+      maxDeposit,
+      minRent,
+      maxRent,
+    });
+  const currentFilterKey = filterKeyOf({
+    sources,
+    propertyTypes,
+    salesTypes,
+    areaBucketIds,
+    query: listingQuery,
+    minDeposit,
+    maxDeposit,
+    minRent,
+    maxRent,
+  });
+  const keepViewportPlaceholder = filterKeyRef.current === currentFilterKey;
+  filterKeyRef.current = currentFilterKey;
+
   const sharedInput = useMemo(
     () => ({
       bounds,
@@ -383,8 +415,14 @@ export default function MapApp() {
       includeListings:
         viewMode === "list" ||
         viewMode === "best" ||
-        Boolean(circle ?? polygon),
-      listingLimit: viewMode === "list" || viewMode === "best" ? listingLimit : undefined,
+        Boolean(circle ?? polygon) ||
+        filtersNeedHomes,
+      listingLimit:
+        viewMode === "list" || viewMode === "best"
+          ? listingLimit
+          : filtersNeedHomes
+            ? 240
+            : undefined,
       minDeposit,
       maxDeposit,
       minRent,
@@ -394,6 +432,7 @@ export default function MapApp() {
       areaBucketIds,
       bounds,
       circle,
+      filtersNeedHomes,
       listingLimit,
       listingQuery,
       maxDeposit,
@@ -408,22 +447,26 @@ export default function MapApp() {
     ],
   );
 
+  const mapQueryOptions = {
+    placeholderData: keepViewportPlaceholder
+      ? (previous: MapData | undefined) => previous
+      : undefined,
+    refetchOnWindowFocus: false as const,
+    retry: false as const,
+  };
+
   const zigbangQuery = api.listings.getMap.useQuery(
     { ...sharedInput, sources: ["zigbang"] },
     {
       enabled: prefsLoaded && sources.includes("zigbang"),
-      placeholderData: (previous) => previous,
-      refetchOnWindowFocus: false,
-      retry: false,
+      ...mapQueryOptions,
     },
   );
   const naverQuery = api.listings.getMap.useQuery(
     { ...sharedInput, sources: ["naver"] },
     {
       enabled: prefsLoaded && sources.includes("naver"),
-      placeholderData: (previous) => previous,
-      refetchOnWindowFocus: false,
-      retry: false,
+      ...mapQueryOptions,
     },
   );
 
@@ -431,9 +474,7 @@ export default function MapApp() {
     { ...sharedInput, sources: ["peterpan"] },
     {
       enabled: prefsLoaded && sources.includes("peterpan"),
-      placeholderData: (previous) => previous,
-      refetchOnWindowFocus: false,
-      retry: false,
+      ...mapQueryOptions,
     },
   );
   const recommendAi = api.listings.aiStatus.useQuery(undefined, {
@@ -453,23 +494,66 @@ export default function MapApp() {
   );
 
   const visible = useMemo(() => {
-    const hasArea = Boolean(circle ?? (polygon && polygon.length >= 3));
-    const listings = data.listings.filter((listing) =>
-      listingInArea(listing, circle ?? undefined, polygon ?? undefined),
-    );
+    const layers = mapLayersForFilters(data.listings, data.clusters, {
+      propertyTypes: propertyTypes.length ? propertyTypes : ALL_TYPES,
+      salesTypes: salesTypes.length ? salesTypes : ALL_SALES,
+      areaBucketIds,
+      query: listingQuery,
+      circle: circle ?? undefined,
+      polygon,
+      zoom,
+      minDeposit,
+      maxDeposit,
+      minRent,
+      maxRent,
+    });
     return {
-      clusters: hasArea ? [] : data.clusters,
-      listings,
+      clusters: layers.clusters,
+      listings: layers.listings,
       stats: data.stats,
       errors: data.errors,
     };
-  }, [circle, data, polygon]);
+  }, [
+    areaBucketIds,
+    circle,
+    data,
+    listingQuery,
+    maxDeposit,
+    maxRent,
+    minDeposit,
+    minRent,
+    polygon,
+    propertyTypes,
+    salesTypes,
+    zoom,
+  ]);
 
   const waitingForFirst =
     (sources.includes("zigbang") && zigbangQuery.isLoading) ||
     (sources.includes("peterpan") && peterpanQuery.isLoading && !zigbangQuery.data) ||
     (sources.includes("naver") && naverQuery.isLoading && !zigbangQuery.data);
   const refreshing = zigbangQuery.isFetching && !zigbangQuery.isLoading;
+
+  useEffect(() => {
+    if (!selected || viewMode === "saved") return;
+    if (visible.listings.some((item) => item.id === selected.id)) return;
+    if (waitingForFirst) return;
+    if (
+      refreshing &&
+      visible.listings.length === 0 &&
+      visible.clusters.length === 0
+    ) {
+      return;
+    }
+    setSelected(null);
+  }, [
+    refreshing,
+    selected,
+    viewMode,
+    visible.clusters.length,
+    visible.listings,
+    waitingForFirst,
+  ]);
 
   const onViewport = useCallback((next: Bounds & { zoom: number }) => {
     if (!isValidBounds(next)) return;
@@ -495,6 +579,10 @@ export default function MapApp() {
 
   const onMapClick = useCallback(
     (point: LatLng) => {
+      if (tool === "pan") {
+        setSelected(null);
+        return;
+      }
       if (tool === "radius") {
         setPolygon(null);
         setDraftPoints([]);
@@ -524,6 +612,16 @@ export default function MapApp() {
       setSearchInput("");
       setDebouncedQuery("");
     }
+  };
+
+  const clearChipFilters = () => {
+    setPropertyTypes(ALL_TYPES);
+    setSalesTypes(DEFAULT_SALES);
+    setAreaBucketIds([]);
+    setMinDeposit(undefined);
+    setMaxDeposit(undefined);
+    setMinRent(undefined);
+    setMaxRent(undefined);
   };
 
   useEffect(() => {
@@ -643,7 +741,18 @@ export default function MapApp() {
     () => ({ minDeposit, maxDeposit, minRent, maxRent }),
     [maxDeposit, maxRent, minDeposit, minRent],
   );
-  const priceHint = describePriceFilter(priceFilter);
+  const filterSummary = describeActiveFilters({
+    propertyTypes,
+    salesTypes,
+    areaBucketIds,
+    minDeposit,
+    maxDeposit,
+    minRent,
+    maxRent,
+  });
+  const visibleHomeCount = visible.clusters.length
+    ? visible.clusters.reduce((sum, cluster) => sum + cluster.count, 0)
+    : visible.listings.length;
 
   const showList = viewMode === "list" || viewMode === "saved" || viewMode === "best";
   const listListings = viewMode === "saved" ? savedHomes : visible.listings;
@@ -829,7 +938,7 @@ export default function MapApp() {
                 }
                 className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
                   propertyTypes.includes(type)
-                    ? "bg-white text-slate-950"
+                    ? TYPE_CHIP_ON[type]
                     : "bg-white/10 text-slate-300"
                 }`}
               >
@@ -890,8 +999,22 @@ export default function MapApp() {
           {areaHint ? (
             <p className="mt-1 text-[11px] text-sky-300">{areaHint}</p>
           ) : null}
-          {priceHint ? (
-            <p className="mt-1 text-[11px] text-violet-300">{priceHint}</p>
+          {uiCompact && filterSummary ? (
+            <p className="mt-1 flex items-center justify-between gap-2 text-[11px] text-violet-200">
+              <span className="min-w-0 truncate">
+                {filterSummary}
+                {visibleHomeCount
+                  ? ` · ${visibleHomeCount.toLocaleString("en-US")} on map`
+                  : ""}
+              </span>
+              <button
+                type="button"
+                onClick={clearChipFilters}
+                className="shrink-0 text-slate-400 hover:text-white"
+              >
+                Clear filters
+              </button>
+            </p>
           ) : null}
 
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -943,6 +1066,23 @@ export default function MapApp() {
               setMaxRent(next.maxRent);
             }}
           />
+          {filterSummary ? (
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <p className="min-w-0 truncate text-[11px] text-violet-200">
+                {filterSummary}
+                {visibleHomeCount
+                  ? ` · ${visibleHomeCount.toLocaleString("en-US")} on map`
+                  : ""}
+              </p>
+              <button
+                type="button"
+                onClick={clearChipFilters}
+                className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : null}
 
           <div className="mt-2 flex flex-wrap gap-1.5">
             {(["pan", "radius", "draw"] as const).map((nextTool) => (
@@ -1026,23 +1166,6 @@ export default function MapApp() {
               Tap the map to drop a search radius, or use map center.
             </p>
           ) : null}
-
-          {zoom < 15 &&
-          !circle &&
-          !polygon &&
-          needsListingDetails({
-            salesTypes,
-            areaBucketIds,
-            query: listingQuery,
-            minDeposit,
-            maxDeposit,
-            minRent,
-            maxRent,
-          }) ? (
-            <p className="mt-1.5 text-[11px] text-slate-400">
-              Zoom in to apply size, price, and listing-text filters to individual homes.
-            </p>
-          ) : null}
           </>
           ) : null}
 
@@ -1083,7 +1206,7 @@ export default function MapApp() {
         >
           <ListingMap
             clusters={visible.clusters}
-            listings={showList && visible.clusters.length ? [] : visible.listings}
+            listings={visible.clusters.length ? [] : visible.listings}
             selectedId={selected?.id}
             focus={focus}
             circle={circle}

@@ -9,6 +9,7 @@ import {
   Polygon,
   Polyline,
   TileLayer,
+  Tooltip,
   ZoomControl,
   useMap,
   useMapEvents,
@@ -16,6 +17,7 @@ import {
 import { DivIcon, DomEvent, type Map as LeafletMap } from "leaflet";
 import { isUsableMapViewport } from "~/lib/geo/bounds";
 import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
+import { formatPrice, propertyTypeLabel } from "~/lib/listings/copy";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
 
 const SEOUL: [number, number] = [37.5665, 126.978];
@@ -30,10 +32,21 @@ function sourceColor(sources: Partial<Record<"zigbang" | "naver" | "peterpan", n
   return "#ff6b2c";
 }
 
-function listingColor(source: MapListing["source"]) {
-  if (source === "naver") return "#03c75a";
-  if (source === "peterpan") return "#f59e0b";
+function listingFill(type: MapListing["propertyType"]) {
+  if (type === "apartment") return "#38bdf8";
+  if (type === "officetel") return "#8b5cf6";
+  if (type === "villa") return "#eab308";
   return "#ff6b2c";
+}
+
+function listingStroke(source: MapListing["source"]) {
+  return sourceColor({ [source]: 1 });
+}
+
+function listingTooltip(listing: MapListing) {
+  const price = formatPrice(listing);
+  const kind = propertyTypeLabel[listing.propertyType];
+  return price ? `${kind} · ${price}` : kind;
 }
 
 function emitViewport(
@@ -130,7 +143,6 @@ function MapEvents({
     moveend: () => emitViewport(map, onViewport),
     zoomend: () => emitViewport(map, onViewport),
     click: (event) => {
-      if (tool === "pan") return;
       onMapClick({ lat: event.latlng.lat, lng: event.latlng.lng });
     },
     dblclick: (event) => {
@@ -201,9 +213,9 @@ function MarkerLayer({
           center={[listing.lat, listing.lng]}
           radius={selectedId === listing.id ? 9 : 6}
           pathOptions={{
-            color: "#0f172a",
-            weight: selectedId === listing.id ? 2 : 1,
-            fillColor: listingColor(listing.source),
+            color: listingStroke(listing.source),
+            weight: selectedId === listing.id ? 3 : 1.5,
+            fillColor: listingFill(listing.propertyType),
             fillOpacity: 0.92,
           }}
           eventHandlers={{
@@ -213,7 +225,11 @@ function MarkerLayer({
               onSelect(listing);
             },
           }}
-        />
+        >
+          <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
+            {listingTooltip(listing)}
+          </Tooltip>
+        </CircleMarker>
       ))}
     </>
   );
@@ -280,7 +296,7 @@ export function ListingMap({
       maxZoom={18}
       className="h-full w-full"
       zoomControl={false}
-      preferCanvas
+      preferCanvas={listings.length > 80}
     >
       <TileLayer
         attribution="© OpenStreetMap © CARTO"
