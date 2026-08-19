@@ -20,6 +20,7 @@ describe("shareable search URLs", () => {
     expect(search).toContain("view=list");
     expect(search).toContain("dmax=2000");
     expect(search).toContain("rmax=80");
+    expect(search).not.toContain("ok=1");
     const parsed = parseAppUrl(search);
     expect(parsed.searchInput).toBe("hongdae");
     expect(parsed.viewMode).toBe("list");
@@ -44,5 +45,22 @@ describe("shareable search URLs", () => {
     });
     expect(search).toContain("view=best");
     expect(parseAppUrl(search).viewMode).toBe("best");
+  });
+
+  it("round-trips the foreigners-welcome chip", () => {
+    const search = buildAppSearch({
+      searchInput: "hongdae",
+      viewMode: "map",
+      sources: ["zigbang", "peterpan"],
+      propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+      salesTypes: ["jeonse", "wolse"],
+      areaBucketIds: [],
+      radiusM: 1200,
+      view: { lat: 37.556, lng: 126.923, zoom: 15 },
+      listSort: "featured",
+      foreignerOk: true,
+    });
+    expect(search).toContain("ok=1");
+    expect(parseAppUrl(search).foreignerOk).toBe(true);
   });
 });

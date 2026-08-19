@@ -93,6 +93,23 @@ describe("sales type filters", () => {
       }).map((item) => item.id),
     ).toEqual(["studio"]);
   });
+
+  it("keeps only listings that say foreigners are welcome", () => {
+    const listings = [
+      { ...listing("ok", "wolse"), foreignerOk: true },
+      { ...listing("silent", "wolse") },
+      { ...listing("no", "wolse"), foreignerOk: false },
+    ];
+    expect(
+      filterListings(listings, {
+        salesTypes: ["wolse"],
+        areaBucketIds: [],
+        query: "",
+        requireDetails: true,
+        foreignerOk: true,
+      }).map((item) => item.id),
+    ).toEqual(["ok"]);
+  });
 });
 
 describe("hydrated vs default rent filters", () => {
@@ -117,6 +134,14 @@ describe("hydrated vs default rent filters", () => {
         salesTypes: ["jeonse", "wolse"],
         areaBucketIds: ["s"],
         query: "",
+      }),
+    ).toBe(true);
+    expect(
+      needsHydratedFilters({
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        query: "",
+        foreignerOk: true,
       }),
     ).toBe(true);
   });

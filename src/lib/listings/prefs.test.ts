@@ -37,6 +37,7 @@ describe("saved map prefs", () => {
       listSort: "deposit",
       maxDeposit: 2000,
       maxRent: 80,
+      foreignerOk: true,
     });
 
     expect(loadPrefs()).toMatchObject({
@@ -50,6 +51,7 @@ describe("saved map prefs", () => {
       listSort: "deposit",
       maxDeposit: 2000,
       maxRent: 80,
+      foreignerOk: true,
     });
   });
 

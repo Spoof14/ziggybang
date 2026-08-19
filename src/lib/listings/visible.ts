@@ -28,7 +28,7 @@ export type VisibleFilterInput = {
   circle?: CircleFilter;
   polygon?: LatLng[] | null;
   zoom: number;
-} & PriceFilter;
+} & PriceFilter & { foreignerOk?: boolean };
 
 function detailInputOf(input: VisibleFilterInput) {
   return {
@@ -39,6 +39,7 @@ function detailInputOf(input: VisibleFilterInput) {
     maxDeposit: input.maxDeposit,
     minRent: input.minRent,
     maxRent: input.maxRent,
+    foreignerOk: input.foreignerOk,
   };
 }
 
@@ -62,6 +63,7 @@ export function listingsMatchingFilters(
     maxDeposit: input.maxDeposit,
     minRent: input.minRent,
     maxRent: input.maxRent,
+    foreignerOk: input.foreignerOk,
   });
 }
 
@@ -97,6 +99,7 @@ export function describeActiveFilters(input: {
   propertyTypes: PropertyType[];
   salesTypes: SalesType[];
   areaBucketIds: AreaBucketId[];
+  foreignerOk?: boolean;
 } & PriceFilter): string | null {
   const parts: string[] = [];
   if (!isAllPropertyTypes(input.propertyTypes) && input.propertyTypes.length) {
@@ -119,6 +122,7 @@ export function describeActiveFilters(input: {
   }
   const price = describePriceFilter(input);
   if (price) parts.push(price);
+  if (input.foreignerOk) parts.push("Foreigners welcome");
   return parts.length ? parts.join(" · ") : null;
 }
 
@@ -128,6 +132,7 @@ export function filterKeyOf(input: {
   salesTypes: SalesType[];
   areaBucketIds: AreaBucketId[];
   query: string;
+  foreignerOk?: boolean;
 } & PriceFilter): string {
   return [
     input.sources.join(","),
@@ -135,6 +140,7 @@ export function filterKeyOf(input: {
     input.salesTypes.join(","),
     input.areaBucketIds.join(","),
     input.query,
+    input.foreignerOk ? "ok" : "",
     input.minDeposit ?? "",
     input.maxDeposit ?? "",
     input.minRent ?? "",

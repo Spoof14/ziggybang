@@ -18,8 +18,11 @@ import {
   englishCardTitle,
   koreanAddressForTaxi,
 } from "~/lib/listings/english";
+import { agencyFeeCopy } from "~/lib/listings/agency-fee";
+import { detectForeignerOk } from "~/lib/listings/foreigner";
 import { listingPagePath, stashListing } from "~/lib/listings/path";
 import { type MapListing } from "~/lib/listings/types";
+import { ForeignerBadge } from "./ForeignerBadge";
 import { ListingGallery } from "./ListingGallery";
 
 async function copyText(value: string) {
@@ -70,6 +73,9 @@ export function ListingPanel({
   const where = englishAddressLine(detail);
   const taxiAddress = koreanAddressForTaxi(detail.address);
   const description = detail.description?.trim();
+  const foreignerOk =
+    detail.foreignerOk ?? detectForeignerOk(detail.title, detail.description);
+  const agencyFee = agencyFeeCopy(detail);
 
   async function copy(kind: "address" | "link", value: string) {
     const ok = await copyText(value);
@@ -99,6 +105,7 @@ export function ListingPanel({
               {salesTypeHint[detail.salesType]}
             </p>
           ) : null}
+          <ForeignerBadge ok={foreignerOk} className="mt-2 inline-flex" />
         </div>
         <div className="flex shrink-0 gap-1">
           {onToggleSave ? (
@@ -128,6 +135,17 @@ export function ListingPanel({
           <div className="col-span-2">
             <dt className="text-slate-400">Price</dt>
             <dd className="font-medium">{price}</dd>
+          </div>
+        ) : null}
+        {agencyFee ? (
+          <div className="col-span-2">
+            <dt className="text-slate-400">Agency fee cap</dt>
+            <dd>
+              {agencyFee.vatLabel} incl. VAT
+              <span className="mt-0.5 block text-[11px] font-normal text-slate-500">
+                Legal maximum at {agencyFee.ratePct}%. Who pays is negotiable.
+              </span>
+            </dd>
           </div>
         ) : null}
         {area ? (

@@ -39,6 +39,7 @@ export type MapQuery = {
   maxDeposit?: number;
   minRent?: number;
   maxRent?: number;
+  foreignerOk?: boolean;
 };
 
 export type MapListing = {
@@ -64,6 +65,7 @@ export type MapListing = {
   roomType?: string;
   updatedAt?: string;
   photos?: string[];
+  foreignerOk?: boolean;
 };
 
 export type MapCluster = {

@@ -87,5 +87,13 @@ describe("map layers follow filters", () => {
         areaBucketIds: [],
       }),
     ).toBe("Studio");
+    expect(
+      describeActiveFilters({
+        propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        foreignerOk: true,
+      }),
+    ).toBe("Foreigners welcome");
   });
 });

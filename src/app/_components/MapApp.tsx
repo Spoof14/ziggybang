@@ -125,6 +125,7 @@ export default function MapApp() {
   const [maxDeposit, setMaxDeposit] = useState<number | undefined>();
   const [minRent, setMinRent] = useState<number | undefined>();
   const [maxRent, setMaxRent] = useState<number | undefined>();
+  const [foreignerOk, setForeignerOk] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [savedHomes, setSavedHomes] = useState<MapListing[]>([]);
   const [tool, setTool] = useState<"pan" | "radius" | "draw">("pan");
@@ -208,6 +209,7 @@ export default function MapApp() {
     setMaxDeposit(url.maxDeposit ?? base?.maxDeposit);
     setMinRent(url.minRent ?? base?.minRent);
     setMaxRent(url.maxRent ?? base?.maxRent);
+    setForeignerOk(url.foreignerOk ?? base?.foreignerOk ?? false);
     setRadiusM(url.radiusM ?? base?.radiusM ?? DEFAULT_RADIUS_M);
     setManualCircle(base?.circle ?? null);
     setPolygon(base?.polygon ?? null);
@@ -266,6 +268,7 @@ export default function MapApp() {
       maxDeposit,
       minRent,
       maxRent,
+      foreignerOk,
     });
   }, [
     areaBucketIds,
@@ -286,6 +289,7 @@ export default function MapApp() {
     viewMode,
     zoom,
     listSort,
+    foreignerOk,
   ]);
 
   useEffect(() => {
@@ -304,6 +308,7 @@ export default function MapApp() {
       maxDeposit,
       minRent,
       maxRent,
+      foreignerOk,
     });
     const url = `${window.location.pathname}${next}`;
     if (`${window.location.pathname}${window.location.search}` !== url) {
@@ -324,6 +329,7 @@ export default function MapApp() {
     sources,
     urlView,
     viewMode,
+    foreignerOk,
   ]);
 
   useEffect(() => {
@@ -387,6 +393,7 @@ export default function MapApp() {
       maxDeposit,
       minRent,
       maxRent,
+      foreignerOk,
     });
   const currentFilterKey = filterKeyOf({
     sources,
@@ -398,6 +405,7 @@ export default function MapApp() {
     maxDeposit,
     minRent,
     maxRent,
+    foreignerOk,
   });
   const keepViewportPlaceholder = filterKeyRef.current === currentFilterKey;
   filterKeyRef.current = currentFilterKey;
@@ -427,12 +435,14 @@ export default function MapApp() {
       maxDeposit,
       minRent,
       maxRent,
+      foreignerOk: foreignerOk || undefined,
     }),
     [
       areaBucketIds,
       bounds,
       circle,
       filtersNeedHomes,
+      foreignerOk,
       listingLimit,
       listingQuery,
       maxDeposit,
@@ -506,6 +516,7 @@ export default function MapApp() {
       maxDeposit,
       minRent,
       maxRent,
+      foreignerOk,
     });
     return {
       clusters: layers.clusters,
@@ -526,6 +537,7 @@ export default function MapApp() {
     propertyTypes,
     salesTypes,
     zoom,
+    foreignerOk,
   ]);
 
   const waitingForFirst =
@@ -622,11 +634,12 @@ export default function MapApp() {
     setMaxDeposit(undefined);
     setMinRent(undefined);
     setMaxRent(undefined);
+    setForeignerOk(false);
   };
 
   useEffect(() => {
     setListingLimit(viewMode === "best" ? 120 : 60);
-  }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent]);
+  }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent, foreignerOk]);
 
   const onToggleSave = useCallback((listing: MapListing) => {
     setSavedHomes((currentHomes) => {
@@ -655,6 +668,7 @@ export default function MapApp() {
       maxDeposit,
       minRent,
       maxRent,
+      foreignerOk,
     });
     const href = `${window.location.origin}${window.location.pathname}${next}`;
     try {
@@ -679,6 +693,7 @@ export default function MapApp() {
     sources,
     viewMode,
     zoom,
+    foreignerOk,
   ]);
 
   const hideNaverError = useCallback((turnOff = false) => {
@@ -706,6 +721,7 @@ export default function MapApp() {
     setMaxDeposit(snapshot.maxDeposit);
     setMinRent(snapshot.minRent);
     setMaxRent(snapshot.maxRent);
+    setForeignerOk(Boolean(snapshot.foreignerOk));
     setRadiusM(snapshot.radiusM);
     setViewMode(snapshot.viewMode);
   }, []);
@@ -722,6 +738,7 @@ export default function MapApp() {
       maxDeposit,
       minRent,
       maxRent,
+      foreignerOk,
     }),
     [
       areaBucketIds,
@@ -734,6 +751,7 @@ export default function MapApp() {
       salesTypes,
       searchInput,
       viewMode,
+      foreignerOk,
     ],
   );
 
@@ -749,6 +767,7 @@ export default function MapApp() {
     maxDeposit,
     minRent,
     maxRent,
+    foreignerOk,
   });
   const visibleHomeCount = visible.clusters.length
     ? visible.clusters.reduce((sum, cluster) => sum + cluster.count, 0)
@@ -966,6 +985,18 @@ export default function MapApp() {
                 {salesTypeFilterLabel[type]}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setForeignerOk((current) => !current)}
+              title="Only ads that mention foreigners are welcome. Most landlords never write it."
+              className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+                foreignerOk
+                  ? "bg-emerald-400 text-slate-950"
+                  : "bg-white/10 text-slate-300"
+              }`}
+            >
+              Foreigners welcome
+            </button>
           </div>
           </>
           ) : null}
@@ -1257,7 +1288,9 @@ export default function MapApp() {
                   ? "No saved homes yet. Tap the heart on a listing to keep it here."
                   : viewMode === "best" && zoom < 14 && !circle && !polygon
                     ? "Search Hongdae, Dangsan station, or zoom in so Best has homes to rank."
-                    : undefined
+                    : foreignerOk
+                      ? "Few ads say foreigners are welcome in the title. Widen the area, or turn that chip off."
+                      : undefined
               }
               onSort={setListSort}
               onSelect={setSelected}

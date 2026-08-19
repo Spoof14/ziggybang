@@ -1,4 +1,5 @@
 import { containsPoint } from "~/lib/geo/bounds";
+import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
   type Bounds,
   type MapListing,
@@ -164,6 +165,7 @@ export function houseToListing(house: PeterpanHouse): MapListing | null {
     url: peterpanListingUrl(String(id)),
     manageCost: krwToManwon(house.price?.maintenance_cost),
     roomType: house.info?.room_type,
+    foreignerOk: detectForeignerOk(house.info?.subject),
   };
 }
 

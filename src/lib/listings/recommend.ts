@@ -205,7 +205,11 @@ export function rankListings(
       const photo = listing.thumbnail ? photos[listing.thumbnail] : undefined;
       const photoScore = photo?.score ?? photoCoverageScore(listing);
       const score = Math.round(
-        valueScore * 0.38 + area.score * 0.32 + photoScore * 0.18 + live.score * 0.12,
+        valueScore * 0.38 +
+          area.score * 0.32 +
+          photoScore * 0.18 +
+          live.score * 0.12 +
+          (listing.foreignerOk ? 6 : 0),
       );
 
       const reasons: string[] = [];
@@ -221,6 +225,7 @@ export function rankListings(
       if (area.score >= 86) reasons.push(`Popular ${area.label}`);
       else if (area.label) reasons.push(area.label);
       if (live.reason) reasons.push(live.reason);
+      if (listing.foreignerOk) reasons.push("Foreigners welcome");
       else if (!photo && listing.photos && listing.photos.length >= 5) {
         reasons.push("Lots of photos");
       }

@@ -98,6 +98,22 @@ describe("recommended homes", () => {
     expect(ranked[1]?.reasons.join(" ")).toMatch(/floorplan/i);
   });
 
+  it("calls out homes that welcome foreigners", () => {
+    const ranked = rankListings([
+      home({
+        id: "ok",
+        lat: 37.556,
+        lng: 126.923,
+        address: "서울 마포구 서교동",
+        deposit: 1000,
+        rent: 70,
+        areaM2: 20,
+        foreignerOk: true,
+      }),
+    ]);
+    expect(ranked[0]?.reasons).toContain("Foreigners welcome");
+  });
+
   it("scores lower ₩/m² as better value", () => {
     const cheap = valuePerM2(
       home({ id: "c", lat: 37.56, lng: 126.92, deposit: 500, rent: 50, areaM2: 30 }),

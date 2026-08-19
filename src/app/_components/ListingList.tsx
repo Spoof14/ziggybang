@@ -8,10 +8,12 @@ import {
   sourceLabel,
 } from "~/lib/listings/copy";
 import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
+import { detectForeignerOk } from "~/lib/listings/foreigner";
 import { listingPagePath, stashListing } from "~/lib/listings/path";
 import { type ListSort } from "~/lib/listings/prefs";
 import { type RankedListing } from "~/lib/listings/recommend";
 import { type MapListing } from "~/lib/listings/types";
+import { ForeignerBadge } from "./ForeignerBadge";
 import { ListingPhoto } from "./ListingPhoto";
 
 const SORT_OPTIONS: Array<{ id: ListSort; label: string }> = [
@@ -151,6 +153,12 @@ export function ListingList({
               const meta = listingCardMeta(listing);
               const saved = savedIds.includes(listing.id);
               const rankedItem = reasonsById.get(listing.id);
+              const foreignerOk =
+                listing.foreignerOk ??
+                detectForeignerOk(listing.title, listing.description);
+              const showForeignerBadge =
+                foreignerOk === true &&
+                !rankedItem?.reasons.includes("Foreigners welcome");
               return (
                 <li key={listing.id}>
                   <div
@@ -179,11 +187,14 @@ export function ListingList({
                         ) : null}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[11px] uppercase tracking-wide text-slate-400">
-                          {propertyTypeLabel[listing.propertyType]}
-                          {listing.salesType
-                            ? ` · ${salesTypeFilterLabel[listing.salesType]}`
-                            : ""}
+                        <span className="flex flex-wrap items-center gap-1">
+                          <span className="text-[11px] uppercase tracking-wide text-slate-400">
+                            {propertyTypeLabel[listing.propertyType]}
+                            {listing.salesType
+                              ? ` · ${salesTypeFilterLabel[listing.salesType]}`
+                              : ""}
+                          </span>
+                          {showForeignerBadge ? <ForeignerBadge ok /> : null}
                         </span>
                         <span className="mt-1 block truncate text-sm font-medium text-white">
                           {price ?? title}

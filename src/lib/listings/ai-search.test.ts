@@ -57,6 +57,13 @@ describe("conversational listing search", () => {
     expect(result.snapshot.propertyTypes).toEqual(["oneroom"]);
   });
 
+  it("turns a foreigners-welcome ask into that chip", () => {
+    const result = interpretSearch("Foreigners welcome near Hongdae", current);
+    expect(result.snapshot.foreignerOk).toBe(true);
+    expect(result.snapshot.searchInput.toLowerCase()).toContain("hongdae");
+    expect(result.reply.toLowerCase()).toContain("foreigners");
+  });
+
   it("merges a rent-only patch onto existing filters", () => {
     const merged = mergeSearchIntent(
       { ...current, searchInput: "hongdae", maxDeposit: 2000, propertyTypes: ["oneroom"] },

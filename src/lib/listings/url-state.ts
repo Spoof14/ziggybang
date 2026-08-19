@@ -20,6 +20,7 @@ export type AppUrlState = {
   radiusM?: number;
   view?: { lat: number; lng: number; zoom: number };
   listSort?: ListSort;
+  foreignerOk?: boolean;
 } & PriceFilter;
 
 const VIEW_MODES: ViewMode[] = ["map", "list", "best", "saved"];
@@ -69,6 +70,7 @@ export function parseAppUrl(search: string): AppUrlState {
   if (sort && LIST_SORTS.includes(sort as ListSort)) {
     next.listSort = sort as ListSort;
   }
+  if (params.get("ok") === "1") next.foreignerOk = true;
   Object.assign(
     next,
     normalizePriceFilter({
@@ -97,6 +99,7 @@ export function buildAppSearch(state: {
   radiusM: number;
   view: { lat: number; lng: number; zoom: number };
   listSort: ListSort;
+  foreignerOk?: boolean;
 } & PriceFilter): string {
   const params = new URLSearchParams();
   if (state.searchInput.trim()) params.set("q", state.searchInput.trim());
@@ -116,6 +119,7 @@ export function buildAppSearch(state: {
   params.set("lng", state.view.lng.toFixed(4));
   params.set("z", String(Math.round(state.view.zoom)));
   if (state.listSort !== "featured") params.set("sort", state.listSort);
+  if (state.foreignerOk) params.set("ok", "1");
   const price = normalizePriceFilter(state);
   if (price.minDeposit != null) params.set("dmin", String(price.minDeposit));
   if (price.maxDeposit != null) params.set("dmax", String(price.maxDeposit));
@@ -127,7 +131,7 @@ export function buildAppSearch(state: {
 
 export function hasAppUrlState(search: string): boolean {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort", "dmin", "dmax", "rmin", "rmax"].some(
+  return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort", "ok", "dmin", "dmax", "rmin", "rmax"].some(
     (key) => params.has(key),
   );
 }

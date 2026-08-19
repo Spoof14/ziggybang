@@ -170,6 +170,7 @@ export function listingSearchText(listing: MapListing): string {
     listing.salesType === "jeonse" ? "전세 jeonse" : "",
     listing.salesType === "wolse" ? "월세 monthly rent" : "",
     listing.salesType === "sale" ? "매매 sale" : "",
+    listing.foreignerOk ? "foreigner foreigners welcome 외국인환영" : "",
   ];
   return parts.filter(Boolean).join(" ");
 }

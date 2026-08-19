@@ -24,7 +24,7 @@ export type SearchSnapshot = {
   areaBucketIds: AreaBucketId[];
   radiusM: number;
   viewMode: ViewMode;
-} & PriceFilter;
+} & PriceFilter & { foreignerOk?: boolean };
 
 export type SearchIntent = {
   searchInput?: string | null;
@@ -37,6 +37,7 @@ export type SearchIntent = {
   maxDeposit?: number | null;
   minRent?: number | null;
   maxRent?: number | null;
+  foreignerOk?: boolean | null;
 };
 
 export type InterpretedSearch = {
@@ -281,7 +282,7 @@ function leftoverListingQuery(text: string, placeNames: string[]): string | unde
       " ",
     )
     .replace(
-      /\b(i|i'm|im|i’d|id|want|wanted|looking|need|needs|find|search|show|get|please|something|somewhere|maybe|around|near|in|at|to|with|and|or|my|me|us|we|for|a|an|the|of|on|by|from|under|over|max|min|maximum|minimum|less|than|more|up|between|budget|deposit|rent|monthly|month|jeonse|wolse|studio|one-room|oneroom|villa|officetel|apartment|apt|sale|buy|cheap|cheaper|higher|lower|bit|walk|walking|distance|station|subway|room|rooms|place|home|homes|listing|listings|korea|seoul|recommend|recommended|best|value|nicest|photo|photos|quality|neighbourhood|neighborhood|decent|good|ranked)\b/gi,
+      /\b(i|i'm|im|i’d|id|want|wanted|looking|need|needs|find|search|show|get|please|something|somewhere|maybe|around|near|in|at|to|with|and|or|my|me|us|we|for|a|an|the|of|on|by|from|under|over|max|min|maximum|minimum|less|than|more|up|between|budget|deposit|rent|monthly|month|jeonse|wolse|studio|one-room|oneroom|villa|officetel|apartment|apt|sale|buy|cheap|cheaper|higher|lower|bit|walk|walking|distance|station|subway|room|rooms|place|home|homes|listing|listings|korea|seoul|recommend|recommended|best|value|nicest|photo|photos|quality|neighbourhood|neighborhood|decent|good|ranked|foreigners|foreigner|welcome|accepts|landlord)\b/gi,
       " ",
     )
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
@@ -346,6 +347,8 @@ export function mergeSearchIntent(
           ? Math.min(3000, Math.max(250, patch.radiusM))
           : current.radiusM,
     viewMode: patch.viewMode === null ? "map" : (patch.viewMode ?? current.viewMode),
+    foreignerOk:
+      patch.foreignerOk === null ? false : (patch.foreignerOk ?? current.foreignerOk),
     ...price,
   };
 }
@@ -369,6 +372,7 @@ export function describeSearchSnapshot(snapshot: SearchSnapshot): string {
     `Looking for ${deals ? deals.toLowerCase() : ""} ${types} near ${where}.`.replace(/\s+/g, " "),
     price,
     size ? `Size: ${size}.` : null,
+    snapshot.foreignerOk ? "Only listings that say foreigners are welcome." : null,
   ]
     .filter(Boolean)
     .join(" ");
@@ -435,6 +439,16 @@ export function interpretSearch(
   if (/anywhere|clear (the )?(area|place|search)/i.test(text)) {
     intent.searchInput = null;
   }
+  if (
+    /foreigners?\s+welcome|accepts?\s+foreigners?|외국인\s*(환영|가능)|for foreigners/i.test(
+      text,
+    )
+  ) {
+    intent.foreignerOk = true;
+  }
+  if (/any landlord|clear foreigner/i.test(text)) {
+    intent.foreignerOk = null;
+  }
 
   const snapshot = mergeSearchIntent(current, intent);
   const reply = describeSearchSnapshot(snapshot);
@@ -444,5 +458,5 @@ export function interpretSearch(
 export const ASK_SUGGESTIONS = [
   "Best value studios near Hongdae, with decent photos",
   "Studio in Hongdae, monthly under ₩800,000, deposit under ₩20 million",
-  "Jeonse near Gangnam station",
+  "Foreigners welcome near Hongdae",
 ];

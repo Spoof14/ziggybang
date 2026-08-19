@@ -56,12 +56,12 @@ describe("zigbang mappers", () => {
         item: {
           itemId: 42,
           title: "Sunny studio",
+          description: "Near the station. 외국인환영",
           salesType: "월세",
           serviceType: "원룸",
           roomType: "오픈형원룸",
           imageThumbnail: "https://ic.zigbang.com/ic/items/42/1.jpg",
           images: ["https://ic.zigbang.com/ic/items/42/1.jpg"],
-          description: "Near the station",
           updatedAt: "2026-07-29 10:40:48",
           approveDate: "20180510",
           moveinDate: "2026.06.30 이후 입주 가능 (협의가능)",
@@ -116,6 +116,7 @@ describe("zigbang mappers", () => {
       subways: [{ name: "숙대입구역", line: "4호선" }],
       nearby: [{ type: "지하철역", meters: 322, walkMinutes: 5 }],
       agent: { name: "Kim", office: "Kim Realty" },
+      foreignerOk: true,
     });
   });
 });

@@ -1,4 +1,5 @@
 import { boundsCenter, containsPoint } from "~/lib/geo/bounds";
+import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
   type Bounds,
   type MapListing,
@@ -162,6 +163,7 @@ export function articleToListing(article: NaverArticle): MapListing | null {
       ? `https://landthumb-phinf.pstatic.net${article.repImgUrl}`
       : undefined,
     url: naverListingUrl(sourceId),
+    foreignerOk: detectForeignerOk(article.atclNm),
   };
 }
 

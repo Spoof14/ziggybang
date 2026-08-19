@@ -5,6 +5,7 @@ import {
 } from "~/lib/geo/geohash";
 import { needsListingDetails } from "~/lib/listings/filter";
 import { type AreaBucketId } from "~/lib/listings/area";
+import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
   type Bounds,
   type ListingDetail,
@@ -414,6 +415,7 @@ export function mapZigbangItemDetail(
     manageCost: item.manageCost?.amount,
     roomType: item.roomType,
     updatedAt: item.updatedAt,
+    foreignerOk: detectForeignerOk(item.title, item.description),
     parking: item.parkingAvailableText,
     elevator: item.elevator,
     bathrooms: item.bathroomCount,

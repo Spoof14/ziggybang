@@ -30,11 +30,13 @@ import {
   translateSubwayLine,
   translateUtility,
 } from "~/lib/listings/detail-copy";
+import { agencyFeeCopy } from "~/lib/listings/agency-fee";
 import {
   englishAddressLine,
   englishCardTitle,
   koreanAddressForTaxi,
 } from "~/lib/listings/english";
+import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
   hasListingCoords,
   listingMapHref,
@@ -49,6 +51,8 @@ import {
   toggleSavedHome,
 } from "~/lib/listings/saved";
 import { type ListingDetail, type MapListing } from "~/lib/listings/types";
+import { ForeignerBadge } from "./ForeignerBadge";
+import { LandlordNotes } from "./LandlordNotes";
 import { ListingGallery } from "./ListingGallery";
 
 const MiniMap = dynamic(
@@ -170,6 +174,9 @@ export function ListingDetailView({
     : taxiAddress
       ? `https://map.naver.com/p/search/${encodeURIComponent(taxiAddress)}`
       : null;
+  const foreignerOk =
+    listing.foreignerOk ?? detectForeignerOk(listing.title, listing.description);
+  const agencyFee = agencyFeeCopy(listing);
 
   return (
     <div className="min-h-[100dvh] bg-slate-950 text-slate-100">
@@ -229,6 +236,7 @@ export function ListingDetailView({
             <h2 className="mt-1 text-2xl font-semibold leading-snug">
               {englishTitle.trim() ? englishTitle : listing.title}
             </h2>
+            <ForeignerBadge ok={foreignerOk} className="mt-2 inline-flex" />
             {listing.title && listing.title !== englishTitle ? (
               <p className="mt-1 text-sm text-slate-400">{listing.title}</p>
             ) : null}
@@ -243,15 +251,7 @@ export function ListingDetailView({
           </div>
 
           {listing.description ? (
-            <div>
-              <h3 className="text-sm font-semibold text-white">Landlord notes</h3>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-300">
-                {listing.description.trim()}
-              </p>
-              <p className="mt-2 text-[11px] text-slate-500">
-                Korean original from {sourceLabel[listing.source]}.
-              </p>
-            </div>
+            <LandlordNotes text={listing.description} source={listing.source} />
           ) : null}
 
           {listing.options?.length ? (
@@ -395,6 +395,24 @@ export function ListingDetailView({
               </p>
             ) : null}
           </section>
+
+          {agencyFee ? (
+            <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+              <h3 className="text-sm font-semibold text-white">
+                Agency fee (est.)
+              </h3>
+              <p className="mt-2 text-lg font-semibold text-sky-300">
+                {agencyFee.vatLabel} incl. VAT
+              </p>
+              <p className="mt-1 text-sm text-slate-300">
+                Cap {agencyFee.feeLabel} at {agencyFee.ratePct}% of the deal
+                {agencyFee.kind === "officetel" ? " (officetel midpoint)" : ""}.
+              </p>
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                {agencyFee.hint}
+              </p>
+            </section>
+          ) : null}
 
           {hasListingCoords(listing) ? (
             <section className="overflow-hidden rounded-2xl border border-white/10">

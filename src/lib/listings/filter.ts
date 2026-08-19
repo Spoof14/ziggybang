@@ -19,6 +19,7 @@ export type ListingFilterInput = {
   areaBucketIds: AreaBucketId[];
   query: string;
   requireDetails: boolean;
+  foreignerOk?: boolean;
 } & PriceFilter;
 
 export function isAllPropertyTypes(selected: PropertyType[]): boolean {
@@ -96,6 +97,10 @@ export function filterListings(
     if (input.query && !listingMatchesQuery(listing, input.query)) {
       return false;
     }
+    if (input.foreignerOk) {
+      if (input.requireDetails && listing.foreignerOk !== true) return false;
+      if (!input.requireDetails && listing.foreignerOk === false) return false;
+    }
     return true;
   });
 }
@@ -107,6 +112,7 @@ export function needsListingDetails(
     !isAllSalesTypes(input.salesTypes) ||
     !isAllAreaBuckets(input.areaBucketIds) ||
     Boolean(input.query.trim()) ||
+    Boolean(input.foreignerOk) ||
     !isEmptyPriceFilter(input)
   );
 }

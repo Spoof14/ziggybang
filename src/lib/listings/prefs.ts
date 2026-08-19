@@ -26,6 +26,7 @@ export type SavedPrefs = {
   view: { lat: number; lng: number; zoom: number } | null;
   uiCompact: boolean;
   listSort: ListSort;
+  foreignerOk?: boolean;
 } & PriceFilter;
 
 const KEY = "ziggybang:prefs:v1";
@@ -133,6 +134,7 @@ export function loadPrefs(): SavedPrefs | null {
         parsed.listSort && LIST_SORTS.includes(parsed.listSort)
           ? parsed.listSort
           : "featured",
+      foreignerOk: parsed.foreignerOk === true,
       ...normalizePriceFilter({
         minDeposit: parsed.minDeposit,
         maxDeposit: parsed.maxDeposit,

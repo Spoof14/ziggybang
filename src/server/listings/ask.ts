@@ -54,6 +54,8 @@ function intentFromUnknown(raw: unknown): SearchIntent {
     maxDeposit: asNumber(data.maxDeposit),
     minRent: asNumber(data.minRent),
     maxRent: asNumber(data.maxRent),
+    foreignerOk:
+      data.foreignerOk === null ? null : typeof data.foreignerOk === "boolean" ? data.foreignerOk : undefined,
   };
 }
 
@@ -85,7 +87,7 @@ async function interpretWithOpenAi(
           {
             role: "system",
             content: `You help foreigners search Korea rentals on Ziggybang.
-Return JSON with: reply (short English), searchInput (neighborhood or station text, null to clear), propertyTypes (oneroom, villa, officetel, apartment), salesTypes (jeonse, wolse, sale), areaBucketIds (xs, s, m, l), radiusM, viewMode (map, list, or best), minDeposit, maxDeposit, minRent, maxRent.
+Return JSON with: reply (short English), searchInput (neighborhood or station text, null to clear), propertyTypes (oneroom, villa, officetel, apartment), salesTypes (jeonse, wolse, sale), areaBucketIds (xs, s, m, l), radiusM, viewMode (map, list, or best), minDeposit, maxDeposit, minRent, maxRent, foreignerOk (true if they need a landlord who accepts foreigners).
 Prices are 만원 (10,000 KRW). 1억 = 10000. ₩20 million deposit = 2000. ₩800,000/month = 80.
 Use null to clear a field, omit unchanged fields. Prefer viewMode list, or best when they ask for recommendations, nicest homes, or best value.`,
           },
