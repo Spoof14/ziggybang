@@ -35,6 +35,7 @@ import {
 } from "~/lib/listings/search";
 import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
 import { type SearchSnapshot } from "~/lib/listings/ai-search";
+import { rankListings, type PhotoScoreInput } from "~/lib/listings/recommend";
 import {
   isSavedHome,
   loadSavedHomes,
@@ -60,6 +61,7 @@ import { ListingPanel } from "./ListingPanel";
 import { ListingPhoto } from "./ListingPhoto";
 import { AskSearch } from "./AskSearch";
 import { PriceFilters } from "./PriceFilters";
+import { usePhotoQuality } from "./usePhotoQuality";
 
 const ALL_SOURCES: Source[] = ["zigbang", "naver", "peterpan"];
 const ALL_TYPES: PropertyType[] = ["oneroom", "villa", "officetel", "apartment"];
@@ -142,7 +144,9 @@ export default function MapApp() {
   const lastViewportKey = useRef<string | null>(null);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPlaceId = useRef<string | null>(null);
+  const inspectedPhotos = useRef<string>("");
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [visionById, setVisionById] = useState<Record<string, PhotoScoreInput>>({});
 
   const parsedSearch = useMemo(
     () => parseSearchQuery(debouncedQuery),
@@ -376,8 +380,11 @@ export default function MapApp() {
       areaBucketIds: isAllAreaBuckets(areaBucketIds) ? undefined : areaBucketIds,
       circle: circle ?? undefined,
       polygon: polygon && polygon.length >= 3 ? polygon : undefined,
-      includeListings: viewMode === "list" || Boolean(circle ?? polygon),
-      listingLimit: viewMode === "list" ? listingLimit : undefined,
+      includeListings:
+        viewMode === "list" ||
+        viewMode === "best" ||
+        Boolean(circle ?? polygon),
+      listingLimit: viewMode === "list" || viewMode === "best" ? listingLimit : undefined,
       minDeposit,
       maxDeposit,
       minRent,
@@ -429,6 +436,11 @@ export default function MapApp() {
       retry: false,
     },
   );
+  const recommendAi = api.listings.aiStatus.useQuery(undefined, {
+    staleTime: 60_000,
+    enabled: viewMode === "best",
+  });
+  const inspectPhotos = api.listings.inspectPhotos.useMutation();
 
   const data = useMemo(
     () =>
@@ -515,7 +527,7 @@ export default function MapApp() {
   };
 
   useEffect(() => {
-    setListingLimit(60);
+    setListingLimit(viewMode === "best" ? 120 : 60);
   }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent]);
 
   const onToggleSave = useCallback((listing: MapListing) => {
@@ -633,8 +645,74 @@ export default function MapApp() {
   );
   const priceHint = describePriceFilter(priceFilter);
 
-  const showList = viewMode === "list" || viewMode === "saved";
+  const showList = viewMode === "list" || viewMode === "saved" || viewMode === "best";
   const listListings = viewMode === "saved" ? savedHomes : visible.listings;
+  const photoScores = usePhotoQuality(
+    viewMode === "best" ? listListings.map((item) => item.thumbnail) : [],
+    viewMode === "best",
+  );
+  const photoInputs = useMemo(() => {
+    const next: Record<string, PhotoScoreInput> = {};
+    for (const listing of listListings) {
+      const url = listing.thumbnail;
+      if (!url) continue;
+      const local = photoScores[url];
+      const vision = visionById[listing.id];
+      if (vision && local) {
+        next[url] = {
+          score: Math.round(local.score * 0.4 + vision.score * 0.6),
+          summary: vision.summary ?? local.summary,
+          likelyFloorplan: local.likelyFloorplan,
+          likelyDim: local.likelyDim,
+        };
+      } else if (vision) {
+        next[url] = vision;
+      } else if (local) {
+        next[url] = local;
+      }
+    }
+    return next;
+  }, [listListings, photoScores, visionById]);
+  const ranked = useMemo(
+    () => (viewMode === "best" ? rankListings(listListings, photoInputs) : undefined),
+    [listListings, photoInputs, viewMode],
+  );
+  const listingIdsKey = listListings.map((item) => item.id).join(",");
+
+  useEffect(() => {
+    if (viewMode !== "best" || !recommendAi.data?.openai || !listingIdsKey) return;
+    const top = rankListings(listListings, photoScores)
+      .slice(0, 6)
+      .flatMap((item) => {
+        const raw = item.listing.thumbnail;
+        if (!raw) return [];
+        const url = raw.startsWith("//") ? `https:${raw}` : raw;
+        if (!/^https?:\/\//.test(url)) return [];
+        return [{ id: item.listing.id, url }];
+      });
+    const key = top.map((item) => item.id).join(",");
+    if (!key || inspectedPhotos.current === key) return;
+    inspectedPhotos.current = key;
+    void inspectPhotos
+      .mutateAsync({ items: top })
+      .then((rows) => {
+        setVisionById(
+          Object.fromEntries(
+            rows.map((row) => [
+              row.id,
+              {
+                score: row.score,
+                summary: row.summary,
+                likelyFloorplan: false,
+                likelyDim: false,
+              },
+            ]),
+          ),
+        );
+      })
+      .catch(() => undefined);
+  }, [inspectPhotos, listListings, listingIdsKey, photoScores, recommendAi.data?.openai, viewMode]);
+
   const naverError = dismissedNaver
     ? undefined
     : visible.errors.find((error) => error.source === "naver");
@@ -817,7 +895,7 @@ export default function MapApp() {
           ) : null}
 
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {(["map", "list", "saved"] as ViewMode[]).map((mode) => (
+            {(["map", "list", "best", "saved"] as ViewMode[]).map((mode) => (
               <button
                 key={mode}
                 type="button"
@@ -826,7 +904,9 @@ export default function MapApp() {
                   viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
                 }`}
               >
-                {mode === "saved" ? `Saved${savedHomes.length ? ` ${savedHomes.length}` : ""}` : mode}
+                {mode === "saved"
+                  ? `Saved${savedHomes.length ? ` ${savedHomes.length}` : ""}`
+                  : mode}
               </button>
             ))}
           </div>
@@ -1034,16 +1114,36 @@ export default function MapApp() {
               }
               sort={listSort}
               savedIds={savedHomes.map((item) => item.id)}
-              canLoadMore={viewMode === "list" && visible.stats.truncated && listingLimit < 300}
+              canLoadMore={
+                (viewMode === "list" || viewMode === "best") &&
+                visible.stats.truncated &&
+                listingLimit < 300
+              }
+              ranked={ranked}
+              recommendHint={
+                viewMode !== "best"
+                  ? undefined
+                  : zoom < 14 && !circle && !polygon
+                    ? "Search a neighborhood or zoom in. Best ranks homes by ₩/m², popular areas, and photo quality."
+                    : recommendAi.data?.openai
+                      ? "Ranked by neighborhood, ₩/m², and listing photos. OpenAI is double-checking the top interiors."
+                      : "Ranked by neighborhood, ₩/m², and listing photos scored on this device."
+              }
               emptyHint={
                 viewMode === "saved"
                   ? "No saved homes yet. Tap the heart on a listing to keep it here."
-                  : undefined
+                  : viewMode === "best" && zoom < 14 && !circle && !polygon
+                    ? "Search Hongdae, Dangsan station, or zoom in so Best has homes to rank."
+                    : undefined
               }
               onSort={setListSort}
               onSelect={setSelected}
               onToggleSave={onToggleSave}
-              loadingMore={viewMode === "list" && refreshing && visible.stats.truncated}
+              loadingMore={
+                (viewMode === "list" || viewMode === "best") &&
+                refreshing &&
+                visible.stats.truncated
+              }
               onLoadMore={() => setListingLimit((current) => Math.min(300, current + 60))}
             />
           </div>

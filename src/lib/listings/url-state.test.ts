@@ -29,4 +29,20 @@ describe("shareable search URLs", () => {
     expect(parsed.maxDeposit).toBe(2000);
     expect(parsed.maxRent).toBe(80);
   });
+
+  it("round-trips the Best view", () => {
+    const search = buildAppSearch({
+      searchInput: "hongdae",
+      viewMode: "best",
+      sources: ["zigbang", "peterpan"],
+      propertyTypes: ["oneroom"],
+      salesTypes: ["wolse"],
+      areaBucketIds: [],
+      radiusM: 800,
+      view: { lat: 37.556, lng: 126.923, zoom: 16 },
+      listSort: "featured",
+    });
+    expect(search).toContain("view=best");
+    expect(parseAppUrl(search).viewMode).toBe("best");
+  });
 });

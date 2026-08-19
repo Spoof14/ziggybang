@@ -10,7 +10,7 @@ import {
   type Source,
 } from "./types";
 
-export type ViewMode = "map" | "list" | "saved";
+export type ViewMode = "map" | "list" | "best" | "saved";
 export type ListSort = "featured" | "newest" | "deposit" | "monthly" | "size";
 
 export type SavedPrefs = {
@@ -30,7 +30,7 @@ export type SavedPrefs = {
 
 const KEY = "ziggybang:prefs:v1";
 const AREA_IDS = areaBuckets.map((bucket) => bucket.id);
-const VIEW_MODES: ViewMode[] = ["map", "list", "saved"];
+const VIEW_MODES: ViewMode[] = ["map", "list", "best", "saved"];
 const LIST_SORTS: ListSort[] = ["featured", "newest", "deposit", "monthly", "size"];
 
 function pickKnown<T extends string>(values: unknown, allowed: readonly T[]): T[] {

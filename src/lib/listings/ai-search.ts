@@ -281,7 +281,7 @@ function leftoverListingQuery(text: string, placeNames: string[]): string | unde
       " ",
     )
     .replace(
-      /\b(i|i'm|im|i’d|id|want|wanted|looking|need|needs|find|search|show|get|please|something|somewhere|maybe|around|near|in|at|to|with|and|or|my|me|us|we|for|a|an|the|of|on|by|from|under|over|max|min|maximum|minimum|less|than|more|up|between|budget|deposit|rent|monthly|month|jeonse|wolse|studio|one-room|oneroom|villa|officetel|apartment|apt|sale|buy|cheap|cheaper|higher|lower|bit|walk|walking|distance|station|subway|room|rooms|place|home|homes|listing|listings|korea|seoul)\b/gi,
+      /\b(i|i'm|im|i’d|id|want|wanted|looking|need|needs|find|search|show|get|please|something|somewhere|maybe|around|near|in|at|to|with|and|or|my|me|us|we|for|a|an|the|of|on|by|from|under|over|max|min|maximum|minimum|less|than|more|up|between|budget|deposit|rent|monthly|month|jeonse|wolse|studio|one-room|oneroom|villa|officetel|apartment|apt|sale|buy|cheap|cheaper|higher|lower|bit|walk|walking|distance|station|subway|room|rooms|place|home|homes|listing|listings|korea|seoul|recommend|recommended|best|value|nicest|photo|photos|quality|neighbourhood|neighborhood|decent|good|ranked)\b/gi,
       " ",
     )
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
@@ -418,7 +418,13 @@ export function interpretSearch(
   const radiusM = parseRadius(text) ?? (place ? (place.radiusM ?? undefined) : undefined);
   if (radiusM) intent.radiusM = radiusM;
   if (/\bon the map\b|\bmap view\b/i.test(text)) intent.viewMode = "map";
-  else intent.viewMode = "list";
+  else if (
+    /recommend|best value|best (?:homes?|places?|apartments?|studios?)|nicest|good photos|for me\b/i.test(
+      text,
+    )
+  ) {
+    intent.viewMode = "best";
+  } else intent.viewMode = "list";
 
   if (/clear (the )?(price|budget|deposit|rent)|any budget|no price/i.test(text)) {
     intent.minDeposit = null;
@@ -436,7 +442,7 @@ export function interpretSearch(
 }
 
 export const ASK_SUGGESTIONS = [
+  "Best value studios near Hongdae, with decent photos",
   "Studio in Hongdae, monthly under ₩800,000, deposit under ₩20 million",
   "Jeonse near Gangnam station",
-  "Officetel by Dangsan station, rent under ₩700,000",
 ];

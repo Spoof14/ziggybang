@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getListingDetail, getMapData } from "~/server/listings/aggregate";
 import { askListings, isOpenAiConfigured } from "~/server/listings/ask";
 import { geocodeKorea } from "~/server/listings/geocode";
+import { inspectListingPhotos } from "~/server/listings/vision";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 
 const boundsSchema = z.object({
@@ -25,7 +26,7 @@ const snapshotSchema = z.object({
   salesTypes: z.array(salesTypeSchema).min(1),
   areaBucketIds: z.array(z.enum(["xs", "s", "m", "l"])),
   radiusM: z.number().min(250).max(3000),
-  viewMode: z.enum(["map", "list", "saved"]),
+  viewMode: z.enum(["map", "list", "saved", "best"]),
   minDeposit: z.number().min(0).max(1_000_000).optional(),
   maxDeposit: z.number().min(0).max(1_000_000).optional(),
   minRent: z.number().min(0).max(50_000).optional(),
@@ -100,4 +101,20 @@ export const listingsRouter = createTRPCRouter({
       }),
     )
     .mutation(({ input }) => askListings(input.messages, input.current)),
+
+  inspectPhotos: publicProcedure
+    .input(
+      z.object({
+        items: z
+          .array(
+            z.object({
+              id: z.string().min(1).max(120),
+              url: z.string().min(8).max(500),
+            }),
+          )
+          .min(1)
+          .max(6),
+      }),
+    )
+    .mutation(({ input }) => inspectListingPhotos(input.items)),
 });

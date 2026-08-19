@@ -9,6 +9,7 @@ import {
 } from "~/lib/listings/copy";
 import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
 import { type ListSort } from "~/lib/listings/prefs";
+import { type RankedListing } from "~/lib/listings/recommend";
 import { type MapListing } from "~/lib/listings/types";
 import { ListingPhoto } from "./ListingPhoto";
 
@@ -45,6 +46,8 @@ export function ListingList({
   canLoadMore,
   loadingMore,
   emptyHint,
+  ranked,
+  recommendHint,
   onSort,
   onSelect,
   onToggleSave,
@@ -60,16 +63,24 @@ export function ListingList({
   canLoadMore?: boolean;
   loadingMore?: boolean;
   emptyHint?: string;
+  ranked?: RankedListing[];
+  recommendHint?: string;
   onSort: (sort: ListSort) => void;
   onSelect: (listing: MapListing) => void;
   onToggleSave: (listing: MapListing) => void;
   onLoadMore?: () => void;
 }) {
   const sorted = useMemo(() => {
+    if (ranked?.length) return ranked.map((item) => item.listing);
     const items = listings.slice();
     if (sort === "featured") return items;
     return items.sort((a, b) => sortValue(a, sort) - sortValue(b, sort));
-  }, [listings, sort]);
+  }, [listings, ranked, sort]);
+  const reasonsById = useMemo(() => {
+    const next = new Map<string, RankedListing>();
+    for (const item of ranked ?? []) next.set(item.listing.id, item);
+    return next;
+  }, [ranked]);
   const sentinel = useRef<HTMLDivElement>(null);
   const loadLock = useRef(false);
 
@@ -103,6 +114,10 @@ export function ListingList({
     <div className="flex h-full min-h-0 flex-col bg-slate-950">
       <div className="flex flex-col gap-2 px-3 pt-2">
         <p className="text-xs text-slate-400">{countLabel}</p>
+        {recommendHint ? (
+          <p className="text-[11px] leading-snug text-sky-300">{recommendHint}</p>
+        ) : null}
+        {ranked ? null : (
         <div className="flex flex-wrap gap-1">
           {SORT_OPTIONS.map((option) => (
             <button
@@ -117,6 +132,7 @@ export function ListingList({
             </button>
           ))}
         </div>
+        )}
       </div>
       {!sorted.length ? (
         <div className="flex flex-1 items-center justify-center p-6 text-sm text-slate-400">
@@ -128,11 +144,12 @@ export function ListingList({
       ) : (
         <div data-list-scroll className="min-h-0 flex-1 overflow-auto p-3">
           <ul className="space-y-2">
-            {sorted.map((listing) => {
+            {sorted.map((listing, index) => {
               const price = formatPrice(listing);
               const title = englishCardTitle(listing);
               const meta = listingCardMeta(listing);
               const saved = savedIds.includes(listing.id);
+              const rankedItem = reasonsById.get(listing.id);
               return (
                 <li key={listing.id}>
                   <div
@@ -154,6 +171,11 @@ export function ListingList({
                           width={400}
                           className="h-20 w-24 object-cover"
                         />
+                        {rankedItem ? (
+                          <span className="absolute left-1 top-1 rounded-full bg-sky-400 px-1.5 text-[10px] font-bold text-slate-950">
+                            {index + 1}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-400">
@@ -171,6 +193,18 @@ export function ListingList({
                         <span className="mt-0.5 block truncate text-xs text-slate-500">
                           {meta || "Tap for details"}
                         </span>
+                        {rankedItem?.reasons.length ? (
+                          <span className="mt-1 flex flex-wrap gap-1">
+                            {rankedItem.reasons.map((reason) => (
+                              <span
+                                key={reason}
+                                className="rounded-full bg-sky-400/15 px-1.5 py-0.5 text-[10px] text-sky-200"
+                              >
+                                {reason}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
                       </span>
                     </button>
                     <span className="flex shrink-0 flex-col gap-1">

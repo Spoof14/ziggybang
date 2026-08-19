@@ -10,7 +10,7 @@ import { areaBuckets } from "~/lib/listings/area";
 import { type ViewMode } from "~/lib/listings/prefs";
 import { propertyTypes, salesTypes } from "~/lib/listings/types";
 
-const VIEW_MODES: ViewMode[] = ["map", "list", "saved"];
+const VIEW_MODES: ViewMode[] = ["map", "list", "saved", "best"];
 
 function pickKnown<T extends string>(values: unknown, allowed: readonly T[]): T[] {
   if (!Array.isArray(values)) return [];
@@ -85,9 +85,9 @@ async function interpretWithOpenAi(
           {
             role: "system",
             content: `You help foreigners search Korea rentals on Ziggybang.
-Return JSON with: reply (short English), searchInput (neighborhood or station text, null to clear), propertyTypes (oneroom, villa, officetel, apartment), salesTypes (jeonse, wolse, sale), areaBucketIds (xs, s, m, l), radiusM, viewMode (map or list), minDeposit, maxDeposit, minRent, maxRent.
+Return JSON with: reply (short English), searchInput (neighborhood or station text, null to clear), propertyTypes (oneroom, villa, officetel, apartment), salesTypes (jeonse, wolse, sale), areaBucketIds (xs, s, m, l), radiusM, viewMode (map, list, or best), minDeposit, maxDeposit, minRent, maxRent.
 Prices are 만원 (10,000 KRW). 1억 = 10000. ₩20 million deposit = 2000. ₩800,000/month = 80.
-Use null to clear a field, omit unchanged fields. Prefer viewMode list.`,
+Use null to clear a field, omit unchanged fields. Prefer viewMode list, or best when they ask for recommendations, nicest homes, or best value.`,
           },
           {
             role: "user",

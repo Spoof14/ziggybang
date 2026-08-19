@@ -22,7 +22,7 @@ export type AppUrlState = {
   listSort?: ListSort;
 } & PriceFilter;
 
-const VIEW_MODES: ViewMode[] = ["map", "list", "saved"];
+const VIEW_MODES: ViewMode[] = ["map", "list", "best", "saved"];
 const LIST_SORTS: ListSort[] = ["featured", "newest", "deposit", "monthly", "size"];
 const AREA_IDS = areaBuckets.map((bucket) => bucket.id);
 
