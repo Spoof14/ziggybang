@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { englishAddressLine, englishCardTitle } from "./english";
+import {
+  englishAddressLine,
+  englishCardTitle,
+  englishDistrict,
+  koreanAddressForTaxi,
+  listingCardMeta,
+} from "./english";
 import { type MapListing } from "./types";
 
 const listing: MapListing = {
@@ -12,6 +18,8 @@ const listing: MapListing = {
   salesType: "wolse",
   roomType: "분리형원룸",
   address: "서울 마포구 연남동",
+  floor: "3/5",
+  areaM2: 25,
   url: "https://example.com",
 };
 
@@ -20,6 +28,26 @@ describe("English listing cards", () => {
     expect(englishCardTitle(listing)).toContain("Yeonnam");
     expect(englishCardTitle(listing)).toContain("Split studio");
     expect(englishCardTitle(listing)).toContain("Monthly");
-    expect(englishAddressLine(listing)).toContain("Yeonnam");
+    expect(englishAddressLine(listing)).toBe("Yeonnam · Mapo-gu");
+    expect(englishAddressLine(listing)).not.toMatch(/[가-힣]/);
+  });
+
+  it("romanizes the district instead of appending Hangul", () => {
+    expect(englishDistrict("서울시 마포구 창전동")).toBe("Mapo-gu");
+    expect(
+      englishAddressLine({
+        ...listing,
+        address: "서울시 마포구 창전동",
+      }),
+    ).toBe("Mapo-gu");
+    expect(koreanAddressForTaxi("서울시 마포구 창전동")).toBe(
+      "서울시 마포구 창전동",
+    );
+  });
+
+  it("puts floor and size on the card subtitle", () => {
+    expect(listingCardMeta(listing)).toContain("Yeonnam");
+    expect(listingCardMeta(listing)).toContain("25");
+    expect(listingCardMeta(listing)).toContain("Floor 3 of 5");
   });
 });

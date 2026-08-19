@@ -33,7 +33,7 @@ import {
   placeSearchToken,
   stripPlaceFromQuery,
 } from "~/lib/listings/search";
-import { englishCardTitle } from "~/lib/listings/english";
+import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
 import { type SearchSnapshot } from "~/lib/listings/ai-search";
 import {
   isSavedHome,
@@ -64,7 +64,10 @@ import { PriceFilters } from "./PriceFilters";
 const ALL_SOURCES: Source[] = ["zigbang", "naver", "peterpan"];
 const ALL_TYPES: PropertyType[] = ["oneroom", "villa", "officetel", "apartment"];
 const ALL_SALES: SalesType[] = ["jeonse", "wolse", "sale"];
+const DEFAULT_SOURCES: Source[] = ["zigbang", "peterpan"];
+const DEFAULT_SALES: SalesType[] = ["jeonse", "wolse"];
 const DEFAULT_RADIUS_M = 1200;
+const NAVER_HIDE_KEY = "ziggybang:hide-naver-error";
 
 function roundCoord(value: number) {
   return Math.round(value * 10_000) / 10_000;
@@ -101,9 +104,9 @@ export default function MapApp() {
     east: 127.02,
   });
   const [zoom, setZoom] = useState(13);
-  const [sources, setSources] = useState<Source[]>(ALL_SOURCES);
+  const [sources, setSources] = useState<Source[]>(DEFAULT_SOURCES);
   const [propertyTypes, setPropertyTypes] = useState<PropertyType[]>(ALL_TYPES);
-  const [salesTypes, setSalesTypes] = useState<SalesType[]>(ALL_SALES);
+  const [salesTypes, setSalesTypes] = useState<SalesType[]>(DEFAULT_SALES);
   const [areaBucketIds, setAreaBucketIds] = useState<AreaBucketId[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -130,6 +133,12 @@ export default function MapApp() {
   } | null>(null);
   const [dismissedNaver, setDismissedNaver] = useState(false);
   const [uiCompact, setUiCompact] = useState(false);
+  const [shareHint, setShareHint] = useState<string | null>(null);
+  const [urlView, setUrlView] = useState({
+    lat: 37.565,
+    lng: 126.98,
+    zoom: 13,
+  });
   const lastViewportKey = useRef<string | null>(null);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPlaceId = useRef<string | null>(null);
@@ -176,9 +185,9 @@ export default function MapApp() {
       ? parseAppUrl(window.location.search)
       : {};
     const base = saved;
-    setSources(url.sources ?? base?.sources ?? ALL_SOURCES);
+    setSources(url.sources ?? base?.sources ?? DEFAULT_SOURCES);
     setPropertyTypes(url.propertyTypes ?? base?.propertyTypes ?? ALL_TYPES);
-    setSalesTypes(url.salesTypes ?? base?.salesTypes ?? ALL_SALES);
+    setSalesTypes(url.salesTypes ?? base?.salesTypes ?? DEFAULT_SALES);
     setAreaBucketIds(url.areaBucketIds ?? base?.areaBucketIds ?? []);
     setSearchInput(url.searchInput ?? base?.searchInput ?? "");
     setDebouncedQuery(url.searchInput ?? base?.searchInput ?? "");
@@ -191,9 +200,25 @@ export default function MapApp() {
     setRadiusM(url.radiusM ?? base?.radiusM ?? DEFAULT_RADIUS_M);
     setManualCircle(base?.circle ?? null);
     setPolygon(base?.polygon ?? null);
-    setUiCompact(base?.uiCompact === true);
+    if (typeof base?.uiCompact === "boolean") {
+      setUiCompact(base.uiCompact);
+    } else {
+      setUiCompact(window.innerWidth < 768);
+    }
+    try {
+      setDismissedNaver(window.localStorage.getItem(NAVER_HIDE_KEY) === "1");
+    } catch {
+      /* private mode */
+    }
     const view = url.view ?? base?.view;
     const searchText = url.searchInput ?? base?.searchInput ?? "";
+    if (view) {
+      setUrlView({
+        lat: view.lat,
+        lng: view.lng,
+        zoom: Math.round(view.zoom),
+      });
+    }
     if (view && !parseSearchQuery(searchText).place) {
       setZoom(Math.round(view.zoom));
       setFocus({
@@ -262,11 +287,7 @@ export default function MapApp() {
       salesTypes,
       areaBucketIds,
       radiusM,
-      view: {
-        lat: (bounds.south + bounds.north) / 2,
-        lng: (bounds.west + bounds.east) / 2,
-        zoom,
-      },
+      view: urlView,
       listSort,
       minDeposit,
       maxDeposit,
@@ -279,7 +300,6 @@ export default function MapApp() {
     }
   }, [
     areaBucketIds,
-    bounds,
     listSort,
     maxDeposit,
     maxRent,
@@ -291,9 +311,34 @@ export default function MapApp() {
     salesTypes,
     searchInput,
     sources,
+    urlView,
     viewMode,
-    zoom,
   ]);
+
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    const timer = setTimeout(() => {
+      setUrlView({
+        lat: (bounds.south + bounds.north) / 2,
+        lng: (bounds.west + bounds.east) / 2,
+        zoom,
+      });
+    }, 1400);
+    return () => clearTimeout(timer);
+  }, [bounds, prefsLoaded, zoom]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (askOpen) {
+        setAskOpen(false);
+        return;
+      }
+      if (selected) setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [askOpen, selected]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchInput), 280);
@@ -481,6 +526,66 @@ export default function MapApp() {
     });
   }, []);
 
+  const copySearchLink = useCallback(async () => {
+    const next = buildAppSearch({
+      searchInput,
+      viewMode,
+      sources,
+      propertyTypes,
+      salesTypes,
+      areaBucketIds,
+      radiusM,
+      view: {
+        lat: (bounds.south + bounds.north) / 2,
+        lng: (bounds.west + bounds.east) / 2,
+        zoom,
+      },
+      listSort,
+      minDeposit,
+      maxDeposit,
+      minRent,
+      maxRent,
+    });
+    const href = `${window.location.origin}${window.location.pathname}${next}`;
+    try {
+      await navigator.clipboard.writeText(href);
+      setShareHint("Copied");
+    } catch {
+      window.prompt("Copy this search link", href);
+    }
+    window.setTimeout(() => setShareHint(null), 1600);
+  }, [
+    areaBucketIds,
+    bounds,
+    listSort,
+    maxDeposit,
+    maxRent,
+    minDeposit,
+    minRent,
+    propertyTypes,
+    radiusM,
+    salesTypes,
+    searchInput,
+    sources,
+    viewMode,
+    zoom,
+  ]);
+
+  const hideNaverError = useCallback((turnOff = false) => {
+    setDismissedNaver(true);
+    if (turnOff) {
+      setSources((current) => {
+        const next = current.filter((source) => source !== "naver");
+        return next.length ? next : current;
+      });
+    }
+    try {
+      window.localStorage.setItem(NAVER_HIDE_KEY, "1");
+    } catch {
+      /* private mode */
+    }
+  }, []);
+
   const applySearchSnapshot = useCallback((snapshot: SearchSnapshot) => {
     setSearchInput(snapshot.searchInput);
     setDebouncedQuery(snapshot.searchInput);
@@ -536,7 +641,19 @@ export default function MapApp() {
 
   const statusLabel = waitingForFirst
     ? "Loading…"
-    : `Zigbang ${visible.stats.zigbang.toLocaleString("en-US")} · Naver ${visible.stats.naver.toLocaleString("en-US")} · Peterpan ${visible.stats.peterpan.toLocaleString("en-US")}`;
+    : [
+        sources.includes("zigbang")
+          ? `Zigbang ${visible.stats.zigbang.toLocaleString("en-US")}`
+          : null,
+        sources.includes("naver")
+          ? `Naver ${visible.stats.naver.toLocaleString("en-US")}`
+          : null,
+        sources.includes("peterpan")
+          ? `Peterpan ${visible.stats.peterpan.toLocaleString("en-US")}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
   const areaHint = place
     ? `${place.names[1] ?? place.names[0]} · ${formatRadius(circle?.radiusM ?? radiusM)}`
@@ -578,6 +695,13 @@ export default function MapApp() {
                 className="rounded-full bg-sky-400 px-2.5 py-1 text-[11px] font-medium text-slate-950 hover:bg-sky-300"
               >
                 Ask
+              </button>
+              <button
+                type="button"
+                onClick={() => void copySearchLink()}
+                className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
+              >
+                {shareHint ?? "Copy link"}
               </button>
               <button
                 type="button"
@@ -845,13 +969,22 @@ export default function MapApp() {
           {naverError ? (
             <p className="mt-1.5 flex items-start justify-between gap-2 text-[11px] text-amber-300">
               <span>{friendlySourceError(naverError.source, naverError.message)}</span>
-              <button
-                type="button"
-                className="shrink-0 text-slate-400 hover:text-white"
-                onClick={() => setDismissedNaver(true)}
-              >
-                Dismiss
-              </button>
+              <span className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  className="text-slate-400 hover:text-white"
+                  onClick={() => hideNaverError(true)}
+                >
+                  Turn off
+                </button>
+                <button
+                  type="button"
+                  className="text-slate-400 hover:text-white"
+                  onClick={() => hideNaverError(false)}
+                >
+                  Dismiss
+                </button>
+              </span>
             </p>
           ) : null}
         </div>
@@ -859,6 +992,9 @@ export default function MapApp() {
 
       <div className="relative flex min-h-0 flex-1">
         <div
+          data-map-chrome={
+            viewMode === "map" && visible.listings.length ? "carousel" : undefined
+          }
           className={
             showList
               ? "pointer-events-none invisible absolute inset-0 z-0 h-full md:visible md:pointer-events-auto md:static md:z-auto md:w-[46%]"
@@ -907,6 +1043,7 @@ export default function MapApp() {
               onSort={setListSort}
               onSelect={setSelected}
               onToggleSave={onToggleSave}
+              loadingMore={viewMode === "list" && refreshing && visible.stats.truncated}
               onLoadMore={() => setListingLimit((current) => Math.min(300, current + 60))}
             />
           </div>
@@ -923,6 +1060,7 @@ export default function MapApp() {
           <div className="pointer-events-auto absolute bottom-4 left-4 right-16 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:right-20">
             {visible.listings.slice(0, 24).map((listing) => {
               const price = formatPrice(listing);
+              const meta = listingCardMeta(listing);
               return (
                 <button
                   key={listing.id}
@@ -946,6 +1084,11 @@ export default function MapApp() {
                     <span className="mt-1 block truncate text-sm font-medium">
                       {price ?? englishCardTitle(listing)}
                     </span>
+                    {meta ? (
+                      <span className="mt-0.5 block truncate text-[10px] text-slate-400">
+                        {meta}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
               );

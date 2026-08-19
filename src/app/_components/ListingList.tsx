@@ -1,14 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
-  formatArea,
   formatPrice,
   propertyTypeLabel,
   salesTypeFilterLabel,
   sourceLabel,
 } from "~/lib/listings/copy";
-import { englishAddressLine, englishCardTitle } from "~/lib/listings/english";
+import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
 import { type ListSort } from "~/lib/listings/prefs";
 import { type MapListing } from "~/lib/listings/types";
 import { ListingPhoto } from "./ListingPhoto";
@@ -44,6 +43,7 @@ export function ListingList({
   sort,
   savedIds,
   canLoadMore,
+  loadingMore,
   emptyHint,
   onSort,
   onSelect,
@@ -58,6 +58,7 @@ export function ListingList({
   sort: ListSort;
   savedIds: string[];
   canLoadMore?: boolean;
+  loadingMore?: boolean;
   emptyHint?: string;
   onSort: (sort: ListSort) => void;
   onSelect: (listing: MapListing) => void;
@@ -69,6 +70,28 @@ export function ListingList({
     if (sort === "featured") return items;
     return items.sort((a, b) => sortValue(a, sort) - sortValue(b, sort));
   }, [listings, sort]);
+  const sentinel = useRef<HTMLDivElement>(null);
+  const loadLock = useRef(false);
+
+  useEffect(() => {
+    loadLock.current = false;
+  }, [listings.length, canLoadMore]);
+
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node || !canLoadMore || !onLoadMore) return;
+    const root = node.closest("[data-list-scroll]");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting || loadLock.current) return;
+        loadLock.current = true;
+        onLoadMore();
+      },
+      { root: root instanceof Element ? root : null, rootMargin: "240px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [canLoadMore, onLoadMore, sorted.length]);
 
   const countLabel = loading
     ? "Loading homes…"
@@ -103,13 +126,12 @@ export function ListingList({
               "No homes in the current map area. Search a neighborhood, draw a shape, or zoom in."}
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto p-3">
+        <div data-list-scroll className="min-h-0 flex-1 overflow-auto p-3">
           <ul className="space-y-2">
             {sorted.map((listing) => {
               const price = formatPrice(listing);
-              const area = formatArea(listing.areaM2);
               const title = englishCardTitle(listing);
-              const where = englishAddressLine(listing);
+              const meta = listingCardMeta(listing);
               const saved = savedIds.includes(listing.id);
               return (
                 <li key={listing.id}>
@@ -147,7 +169,7 @@ export function ListingList({
                           {title}
                         </span>
                         <span className="mt-0.5 block truncate text-xs text-slate-500">
-                          {where ?? area ?? "Tap for details"}
+                          {meta || "Tap for details"}
                         </span>
                       </span>
                     </button>
@@ -175,13 +197,16 @@ export function ListingList({
             })}
           </ul>
           {canLoadMore ? (
-            <button
-              type="button"
-              onClick={onLoadMore}
-              className="mt-3 w-full rounded-xl bg-white/10 px-3 py-2 text-sm text-white"
-            >
-              Load more homes
-            </button>
+            <>
+              <div ref={sentinel} className="h-4" />
+              <button
+                type="button"
+                onClick={onLoadMore}
+                className="mt-3 w-full rounded-xl bg-white/10 px-3 py-2 text-sm text-white"
+              >
+                {loadingMore ? "Loading more…" : "Load more homes"}
+              </button>
+            </>
           ) : null}
         </div>
       )}

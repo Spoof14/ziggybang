@@ -148,7 +148,7 @@ export function AskSearch({
             <input
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="e.g. officetel near Dangsan, rent under 70"
+              placeholder="e.g. officetel near Dangsan, rent under ₩700,000"
               autoComplete="off"
               className="search-input w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-400"
             />
