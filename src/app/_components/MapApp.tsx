@@ -1464,7 +1464,7 @@ export default function MapApp() {
           />
         ) : viewMode === "map" && visible.listings.length ? (
           <div
-            className={`pointer-events-auto absolute bottom-4 left-4 right-16 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:right-20 ${
+            className={`pointer-events-auto absolute bottom-4 left-4 right-4 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar ${
               uiCompact ? "" : "max-md:hidden"
             }`}
           >

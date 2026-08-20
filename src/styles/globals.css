@@ -24,7 +24,7 @@ body {
 }
 
 [data-map-chrome="carousel"] .leaflet-bottom.leaflet-right {
-  margin-bottom: 7.25rem;
+  margin-bottom: 8.5rem;
 }
 
 @media (max-width: 767px) {
