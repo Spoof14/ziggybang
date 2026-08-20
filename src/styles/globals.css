@@ -28,8 +28,43 @@ body {
 }
 
 @media (max-width: 767px) {
-  [data-filters="open"][data-map-chrome="carousel"] .leaflet-bottom.leaflet-right {
+  [data-filters="open"][data-map-chrome="carousel"]
+    .leaflet-bottom.leaflet-right {
     margin-bottom: 0.75rem;
+  }
+}
+
+.leaflet-control-locate a {
+  align-items: center;
+  color: #0f172a;
+  display: flex;
+  height: 30px;
+  justify-content: center;
+  line-height: 0;
+  width: 30px;
+}
+
+.leaflet-control-locate a svg {
+  height: 16px;
+  width: 16px;
+}
+
+.leaflet-control-locate a.is-locating {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+.leaflet-control-locate a.is-locating svg {
+  animation: locate-spin 0.8s linear infinite;
+}
+
+.leaflet-control-locate a.is-error {
+  color: #dc2626;
+}
+
+@keyframes locate-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
