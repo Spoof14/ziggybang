@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blendAskIntent, interpretSearch, mergeSearchIntent, type SearchSnapshot } from "./ai-search";
+import { composeAskIntent, interpretSearch, mergeSearchIntent, type SearchSnapshot } from "./ai-search";
 
 const current: SearchSnapshot = {
   searchInput: "",
@@ -88,24 +88,50 @@ describe("conversational listing search", () => {
   it("keeps leftover listing words like pet and rooftop", () => {
     const result = interpretSearch("pet friendly rooftop near hongdae", current);
     expect(result.snapshot.searchInput.toLowerCase()).toContain("hongdae");
+    expect(result.snapshot.searchInput.toLowerCase()).not.toContain("pet");
     expect(result.snapshot.listingQuery?.toLowerCase()).toContain("pet");
     expect(result.snapshot.listingQuery?.toLowerCase()).toContain("rooftop");
-    expect(result.snapshot.searchInput.toLowerCase()).toContain("pet");
   });
 
-  it("blends OpenAI place-only searchInput with leftover listing text", () => {
+  it("does not turn a value + building-age sentence into a title search", () => {
+    const dirty: SearchSnapshot = {
+      ...current,
+      searchInput: "hongdae",
+      maxDeposit: 3000,
+      maxRent: 150,
+      areaBucketIds: ["s", "m", "l"],
+      floorFilter: "no-basement",
+      listingQuery: "some good places that are less than years old",
+    };
+    const result = interpretSearch(
+      "Find me some good value places that are less than 15 years old near guro digital complex",
+      dirty,
+    );
+    expect(result.snapshot.searchInput.toLowerCase()).toBe("guro digital");
+    expect(result.snapshot.listingQuery).toBeUndefined();
+    expect(result.snapshot.maxBuildingAge).toBe(15);
+    expect(result.snapshot.viewMode).toBe("best");
+    expect(result.snapshot.maxDeposit).toBeUndefined();
+    expect(result.snapshot.maxRent).toBeUndefined();
+    expect(result.snapshot.areaBucketIds).toEqual([]);
+    expect(result.snapshot.floorFilter).toBeUndefined();
+    expect(result.reply.toLowerCase()).toContain("15 years");
+  });
+
+  it("lets OpenAI keep a place-only searchInput without leftover sentence text", () => {
     const local = interpretSearch("furnished pet officetel near hongdae", current);
-    const blended = blendAskIntent(
+    const composed = composeAskIntent(
       {
         searchInput: "Hongdae",
         propertyTypes: ["officetel"],
         viewMode: "list",
       },
       local.intent,
+      true,
     );
-    expect(blended.searchInput?.toLowerCase()).toContain("hongdae");
-    expect(blended.searchInput?.toLowerCase()).toContain("pet");
-    expect(blended.listingQuery?.toLowerCase()).toContain("pet");
+    expect(composed.searchInput?.toLowerCase()).toBe("hongdae");
+    expect(composed.listingQuery?.toLowerCase()).toMatch(/pet/);
+    expect(composed.searchInput?.toLowerCase()).not.toMatch(/furnished pet/);
   });
 
   it("merges a rent-only patch onto existing filters", () => {

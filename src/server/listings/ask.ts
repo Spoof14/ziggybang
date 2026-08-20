@@ -1,8 +1,10 @@
 import { env } from "~/env";
 import {
+  composeAskIntent,
   describeSearchSnapshot,
+  emptyAskSnapshot,
   interpretSearch,
-  blendAskIntent,
+  isFreshAsk,
   mergeSearchIntent,
   type SearchIntent,
   type SearchSnapshot,
@@ -12,6 +14,7 @@ import { type ViewMode } from "~/lib/listings/prefs";
 import { propertyTypes, salesTypes } from "~/lib/listings/types";
 import { ageFilters, type AgeFilter } from "~/lib/listings/age";
 import { floorFilters, type FloorFilter } from "~/lib/listings/floor";
+import { normalizeBuildingAgeFilter } from "~/lib/listings/building-age";
 
 const VIEW_MODES: ViewMode[] = ["map", "list", "saved", "best"];
 
@@ -41,6 +44,7 @@ function intentFromUnknown(raw: unknown): SearchIntent {
     typeof data.viewMode === "string" && VIEW_MODES.includes(data.viewMode as ViewMode)
       ? (data.viewMode as ViewMode)
       : undefined;
+  const built = normalizeBuildingAgeFilter({ maxBuildingAge: data.maxBuildingAge });
   return {
     searchInput:
       data.searchInput === null
@@ -79,6 +83,8 @@ function intentFromUnknown(raw: unknown): SearchIntent {
         : typeof data.listingQuery === "string"
           ? data.listingQuery.trim().slice(0, 80) || undefined
           : undefined,
+    maxBuildingAge:
+      data.maxBuildingAge === null ? null : built.maxBuildingAge,
   };
 }
 
@@ -93,7 +99,7 @@ async function interpretWithOpenAi(
   const key = env.OPENAI_API_KEY;
   if (!key) return null;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const timer = setTimeout(() => controller.abort(), 12_000);
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -104,16 +110,30 @@ async function interpretWithOpenAi(
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        temperature: 0.2,
+        temperature: 0.1,
         response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
-            content: `You help foreigners search Korea rentals on Ziggybang.
-Return JSON with: reply (short English), searchInput (neighborhood or station text, null to clear), listingQuery (leftover words that should match listing titles/descriptions, like pet, rooftop, furnished, parking, duplex; empty/omit if none), propertyTypes (oneroom, villa, officetel, apartment), salesTypes (jeonse, wolse, sale), areaBucketIds (xs, s, m, l), radiusM, viewMode (map, list, or best), minDeposit, maxDeposit, minRent, maxRent, foreignerOk (true if they need a landlord who accepts foreigners), floorFilter (no-basement, min-2, or min-5), ageFilter (week or month).
-Prices are 만원 (10,000 KRW). 1억 = 10000. ₩20 million deposit = 2000. ₩800,000/month = 80.
-searchInput should be the neighborhood or station plus listingQuery words. Do not put geographic leftovers like digital or complex into listingQuery. Do not put no basement, this week, or prices into listingQuery — those are structured filters.
-Use null to clear a field, omit unchanged fields. Prefer viewMode list, or best when they ask for recommendations, nicest homes, or best value.`,
+            content: `You convert a rental search into Ziggybang map filters. You own the filter decision — do not copy leftover English into the search box.
+Return JSON with:
+- reply: short English confirming the filters
+- searchInput: neighborhood or station ONLY (e.g. "Guro Digital", "Hongdae"). null to clear. Never put sentences, "good value", "years old", or "complex" here.
+- listingQuery: amenity words that match listing titles (pet, rooftop, furnished, parking, duplex). Empty/null if none. NEVER put "good value", "places", "less than years old", or building age here.
+- propertyTypes: oneroom, villa, officetel, apartment
+- salesTypes: jeonse, wolse, sale
+- areaBucketIds: xs, s, m, l — only if they asked for a size. Do not guess.
+- radiusM: meters
+- viewMode: map, list, or best. Use best for good value / recommend / nicest.
+- minDeposit, maxDeposit, minRent, maxRent in 만원 (₩20 million = 2000, ₩800,000/month = 80, 1억 = 10000)
+- foreignerOk: true if they need a landlord who accepts foreigners
+- floorFilter: no-basement, min-2, or min-5
+- ageFilter: week or month (listing recency, NOT building age)
+- maxBuildingAge: integer 5–39. "less than 15 years old" / "under 10 years" → 15 or 10. null to clear.
+
+Fresh search (they name a place or say find/search/looking for): set omitted filters to null so old budget/size/floor/title filters do not carry over. Keep only what they asked for.
+Follow-up (cheaper, no basement, bigger): omit unchanged fields.
+Do not invent a budget or size if they did not mention one.`,
           },
           {
             role: "user",
@@ -154,9 +174,14 @@ export async function askListings(
   if (!ai) {
     return { snapshot: local.snapshot, reply: local.reply, provider: "local" };
   }
+  const composed = composeAskIntent(ai.intent, local.intent, isFreshAsk(lastUser, {
+    ...ai.intent,
+    searchInput: ai.intent.searchInput ?? local.intent.searchInput,
+  }));
+  const fresh = isFreshAsk(lastUser, composed);
   const snapshot = mergeSearchIntent(
-    current,
-    blendAskIntent({ ...ai.intent, viewMode: ai.intent.viewMode ?? "list" }, local.intent),
+    fresh ? emptyAskSnapshot(current) : current,
+    composed,
   );
   const reply = ai.reply?.trim();
   return {

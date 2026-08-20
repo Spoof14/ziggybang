@@ -796,8 +796,11 @@ export default function MapApp() {
   }, []);
 
   const applySearchSnapshot = useCallback((snapshot: SearchSnapshot) => {
-    setSearchInput(snapshot.searchInput);
-    setDebouncedQuery(snapshot.searchInput);
+    const searchBox = [snapshot.searchInput.trim(), snapshot.listingQuery?.trim()]
+      .filter(Boolean)
+      .join(" ");
+    setSearchInput(searchBox);
+    setDebouncedQuery(searchBox);
     setPropertyTypes(snapshot.propertyTypes.length ? snapshot.propertyTypes : ALL_TYPES);
     setSalesTypes(snapshot.salesTypes.length ? snapshot.salesTypes : ALL_SALES);
     setAreaBucketIds(snapshot.areaBucketIds);
@@ -808,6 +811,7 @@ export default function MapApp() {
     setForeignerOk(Boolean(snapshot.foreignerOk));
     setFloorFilter(snapshot.floorFilter);
     setAgeFilter(snapshot.ageFilter);
+    setMaxBuildingAge(snapshot.maxBuildingAge);
     setRadiusM(snapshot.radiusM);
     setViewMode(snapshot.viewMode);
   }, []);
@@ -827,6 +831,7 @@ export default function MapApp() {
       foreignerOk,
       floorFilter,
       ageFilter,
+      maxBuildingAge,
       listingQuery: listingQuery || undefined,
     }),
     [
@@ -834,6 +839,7 @@ export default function MapApp() {
       floorFilter,
       ageFilter,
       listingQuery,
+      maxBuildingAge,
       maxDeposit,
       maxRent,
       minDeposit,

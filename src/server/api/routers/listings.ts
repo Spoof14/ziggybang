@@ -40,6 +40,7 @@ const snapshotSchema = z.object({
   floorFilter: floorFilterSchema.optional(),
   ageFilter: ageFilterSchema.optional(),
   listingQuery: z.string().max(80).optional(),
+  maxBuildingAge: z.number().int().min(5).max(39).optional(),
 });
 
 export const listingsRouter = createTRPCRouter({
