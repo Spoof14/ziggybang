@@ -1366,6 +1366,7 @@ export default function MapApp() {
           data-map-chrome={
             viewMode === "map" && visible.listings.length ? "carousel" : undefined
           }
+          data-filters={uiCompact ? "compact" : "open"}
           className={
             showList
               ? "pointer-events-none invisible absolute inset-0 z-0 h-full md:visible md:pointer-events-auto md:static md:z-auto md:w-[46%]"
@@ -1451,7 +1452,11 @@ export default function MapApp() {
             onToggleSave={onToggleSave}
           />
         ) : viewMode === "map" && visible.listings.length ? (
-          <div className="pointer-events-auto absolute bottom-4 left-4 right-16 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:right-20">
+          <div
+            className={`pointer-events-auto absolute bottom-4 left-4 right-16 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:right-20 ${
+              uiCompact ? "" : "max-md:hidden"
+            }`}
+          >
             {visible.listings.slice(0, 24).map((listing) => {
               const meta = listingCardMeta(listing);
               return (

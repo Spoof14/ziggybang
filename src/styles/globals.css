@@ -27,6 +27,12 @@ body {
   margin-bottom: 7.25rem;
 }
 
+@media (max-width: 767px) {
+  [data-filters="open"][data-map-chrome="carousel"] .leaflet-bottom.leaflet-right {
+    margin-bottom: 0.75rem;
+  }
+}
+
 .leaflet-control-attribution {
   background: rgba(15, 23, 42, 0.72) !important;
   color: #cbd5e1;
