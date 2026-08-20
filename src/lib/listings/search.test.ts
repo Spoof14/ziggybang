@@ -49,6 +49,28 @@ describe("bilingual fuzzy search", () => {
     expect(looksLikePlaceQuery("deposit 2000")).toBe(false);
   });
 
+  it("prefers Guro Digital over Guro and does not keep leftover title text", () => {
+    expect(matchPlace("guro digital")?.id).toBe("guro-digital");
+    expect(matchPlace("guro")?.id).toBe("guro");
+    expect(matchPlace("구로디지털단지")?.id).toBe("guro-digital");
+    const parsed = parseSearchQuery("guro digital");
+    expect(parsed.place?.id).toBe("guro-digital");
+    expect(parsed.listingQuery).toBe("");
+    expect(parseSearchQuery("guro digital complex").listingQuery).toBe("");
+    expect(parseSearchQuery("guro digital studio").listingQuery.toLowerCase()).toContain(
+      "studio",
+    );
+  });
+
+  it("does not treat no-basement as a title search for studios", () => {
+    expect(listingMatchesQuery(listing({ propertyType: "oneroom" }), "no")).toBe(false);
+    const parsed = parseSearchQuery("no basement");
+    expect(parsed.listingQuery).toBe("");
+    expect(parsed.floorFilter).toBe("no-basement");
+    expect(parseSearchQuery("hongdae no basement").floorFilter).toBe("no-basement");
+    expect(parseSearchQuery("hongdae no basement").listingQuery).toBe("");
+  });
+
   it("matches Dangsan station as a walk-radius place, not listing text", () => {
     expect(matchPlace("dangsan station")?.id).toBe("dangsan");
     expect(matchPlace("당산역")?.id).toBe("dangsan");

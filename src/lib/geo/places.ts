@@ -21,6 +21,8 @@ export const places: Place[] = [
   { id: "singil", names: ["singil", "신길", "신길동"], lat: 37.513, lng: 126.921, zoom: 15 },
   { id: "noryangjin", names: ["noryangjin", "노량진"], lat: 37.513, lng: 126.942, zoom: 15 },
   { id: "sindorim", names: ["sindorim", "신도림"], lat: 37.509, lng: 126.891, zoom: 15 },
+  { id: "guro-digital", names: ["guro digital", "guro digital complex", "guro digital complex station", "gurodigital", "guro-digital", "gdc", "구로디지털", "구로디지털단지", "구로디지털단지역"], lat: 37.4852, lng: 126.9014, zoom: 16, radiusM: 800 },
+  { id: "gasan-digital", names: ["gasan digital", "gasan digital complex", "gasan digital complex station", "gasan", "가산디지털", "가산디지털단지", "가산디지털단지역", "가산"], lat: 37.4816, lng: 126.8828, zoom: 16, radiusM: 800 },
   { id: "guro", names: ["guro", "구로", "구로구", "guro-gu"], lat: 37.495, lng: 126.888, zoom: 14 },
   { id: "daerim", names: ["daerim", "대림", "대림동"], lat: 37.493, lng: 126.895, zoom: 15 },
   { id: "wangsimni", names: ["wangsimni", "왕십리"], lat: 37.561, lng: 127.037, zoom: 15 },

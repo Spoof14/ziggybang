@@ -1,5 +1,6 @@
 import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
 import { areaBuckets, type AreaBucketId } from "./area";
+import { floorFilters, type FloorFilter } from "./floor";
 import { normalizePriceFilter, type PriceFilter } from "./price";
 import {
   propertyTypes,
@@ -27,6 +28,7 @@ export type SavedPrefs = {
   uiCompact: boolean;
   listSort: ListSort;
   foreignerOk?: boolean;
+  floorFilter?: FloorFilter;
 } & PriceFilter;
 
 const KEY = "ziggybang:prefs:v1";
@@ -135,6 +137,7 @@ export function loadPrefs(): SavedPrefs | null {
           ? parsed.listSort
           : "featured",
       foreignerOk: parsed.foreignerOk === true,
+      floorFilter: pickKnown([parsed.floorFilter], floorFilters)[0],
       ...normalizePriceFilter({
         minDeposit: parsed.minDeposit,
         maxDeposit: parsed.maxDeposit,

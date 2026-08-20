@@ -7,7 +7,6 @@ import {
   formatArea,
   formatFloor,
   formatKrwFromManwon,
-  formatPrice,
   formatRoomType,
   propertyTypeLabel,
   salesTypeHint,
@@ -54,6 +53,7 @@ import { BackToMap } from "./BackToMap";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { LandlordNotes } from "./LandlordNotes";
 import { ListingGallery } from "./ListingGallery";
+import { ListingPrice } from "./ListingPrice";
 
 const MiniMap = dynamic(
   () => import("./ListingMiniMap").then((mod) => mod.ListingMiniMap),
@@ -132,7 +132,6 @@ export function ListingDetailView({
       ),
     ),
   ];
-  const price = formatPrice(listing);
   const deposit = formatKrwFromManwon(listing.deposit);
   const rent = formatKrwFromManwon(listing.rent);
   const salePrice = formatKrwFromManwon(listing.price);
@@ -232,9 +231,10 @@ export function ListingDetailView({
                 {salesTypeHint[listing.salesType]}
               </p>
             ) : null}
-            {price ? (
-              <p className="mt-3 text-xl font-semibold text-sky-300">{price}</p>
-            ) : null}
+            <ListingPrice
+              listing={listing}
+              className="mt-3 text-xl font-semibold leading-snug text-sky-300"
+            />
           </div>
 
           {listing.description ? (

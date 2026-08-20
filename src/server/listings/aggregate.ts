@@ -85,6 +85,7 @@ export async function getMapData(
     minRent: query.minRent,
     maxRent: query.maxRent,
     foreignerOk: query.foreignerOk,
+    floorFilter: query.floorFilter,
   };
   const requireDetails =
     (query.zoom >= 15 && needsListingDetails(detailFilters)) ||

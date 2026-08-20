@@ -9,6 +9,7 @@ import {
   needsListingDetails,
 } from "./filter";
 import { describePriceFilter, type PriceFilter } from "./price";
+import { floorFilterLabel, type FloorFilter } from "./floor";
 import {
   propertyTypeLabel,
   salesTypeFilterLabel,
@@ -28,7 +29,7 @@ export type VisibleFilterInput = {
   circle?: CircleFilter;
   polygon?: LatLng[] | null;
   zoom: number;
-} & PriceFilter & { foreignerOk?: boolean };
+} & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter };
 
 function detailInputOf(input: VisibleFilterInput) {
   return {
@@ -40,6 +41,7 @@ function detailInputOf(input: VisibleFilterInput) {
     minRent: input.minRent,
     maxRent: input.maxRent,
     foreignerOk: input.foreignerOk,
+    floorFilter: input.floorFilter,
   };
 }
 
@@ -64,6 +66,7 @@ export function listingsMatchingFilters(
     minRent: input.minRent,
     maxRent: input.maxRent,
     foreignerOk: input.foreignerOk,
+    floorFilter: input.floorFilter,
   });
 }
 
@@ -100,6 +103,7 @@ export function describeActiveFilters(input: {
   salesTypes: SalesType[];
   areaBucketIds: AreaBucketId[];
   foreignerOk?: boolean;
+  floorFilter?: FloorFilter;
 } & PriceFilter): string | null {
   const parts: string[] = [];
   if (!isAllPropertyTypes(input.propertyTypes) && input.propertyTypes.length) {
@@ -123,6 +127,7 @@ export function describeActiveFilters(input: {
   const price = describePriceFilter(input);
   if (price) parts.push(price);
   if (input.foreignerOk) parts.push("Foreigners welcome");
+  if (input.floorFilter) parts.push(floorFilterLabel[input.floorFilter]);
   return parts.length ? parts.join(" · ") : null;
 }
 
@@ -133,6 +138,7 @@ export function filterKeyOf(input: {
   areaBucketIds: AreaBucketId[];
   query: string;
   foreignerOk?: boolean;
+  floorFilter?: FloorFilter;
 } & PriceFilter): string {
   return [
     input.sources.join(","),
@@ -141,6 +147,7 @@ export function filterKeyOf(input: {
     input.areaBucketIds.join(","),
     input.query,
     input.foreignerOk ? "ok" : "",
+    input.floorFilter ?? "",
     input.minDeposit ?? "",
     input.maxDeposit ?? "",
     input.minRent ?? "",

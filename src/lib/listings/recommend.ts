@@ -49,6 +49,8 @@ const NEIGHBORHOOD_SCORE: Record<string, number> = {
   noryangjin: 55,
   sindorim: 54,
   sillim: 52,
+  "guro-digital": 51,
+  "gasan-digital": 51,
   guro: 50,
   gangbuk: 50,
   daerim: 48,

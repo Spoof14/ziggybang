@@ -3,13 +3,19 @@ import {
   propertyTypeLabel,
   salesTypeFilterLabel,
 } from "./copy";
+import { floorFilterLabel, parseFloorFilter, type FloorFilter } from "./floor";
 import { type ViewMode } from "./prefs";
 import {
   describePriceFilter,
   normalizePriceFilter,
   type PriceFilter,
 } from "./price";
-import { isStationQuery, matchPlace } from "./search";
+import {
+  isStationQuery,
+  listingFilterQuery,
+  matchPlace,
+  unrefinedPlaceLeftover,
+} from "./search";
 import {
   propertyTypes,
   salesTypes,
@@ -24,7 +30,7 @@ export type SearchSnapshot = {
   areaBucketIds: AreaBucketId[];
   radiusM: number;
   viewMode: ViewMode;
-} & PriceFilter & { foreignerOk?: boolean };
+} & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter };
 
 export type SearchIntent = {
   searchInput?: string | null;
@@ -38,6 +44,7 @@ export type SearchIntent = {
   minRent?: number | null;
   maxRent?: number | null;
   foreignerOk?: boolean | null;
+  floorFilter?: FloorFilter | null;
 };
 
 export type InterpretedSearch = {
@@ -271,27 +278,6 @@ function parseRadius(text: string): number | undefined {
   return undefined;
 }
 
-function leftoverListingQuery(text: string, placeNames: string[]): string | undefined {
-  let rest = text;
-  for (const name of [...placeNames].sort((a, b) => b.length - a.length)) {
-    rest = rest.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), " ");
-  }
-  rest = rest
-    .replace(
-      /₩?\s*\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?\s*(억|만원|만\s*원|만|million|mil|m|k|원|krw|won)?/gi,
-      " ",
-    )
-    .replace(
-      /\b(i|i'm|im|i’d|id|want|wanted|looking|need|needs|find|search|show|get|please|something|somewhere|maybe|around|near|in|at|to|with|and|or|my|me|us|we|for|a|an|the|of|on|by|from|under|over|max|min|maximum|minimum|less|than|more|up|between|budget|deposit|rent|monthly|month|jeonse|wolse|studio|one-room|oneroom|villa|officetel|apartment|apt|sale|buy|cheap|cheaper|higher|lower|bit|walk|walking|distance|station|subway|room|rooms|place|home|homes|listing|listings|korea|seoul|recommend|recommended|best|value|nicest|photo|photos|quality|neighbourhood|neighborhood|decent|good|ranked|foreigners|foreigner|welcome|accepts|landlord)\b/gi,
-      " ",
-    )
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (rest.length < 3) return undefined;
-  return rest;
-}
-
 function relativePrice(text: string, current: SearchSnapshot): PriceFilter {
   const cheaper = /\b(cheaper|lower budget|too expensive|less rent|bring.*down)\b/i.test(text);
   const higher = /\b(higher budget|more rent|can spend more|a bit more)\b/i.test(text);
@@ -349,6 +335,8 @@ export function mergeSearchIntent(
     viewMode: patch.viewMode === null ? "map" : (patch.viewMode ?? current.viewMode),
     foreignerOk:
       patch.foreignerOk === null ? false : (patch.foreignerOk ?? current.foreignerOk),
+    floorFilter:
+      patch.floorFilter === null ? undefined : (patch.floorFilter ?? current.floorFilter),
     ...price,
   };
 }
@@ -373,6 +361,7 @@ export function describeSearchSnapshot(snapshot: SearchSnapshot): string {
     price,
     size ? `Size: ${size}.` : null,
     snapshot.foreignerOk ? "Only listings that say foreigners are welcome." : null,
+    snapshot.floorFilter ? `${floorFilterLabel[snapshot.floorFilter]}.` : null,
   ]
     .filter(Boolean)
     .join(" ");
@@ -393,11 +382,16 @@ export function interpretSearch(
   const followUp = isFollowUp(text);
   const place = followUp ? undefined : matchPlace(text);
   if (place) {
-    intent.searchInput = isStationQuery(text)
-      ? `${place.names[0]} station`
-      : (place.names[0] ?? place.id);
+    const geoLeftover = unrefinedPlaceLeftover(text, place);
+    if (isStationQuery(text)) {
+      intent.searchInput = `${place.names[0]} station`;
+    } else if (geoLeftover) {
+      intent.searchInput = `${place.names[0]} ${geoLeftover}`;
+    } else {
+      intent.searchInput = place.names[0] ?? place.id;
+    }
   }
-  const leftover = followUp ? undefined : leftoverListingQuery(text, place?.names ?? []);
+  const leftover = followUp ? undefined : listingFilterQuery(text, place) || undefined;
   if (leftover && intent.searchInput) {
     intent.searchInput = `${intent.searchInput} ${leftover}`;
   } else if (leftover && !place) {
@@ -449,6 +443,11 @@ export function interpretSearch(
   if (/any landlord|clear foreigner/i.test(text)) {
     intent.foreignerOk = null;
   }
+  const floor = followUp ? { floorFilter: undefined } : parseFloorFilter(text);
+  if (floor.floorFilter) intent.floorFilter = floor.floorFilter;
+  if (/any floor|clear floor|basement (ok|fine)|include basement/i.test(text)) {
+    intent.floorFilter = null;
+  }
 
   const snapshot = mergeSearchIntent(current, intent);
   const reply = describeSearchSnapshot(snapshot);
@@ -458,5 +457,5 @@ export function interpretSearch(
 export const ASK_SUGGESTIONS = [
   "Best value studios near Hongdae, with decent photos",
   "Studio in Hongdae, monthly under ₩800,000, deposit under ₩20 million",
-  "Foreigners welcome near Hongdae",
+  "No basement near Guro Digital",
 ];

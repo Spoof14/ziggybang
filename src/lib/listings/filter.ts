@@ -12,6 +12,7 @@ import {
   type PriceFilter,
 } from "./price";
 import { listingMatchesQuery } from "./search";
+import { listingMatchesFloor, type FloorFilter } from "./floor";
 
 export type ListingFilterInput = {
   propertyTypes?: PropertyType[];
@@ -20,6 +21,7 @@ export type ListingFilterInput = {
   query: string;
   requireDetails: boolean;
   foreignerOk?: boolean;
+  floorFilter?: FloorFilter;
 } & PriceFilter;
 
 export function isAllPropertyTypes(selected: PropertyType[]): boolean {
@@ -101,6 +103,15 @@ export function filterListings(
       if (input.requireDetails && listing.foreignerOk !== true) return false;
       if (!input.requireDetails && listing.foreignerOk === false) return false;
     }
+    if (
+      !listingMatchesFloor(
+        listing.floor,
+        input.floorFilter,
+        input.requireDetails && Boolean(input.floorFilter),
+      )
+    ) {
+      return false;
+    }
     return true;
   });
 }
@@ -113,6 +124,7 @@ export function needsListingDetails(
     !isAllAreaBuckets(input.areaBucketIds) ||
     Boolean(input.query.trim()) ||
     Boolean(input.foreignerOk) ||
+    Boolean(input.floorFilter) ||
     !isEmptyPriceFilter(input)
   );
 }

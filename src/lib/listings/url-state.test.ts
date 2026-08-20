@@ -63,4 +63,21 @@ describe("shareable search URLs", () => {
     expect(search).toContain("ok=1");
     expect(parseAppUrl(search).foreignerOk).toBe(true);
   });
+
+  it("round-trips the no-basement floor chip", () => {
+    const search = buildAppSearch({
+      searchInput: "guro digital",
+      viewMode: "map",
+      sources: ["zigbang", "peterpan"],
+      propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+      salesTypes: ["jeonse", "wolse"],
+      areaBucketIds: [],
+      radiusM: 800,
+      view: { lat: 37.4852, lng: 126.9014, zoom: 16 },
+      listSort: "featured",
+      floorFilter: "no-basement",
+    });
+    expect(search).toContain("floor=nb");
+    expect(parseAppUrl(search).floorFilter).toBe("no-basement");
+  });
 });

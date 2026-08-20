@@ -6,7 +6,7 @@ import {
   formatArea,
   formatFloor,
   formatKrwFromManwon,
-  formatPrice,
+  formatPriceLines,
   formatRoomType,
   propertyTypeLabel,
   salesTypeHint,
@@ -25,6 +25,7 @@ import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { ListingGallery } from "./ListingGallery";
 import { ListingPageLink } from "./ListingPageLink";
+import { ListingPrice } from "./ListingPrice";
 
 async function copyText(value: string) {
   try {
@@ -65,7 +66,7 @@ export function ListingPanel({
       ),
     ),
   ];
-  const price = formatPrice(detail);
+  const priceLines = formatPriceLines(detail);
   const area = formatArea(detail.areaM2);
   const floor = formatFloor(detail.floor);
   const roomType = formatRoomType(detail.roomType);
@@ -132,10 +133,12 @@ export function ListingPanel({
       <ListingGallery urls={photos} alt={detail.title ?? "listing"} />
 
       <dl className="grid grid-cols-2 gap-2 p-4 text-sm">
-        {price ? (
+        {priceLines.length ? (
           <div className="col-span-2">
             <dt className="text-slate-400">Price</dt>
-            <dd className="font-medium">{price}</dd>
+            <dd className="font-medium">
+              <ListingPrice listing={detail} />
+            </dd>
           </div>
         ) : null}
         {agencyFee ? (

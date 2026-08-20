@@ -11,7 +11,6 @@ import {
   type AreaBucketId,
 } from "~/lib/listings/area";
 import {
-  formatPrice,
   friendlySourceError,
   propertyTypeLabel,
   salesTypeFilterLabel,
@@ -30,9 +29,10 @@ import {
   looksLikePlaceQuery,
   parseSearchQuery,
   placeSearchToken,
-  stripPlaceFromQuery,
+  unrefinedPlaceLeftover,
 } from "~/lib/listings/search";
-import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
+import { listingCardMeta } from "~/lib/listings/english";
+import { floorFilterLabel, floorFilters, type FloorFilter } from "~/lib/listings/floor";
 import { type SearchSnapshot } from "~/lib/listings/ai-search";
 import { rankListings, type PhotoScoreInput } from "~/lib/listings/recommend";
 import {
@@ -60,6 +60,7 @@ import { ListingMap } from "./ListingMap";
 import { ListingPanel } from "./ListingPanel";
 import { ListingPhoto } from "./ListingPhoto";
 import { AskSearch } from "./AskSearch";
+import { ListingPrice } from "./ListingPrice";
 import { PriceFilters } from "./PriceFilters";
 import { useHistoryOverlay } from "./useHistoryOverlay";
 import { usePhotoQuality } from "./usePhotoQuality";
@@ -127,6 +128,7 @@ export default function MapApp() {
   const [minRent, setMinRent] = useState<number | undefined>();
   const [maxRent, setMaxRent] = useState<number | undefined>();
   const [foreignerOk, setForeignerOk] = useState(false);
+  const [floorFilter, setFloorFilter] = useState<FloorFilter | undefined>();
   const [askOpen, setAskOpen] = useState(false);
   const [savedHomes, setSavedHomes] = useState<MapListing[]>([]);
   const [tool, setTool] = useState<"pan" | "radius" | "draw">("pan");
@@ -162,10 +164,15 @@ export default function MapApp() {
     () => parseSearchQuery(debouncedQuery),
     [debouncedQuery],
   );
+  useEffect(() => {
+    if (parsedSearch.floorFilter) setFloorFilter(parsedSearch.floorFilter);
+  }, [parsedSearch.floorFilter]);
   const geoToken =
     !parsedSearch.place && looksLikePlaceQuery(debouncedQuery)
       ? (placeSearchToken(debouncedQuery) ?? debouncedQuery)
-      : undefined;
+      : parsedSearch.place && unrefinedPlaceLeftover(debouncedQuery, parsedSearch.place)
+        ? debouncedQuery
+        : undefined;
   const geocodeQuery = api.listings.geocode.useQuery(
     { query: geoToken ?? "" },
     {
@@ -174,12 +181,12 @@ export default function MapApp() {
       retry: false,
     },
   );
-  const place = parsedSearch.place ?? geocodeQuery.data ?? undefined;
-  const listingQuery = place
-    ? stripPlaceFromQuery(debouncedQuery, place)
-    : looksLikePlaceQuery(debouncedQuery)
-      ? ""
-      : parsedSearch.listingQuery;
+  const place =
+    (geoToken ? geocodeQuery.data : undefined) ??
+    parsedSearch.place ??
+    geocodeQuery.data ??
+    undefined;
+  const listingQuery = parsedSearch.listingQuery;
 
   const circle = useMemo<CircleFilter | null>(() => {
     if (polygon) return null;
@@ -212,6 +219,7 @@ export default function MapApp() {
     setMinRent(url.minRent ?? base?.minRent);
     setMaxRent(url.maxRent ?? base?.maxRent);
     setForeignerOk(url.foreignerOk ?? base?.foreignerOk ?? false);
+    setFloorFilter(url.floorFilter ?? base?.floorFilter);
     setRadiusM(url.radiusM ?? base?.radiusM ?? DEFAULT_RADIUS_M);
     setManualCircle(base?.circle ?? null);
     setPolygon(base?.polygon ?? null);
@@ -271,6 +279,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      floorFilter,
     });
   }, [
     areaBucketIds,
@@ -292,6 +301,7 @@ export default function MapApp() {
     zoom,
     listSort,
     foreignerOk,
+    floorFilter,
   ]);
 
   useEffect(() => {
@@ -311,6 +321,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      floorFilter,
     });
     const url = `${window.location.pathname}${next}`;
     if (`${window.location.pathname}${window.location.search}` !== url) {
@@ -332,6 +343,7 @@ export default function MapApp() {
     urlView,
     viewMode,
     foreignerOk,
+    floorFilter,
   ]);
 
   useEffect(() => {
@@ -396,6 +408,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      floorFilter,
     });
   const currentFilterKey = filterKeyOf({
     sources,
@@ -408,6 +421,7 @@ export default function MapApp() {
     minRent,
     maxRent,
     foreignerOk,
+    floorFilter,
   });
   const keepViewportPlaceholder = filterKeyRef.current === currentFilterKey;
   filterKeyRef.current = currentFilterKey;
@@ -438,12 +452,14 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk: foreignerOk || undefined,
+      floorFilter,
     }),
     [
       areaBucketIds,
       bounds,
       circle,
       filtersNeedHomes,
+      floorFilter,
       foreignerOk,
       listingLimit,
       listingQuery,
@@ -519,6 +535,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      floorFilter,
     });
     return {
       clusters: layers.clusters,
@@ -530,6 +547,7 @@ export default function MapApp() {
     areaBucketIds,
     circle,
     data,
+    floorFilter,
     listingQuery,
     maxDeposit,
     maxRent,
@@ -637,11 +655,12 @@ export default function MapApp() {
     setMinRent(undefined);
     setMaxRent(undefined);
     setForeignerOk(false);
+    setFloorFilter(undefined);
   };
 
   useEffect(() => {
     setListingLimit(viewMode === "best" ? 120 : 60);
-  }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent, foreignerOk]);
+  }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent, foreignerOk, floorFilter]);
 
   const onToggleSave = useCallback((listing: MapListing) => {
     setSavedHomes((currentHomes) => {
@@ -671,6 +690,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      floorFilter,
     });
     const href = `${window.location.origin}${window.location.pathname}${next}`;
     try {
@@ -683,6 +703,7 @@ export default function MapApp() {
   }, [
     areaBucketIds,
     bounds,
+    floorFilter,
     listSort,
     maxDeposit,
     maxRent,
@@ -724,6 +745,7 @@ export default function MapApp() {
     setMinRent(snapshot.minRent);
     setMaxRent(snapshot.maxRent);
     setForeignerOk(Boolean(snapshot.foreignerOk));
+    setFloorFilter(snapshot.floorFilter);
     setRadiusM(snapshot.radiusM);
     setViewMode(snapshot.viewMode);
   }, []);
@@ -741,9 +763,11 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      floorFilter,
     }),
     [
       areaBucketIds,
+      floorFilter,
       maxDeposit,
       maxRent,
       minDeposit,
@@ -770,6 +794,7 @@ export default function MapApp() {
     minRent,
     maxRent,
     foreignerOk,
+    floorFilter,
   });
   const visibleHomeCount = visible.clusters.length
     ? visible.clusters.reduce((sum, cluster) => sum + cluster.count, 0)
@@ -999,6 +1024,22 @@ export default function MapApp() {
             >
               Foreigners welcome
             </button>
+            {floorFilters.map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                onClick={() =>
+                  setFloorFilter((current) => (current === filter ? undefined : filter))
+                }
+                className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+                  floorFilter === filter
+                    ? "bg-amber-300 text-slate-950"
+                    : "bg-white/10 text-slate-300"
+                }`}
+              >
+                {floorFilterLabel[filter]}
+              </button>
+            ))}
           </div>
           </>
           ) : null}
@@ -1317,7 +1358,6 @@ export default function MapApp() {
         ) : viewMode === "map" && visible.listings.length ? (
           <div className="pointer-events-auto absolute bottom-4 left-4 right-16 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:right-20">
             {visible.listings.slice(0, 24).map((listing) => {
-              const price = formatPrice(listing);
               const meta = listingCardMeta(listing);
               return (
                 <button
@@ -1339,9 +1379,10 @@ export default function MapApp() {
                         ? ` · ${salesTypeFilterLabel[listing.salesType]}`
                         : ""}
                     </span>
-                    <span className="mt-1 block truncate text-sm font-medium">
-                      {price ?? englishCardTitle(listing)}
-                    </span>
+                    <ListingPrice
+                      listing={listing}
+                      className="mt-1 text-sm font-medium leading-snug"
+                    />
                     {meta ? (
                       <span className="mt-0.5 block truncate text-[10px] text-slate-400">
                         {meta}

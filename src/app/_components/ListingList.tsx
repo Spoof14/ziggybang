@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import {
-  formatPrice,
   propertyTypeLabel,
   salesTypeFilterLabel,
   sourceLabel,
@@ -15,6 +14,7 @@ import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { ListingPageLink } from "./ListingPageLink";
 import { ListingPhoto } from "./ListingPhoto";
+import { ListingPrice } from "./ListingPrice";
 
 const SORT_OPTIONS: Array<{ id: ListSort; label: string }> = [
   { id: "featured", label: "Featured" },
@@ -148,7 +148,6 @@ export function ListingList({
         <div data-list-scroll className="min-h-0 flex-1 overflow-auto p-3">
           <ul className="space-y-2">
             {sorted.map((listing, index) => {
-              const price = formatPrice(listing);
               const title = englishCardTitle(listing);
               const meta = listingCardMeta(listing);
               const saved = savedIds.includes(listing.id);
@@ -196,9 +195,10 @@ export function ListingList({
                           </span>
                           {showForeignerBadge ? <ForeignerBadge ok /> : null}
                         </span>
-                        <span className="mt-1 block truncate text-sm font-medium text-white">
-                          {price ?? title}
-                        </span>
+                        <ListingPrice
+                          listing={listing}
+                          className="mt-1 text-sm font-medium leading-snug text-white"
+                        />
                         <span className="mt-1 block truncate text-xs text-slate-400">
                           {title}
                         </span>

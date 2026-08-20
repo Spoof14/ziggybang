@@ -4,6 +4,7 @@ import {
   formatFloor,
   formatKrwFromManwon,
   formatPrice,
+  formatPriceLines,
   formatRoomType,
   friendlySourceError,
   propertyTypeLabel,
@@ -21,6 +22,9 @@ describe("English listing copy", () => {
     expect(
       formatPrice({ salesType: "wolse", deposit: 1000, rent: 70 }),
     ).toBe("₩10 million deposit · ₩700,000 / month");
+    expect(
+      formatPriceLines({ salesType: "wolse", deposit: 1000, rent: 70 }),
+    ).toEqual(["₩10 million deposit", "₩700,000 / month"]);
     expect(formatPrice({ salesType: "jeonse", deposit: 19000 })).toBe(
       "₩190 million",
     );

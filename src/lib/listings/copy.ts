@@ -69,25 +69,34 @@ export function formatKrwFromManwon(manwon?: number): string | null {
   return `₩${krw.toLocaleString("en-US")}`;
 }
 
+export function formatPriceLines(listing: {
+  salesType?: SalesType;
+  deposit?: number;
+  rent?: number;
+  price?: number;
+}): string[] {
+  if (listing.salesType === "sale" && listing.price != null) {
+    const sale = formatKrwFromManwon(listing.price);
+    return sale ? [sale] : [];
+  }
+  if (listing.salesType === "wolse") {
+    const deposit = formatKrwFromManwon(listing.deposit);
+    const rent = formatKrwFromManwon(listing.rent ?? 0);
+    if (deposit && rent) return [`${deposit} deposit`, `${rent} / month`];
+    return [deposit ?? rent].filter((line): line is string => Boolean(line));
+  }
+  const lump = formatKrwFromManwon(listing.deposit ?? listing.price);
+  return lump ? [lump] : [];
+}
+
 export function formatPrice(listing: {
   salesType?: SalesType;
   deposit?: number;
   rent?: number;
   price?: number;
 }): string | null {
-  if (listing.salesType === "sale" && listing.price != null) {
-    return formatKrwFromManwon(listing.price);
-  }
-  if (listing.salesType === "wolse") {
-    const deposit = formatKrwFromManwon(listing.deposit);
-    const rent = formatKrwFromManwon(listing.rent ?? 0);
-    if (deposit && rent) return `${deposit} deposit · ${rent} / month`;
-    return deposit ?? rent;
-  }
-  if (listing.deposit != null) {
-    return formatKrwFromManwon(listing.deposit);
-  }
-  return formatKrwFromManwon(listing.price);
+  const lines = formatPriceLines(listing);
+  return lines.length ? lines.join(" · ") : null;
 }
 
 export function formatArea(areaM2?: number): string | null {
