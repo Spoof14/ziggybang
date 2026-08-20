@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "~/trpc/react";
 import {
@@ -51,6 +50,7 @@ import {
   toggleSavedHome,
 } from "~/lib/listings/saved";
 import { type ListingDetail, type MapListing } from "~/lib/listings/types";
+import { BackToMap } from "./BackToMap";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { LandlordNotes } from "./LandlordNotes";
 import { ListingGallery } from "./ListingGallery";
@@ -117,12 +117,10 @@ export function ListingDetailView({
         <p className="mt-2 text-sm">
           This home may have been taken down. Back to the map still works.
         </p>
-        <Link
+        <BackToMap
           href="/"
           className="mt-6 inline-flex rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
-        >
-          Back to map
-        </Link>
+        />
       </main>
     );
   }
@@ -191,21 +189,10 @@ export function ListingDetailView({
             </h1>
           </div>
           <div className="flex shrink-0 gap-2">
-            {mapHref ? (
-              <Link
-                href={mapHref}
-                className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/20"
-              >
-                View on map
-              </Link>
-            ) : (
-              <Link
-                href="/"
-                className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/20"
-              >
-                Back to map
-              </Link>
-            )}
+            <BackToMap
+              href={mapHref ?? "/"}
+              className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/20"
+            />
             <button
               type="button"
               onClick={() => {

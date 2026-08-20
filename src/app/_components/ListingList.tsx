@@ -9,11 +9,11 @@ import {
 } from "~/lib/listings/copy";
 import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
-import { listingPagePath, stashListing } from "~/lib/listings/path";
 import { type ListSort } from "~/lib/listings/prefs";
 import { type RankedListing } from "~/lib/listings/recommend";
 import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
+import { ListingPageLink } from "./ListingPageLink";
 import { ListingPhoto } from "./ListingPhoto";
 
 const SORT_OPTIONS: Array<{ id: ListSort; label: string }> = [
@@ -228,15 +228,12 @@ export function ListingList({
                       >
                         {saved ? "♥" : "♡"}
                       </button>
-                      <a
-                        href={listingPagePath(listing)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => stashListing(listing)}
+                      <ListingPageLink
+                        listing={listing}
                         className="rounded-full bg-white/10 px-2 py-1 text-center text-[11px] text-sky-300"
                       >
-                        Page ↗
-                      </a>
+                        Page
+                      </ListingPageLink>
                       <a
                         href={listing.url}
                         target="_blank"

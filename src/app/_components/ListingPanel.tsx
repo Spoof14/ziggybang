@@ -20,10 +20,11 @@ import {
 } from "~/lib/listings/english";
 import { agencyFeeCopy } from "~/lib/listings/agency-fee";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
-import { listingPagePath, stashListing } from "~/lib/listings/path";
+import { listingPagePath } from "~/lib/listings/path";
 import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { ListingGallery } from "./ListingGallery";
+import { ListingPageLink } from "./ListingPageLink";
 
 async function copyText(value: string) {
   try {
@@ -210,15 +211,12 @@ export function ListingPanel({
       ) : null}
 
       <div className="mt-auto flex flex-col gap-2 p-4">
-        <a
-          href={listingPagePath(detail)}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => stashListing(detail)}
+        <ListingPageLink
+          listing={detail}
           className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
         >
           Open full page
-        </a>
+        </ListingPageLink>
         <a
           href={detail.url}
           target="_blank"
