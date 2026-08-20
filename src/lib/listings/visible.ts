@@ -9,6 +9,7 @@ import {
   needsListingDetails,
 } from "./filter";
 import { describePriceFilter, type PriceFilter } from "./price";
+import { describeBuildingAgeFilter } from "./building-age";
 import { ageFilterLabel, type AgeFilter } from "./age";
 import { floorFilterLabel, type FloorFilter } from "./floor";
 import {
@@ -30,7 +31,7 @@ export type VisibleFilterInput = {
   circle?: CircleFilter;
   polygon?: LatLng[] | null;
   zoom: number;
-} & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter; ageFilter?: AgeFilter };
+} & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter; ageFilter?: AgeFilter; maxBuildingAge?: number };
 
 function detailInputOf(input: VisibleFilterInput) {
   return {
@@ -44,6 +45,7 @@ function detailInputOf(input: VisibleFilterInput) {
     foreignerOk: input.foreignerOk,
     floorFilter: input.floorFilter,
     ageFilter: input.ageFilter,
+    maxBuildingAge: input.maxBuildingAge,
   };
 }
 
@@ -70,6 +72,7 @@ export function listingsMatchingFilters(
     foreignerOk: input.foreignerOk,
     floorFilter: input.floorFilter,
     ageFilter: input.ageFilter,
+    maxBuildingAge: input.maxBuildingAge,
   });
 }
 
@@ -108,6 +111,7 @@ export function describeActiveFilters(input: {
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
+  maxBuildingAge?: number;
 } & PriceFilter): string | null {
   const parts: string[] = [];
   if (!isAllPropertyTypes(input.propertyTypes) && input.propertyTypes.length) {
@@ -133,6 +137,8 @@ export function describeActiveFilters(input: {
   if (input.foreignerOk) parts.push("Foreigners welcome");
   if (input.floorFilter) parts.push(floorFilterLabel[input.floorFilter]);
   if (input.ageFilter) parts.push(ageFilterLabel[input.ageFilter]);
+  const built = describeBuildingAgeFilter(input.maxBuildingAge);
+  if (built) parts.push(built);
   return parts.length ? parts.join(" · ") : null;
 }
 
@@ -145,6 +151,7 @@ export function filterKeyOf(input: {
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
+  maxBuildingAge?: number;
 } & PriceFilter): string {
   return [
     input.sources.join(","),
@@ -155,6 +162,7 @@ export function filterKeyOf(input: {
     input.foreignerOk ? "ok" : "",
     input.floorFilter ?? "",
     input.ageFilter ?? "",
+    input.maxBuildingAge ?? "",
     input.minDeposit ?? "",
     input.maxDeposit ?? "",
     input.minRent ?? "",

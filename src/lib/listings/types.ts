@@ -45,6 +45,7 @@ export type MapQuery = {
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
+  maxBuildingAge?: number;
 };
 
 export type MapListing = {
@@ -69,6 +70,7 @@ export type MapListing = {
   manageCost?: number;
   roomType?: string;
   updatedAt?: string;
+  approveDate?: string;
   photos?: string[];
   foreignerOk?: boolean;
 };

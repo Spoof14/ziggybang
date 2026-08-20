@@ -81,6 +81,23 @@ describe("shareable search URLs", () => {
     expect(parseAppUrl(search).floorFilter).toBe("no-basement");
   });
 
+  it("round-trips the max building-age slider", () => {
+    const search = buildAppSearch({
+      searchInput: "hongdae",
+      viewMode: "map",
+      sources: ["zigbang", "peterpan"],
+      propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+      salesTypes: ["jeonse", "wolse"],
+      areaBucketIds: [],
+      radiusM: 800,
+      view: { lat: 37.556, lng: 126.923, zoom: 15 },
+      listSort: "featured",
+      maxBuildingAge: 10,
+    });
+    expect(search).toContain("maxage=10");
+    expect(parseAppUrl(search).maxBuildingAge).toBe(10);
+  });
+
   it("round-trips the this-week age chip", () => {
     const search = buildAppSearch({
       searchInput: "hongdae",
