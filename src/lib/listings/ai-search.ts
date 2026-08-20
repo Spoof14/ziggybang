@@ -551,6 +551,6 @@ export function interpretSearch(
 
 export const ASK_SUGGESTIONS = [
   "Best value studios near Hongdae, with decent photos",
-  "Studio in Hongdae, monthly under ₩800,000, deposit under ₩20 million",
+  "Good value places under 15 years old near Guro Digital",
   "No basement near Guro Digital",
 ];
