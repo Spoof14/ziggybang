@@ -1464,7 +1464,7 @@ export default function MapApp() {
                   key={listing.id}
                   type="button"
                   onClick={() => setSelected(listing)}
-                  className="min-w-[9.5rem] shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/92 text-left shadow-xl backdrop-blur"
+                  className="min-w-[9.5rem] shrink-0 overflow-hidden rounded-2xl border border-white/15 bg-slate-950 text-left text-slate-100 shadow-xl"
                 >
                   <ListingPhoto
                     url={listing.thumbnail}
@@ -1472,8 +1472,8 @@ export default function MapApp() {
                     width={240}
                     className="h-16 w-full object-cover"
                   />
-                  <span className="block px-3 py-2">
-                    <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-400">
+                  <span className="block bg-slate-950 px-3 py-2">
+                    <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-300">
                       <ListingAgeDot updatedAt={listing.updatedAt} />
                       {propertyTypeLabel[listing.propertyType]}
                       {listing.salesType
@@ -1482,10 +1482,10 @@ export default function MapApp() {
                     </span>
                     <ListingPrice
                       listing={listing}
-                      className="mt-1 text-sm font-medium leading-snug"
+                      className="mt-1 text-sm font-medium leading-snug text-slate-100"
                     />
                     {meta ? (
-                      <span className="mt-0.5 block truncate text-[10px] text-slate-400">
+                      <span className="mt-0.5 block truncate text-[10px] text-slate-300">
                         {meta}
                       </span>
                     ) : null}
