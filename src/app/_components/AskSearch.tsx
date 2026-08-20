@@ -85,8 +85,8 @@ export function AskSearch({
             <h2 className="text-sm font-semibold">Tell me what you need</h2>
             <p className="mt-0.5 text-[11px] text-slate-400">
               {aiStatus.data?.openai
-                ? "OpenAI turns your chat into map filters — area, rent, type, floor — and leftover words like pet or rooftop match listing titles."
-                : "Turns your sentence into map filters (area, rent, type, floor). Leftover words can match listing titles. Add OPENAI_API_KEY for a smarter chat."}
+                ? "OpenAI sets map filters — area, rent, type, floor, and building age. Amenity words like pet or rooftop can match titles."
+                : "Turns your sentence into map filters (area, rent, type, floor, building age). Add OPENAI_API_KEY for a smarter chat."}
             </p>
           </div>
           <button
@@ -101,7 +101,7 @@ export function AskSearch({
           {messages.length === 0 ? (
             <div className="space-y-2">
               <p className="text-sm text-slate-300">
-                Neighborhood, jeonse vs monthly, a rent cap, and floor is enough. Extra words
+                Neighborhood, budget, floor, and building age are enough. Extra amenity words
                 like pet or rooftop can match listing titles.
               </p>
               {ASK_SUGGESTIONS.map((suggestion) => (

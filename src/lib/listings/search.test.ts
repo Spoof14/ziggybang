@@ -78,6 +78,14 @@ describe("bilingual fuzzy search", () => {
     expect(parsed.listingQuery).toBe("");
   });
 
+  it("does not keep filler words from a spoken Ask sentence as title text", () => {
+    expect(
+      parseSearchQuery(
+        "Find me some good value places that are less than 15 years old near guro digital complex",
+      ).listingQuery,
+    ).toBe("");
+  });
+
   it("keeps leftover descriptive words as a title filter", () => {
     expect(parseSearchQuery("hongdae pet").listingQuery.toLowerCase()).toContain("pet");
     expect(parseSearchQuery("hongdae furnished rooftop").listingQuery.toLowerCase()).toContain(

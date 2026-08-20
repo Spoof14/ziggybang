@@ -5,6 +5,11 @@ import {
 } from "./copy";
 import { ageFilterLabel, parseAgeFilter, type AgeFilter } from "./age";
 import { floorFilterLabel, parseFloorFilter, type FloorFilter } from "./floor";
+import {
+  describeBuildingAgeFilter,
+  normalizeBuildingAgeFilter,
+  parseMaxBuildingAge,
+} from "./building-age";
 import { type ViewMode } from "./prefs";
 import {
   describePriceFilter,
@@ -33,7 +38,12 @@ export type SearchSnapshot = {
   radiusM: number;
   viewMode: ViewMode;
   listingQuery?: string;
-} & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter; ageFilter?: AgeFilter };
+} & PriceFilter & {
+  foreignerOk?: boolean;
+  floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
+  maxBuildingAge?: number;
+};
 
 export type SearchIntent = {
   searchInput?: string | null;
@@ -50,6 +60,7 @@ export type SearchIntent = {
   floorFilter?: FloorFilter | null;
   ageFilter?: AgeFilter | null;
   listingQuery?: string | null;
+  maxBuildingAge?: number | null;
 };
 
 export type InterpretedSearch = {
@@ -101,7 +112,7 @@ function extractMoney(text: string): MoneyHit[] {
   while ((match = re.exec(text))) {
     const raw = match[0] ?? "";
     const after = text.slice(match.index + raw.length, match.index + raw.length + 12);
-    if (/\s*(pyeong|py\b|m²|m2|sqm|meters?|minute|min\b|km|m\b)/i.test(after)) {
+    if (/\s*(pyeong|py\b|m²|m2|sqm|meters?|minute|min\b|km|m\b|years?|yrs?|year old)\b/i.test(after)) {
       continue;
     }
     const amount = Number((match[1] ?? "").replace(/,/g, ""));
@@ -348,6 +359,12 @@ export function mergeSearchIntent(
       patch.listingQuery === null
         ? undefined
         : (patch.listingQuery ?? current.listingQuery),
+    maxBuildingAge:
+      patch.maxBuildingAge === null
+        ? undefined
+        : normalizeBuildingAgeFilter({
+            maxBuildingAge: patch.maxBuildingAge ?? current.maxBuildingAge,
+          }).maxBuildingAge,
     ...price,
   };
 }
@@ -374,6 +391,7 @@ export function describeSearchSnapshot(snapshot: SearchSnapshot): string {
     snapshot.foreignerOk ? "Only listings that say foreigners are welcome." : null,
     snapshot.floorFilter ? `${floorFilterLabel[snapshot.floorFilter]}.` : null,
     snapshot.ageFilter ? `${ageFilterLabel[snapshot.ageFilter]}.` : null,
+    describeBuildingAgeFilter(snapshot.maxBuildingAge),
     snapshot.listingQuery ? `Matching “${snapshot.listingQuery}”.` : null,
   ]
     .filter(Boolean)
@@ -384,6 +402,23 @@ function isFollowUp(text: string): boolean {
   return /^(?:a bit )?cheaper\b|higher budget|too expensive|clear |anywhere|less rent|more rent|make (?:the )?(?:rent|deposit)|bring (?:it|the rent) down/i.test(
     text.trim(),
   );
+}
+
+export function isFreshAsk(text: string, intent: SearchIntent): boolean {
+  if (isFollowUp(text)) return false;
+  if (intent.searchInput) return true;
+  return /\b(find|search|show me|looking for|i want|near)\b/i.test(text);
+}
+
+export function emptyAskSnapshot(current: Pick<SearchSnapshot, "radiusM">): SearchSnapshot {
+  return {
+    searchInput: "",
+    propertyTypes: ALL_TYPES,
+    salesTypes: ["jeonse", "wolse"],
+    areaBucketIds: [],
+    radiusM: current.radiusM || 1200,
+    viewMode: "list",
+  };
 }
 
 export function appendUniqueSearchTerms(base: string, extra?: string | null): string {
@@ -397,25 +432,29 @@ export function appendUniqueSearchTerms(base: string, extra?: string | null): st
   return [base.trim(), missing.join(" ")].filter(Boolean).join(" ");
 }
 
-/** Fold leftover title-match words into an OpenAI (or local) intent so Ask can filter on free text. */
-export function blendAskIntent(ai: SearchIntent, local: SearchIntent): SearchIntent {
-  const leftover =
-    ai.listingQuery === undefined ? local.listingQuery : ai.listingQuery;
-  const next: SearchIntent = {
+function usableLocalListingQuery(query?: string | null): string | null | undefined {
+  if (query == null) return query;
+  const tokens = query.trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length) return null;
+  if (tokens.length > 4) return null;
+  return query.trim();
+}
+
+/** Prefer OpenAI's structured filters. Only fill place / building age if the model omitted them. */
+export function composeAskIntent(ai: SearchIntent, local: SearchIntent, fresh: boolean): SearchIntent {
+  return {
     ...ai,
-    viewMode: ai.viewMode ?? "list",
+    searchInput: ai.searchInput === undefined ? local.searchInput : ai.searchInput,
+    maxBuildingAge:
+      ai.maxBuildingAge === undefined ? local.maxBuildingAge : ai.maxBuildingAge,
+    viewMode: ai.viewMode ?? local.viewMode ?? "list",
+    listingQuery:
+      ai.listingQuery === undefined
+        ? fresh
+          ? (usableLocalListingQuery(local.listingQuery) ?? null)
+          : undefined
+        : ai.listingQuery,
   };
-  if (leftover === null) {
-    next.listingQuery = null;
-    return next;
-  }
-  if (leftover) {
-    next.listingQuery = leftover;
-    if (next.searchInput !== null) {
-      next.searchInput = appendUniqueSearchTerms(next.searchInput ?? "", leftover);
-    }
-  }
-  return next;
 }
 
 export function interpretSearch(
@@ -430,7 +469,7 @@ export function interpretSearch(
     const geoLeftover = unrefinedPlaceLeftover(text, place);
     if (isStationQuery(text)) {
       intent.searchInput = `${place.names[0]} station`;
-    } else if (geoLeftover) {
+    } else if (geoLeftover && geoLeftover.split(/\s+/).length <= 2) {
       intent.searchInput = `${place.names[0]} ${geoLeftover}`;
     } else {
       intent.searchInput = place.names[0] ?? place.id;
@@ -438,10 +477,11 @@ export function interpretSearch(
   }
   const leftover = followUp ? undefined : listingFilterQuery(text, place) || undefined;
   if (leftover) intent.listingQuery = leftover;
-  if (leftover && intent.searchInput) {
-    intent.searchInput = `${intent.searchInput} ${leftover}`;
-  } else if (leftover && !place) {
-    intent.searchInput = leftover;
+
+  const maxBuildingAge = followUp ? undefined : parseMaxBuildingAge(text);
+  if (maxBuildingAge) intent.maxBuildingAge = maxBuildingAge;
+  if (/any building age|any age building|old buildings? (ok|fine)/i.test(text)) {
+    intent.maxBuildingAge = null;
   }
 
   const price = {
@@ -463,7 +503,7 @@ export function interpretSearch(
   if (radiusM) intent.radiusM = radiusM;
   if (/\bon the map\b|\bmap view\b/i.test(text)) intent.viewMode = "map";
   else if (
-    /recommend|best value|best (?:homes?|places?|apartments?|studios?)|nicest|good photos|for me\b/i.test(
+    /recommend|best value|good value|best (?:homes?|places?|apartments?|studios?)|nicest|good photos|for me\b/i.test(
       text,
     )
   ) {
@@ -501,7 +541,10 @@ export function interpretSearch(
     intent.ageFilter = null;
   }
 
-  const snapshot = mergeSearchIntent(current, intent);
+  const snapshot = mergeSearchIntent(
+    followUp || !isFreshAsk(text, intent) ? current : emptyAskSnapshot(current),
+    intent,
+  );
   const reply = describeSearchSnapshot(snapshot);
   return { intent, snapshot, reply };
 }

@@ -366,6 +366,30 @@ const PLACE_STOPWORDS = new Set(
     "fresh",
     "근처",
     "friendly",
+    "some",
+    "good",
+    "great",
+    "nice",
+    "places",
+    "place",
+    "less",
+    "than",
+    "years",
+    "year",
+    "old",
+    "older",
+    "newer",
+    "built",
+    "age",
+    "value",
+    "find",
+    "decent",
+    "photos",
+    "photo",
+    "that",
+    "are",
+    "is",
+    "be",
   ].map(normalizeSearch),
 );
 
@@ -383,14 +407,29 @@ export function isListingFilterToken(token: string): boolean {
   );
 }
 
-/** Leftover words that should match listing titles (pet, furnished) after place/floor/age are stripped. */
+const AMENITY_TOKENS = new Set(
+  [
+    "pet",
+    "pets",
+    "furnished",
+    "parking",
+    "duplex",
+    "loft",
+    "terrace",
+    "balcony",
+    "short-term",
+    "shortterm",
+  ].map(normalizeSearch),
+);
+
+/** Leftover amenity words that should match listing titles (pet, furnished). */
 export function isDescriptiveListingToken(token: string): boolean {
   const normalized = normalizeSearch(token);
   if (!normalized || normalized.length < 3 || /^\d+$/.test(normalized)) return false;
   if (PLACE_STOPWORDS.has(normalized)) return false;
   if (normalized === "complex" || normalized === "단지") return false;
   if (isListingFilterToken(normalized)) return false;
-  return /\p{L}/u.test(normalized);
+  return AMENITY_TOKENS.has(normalized);
 }
 
 export function looksLikePlaceQuery(query: string): boolean {
@@ -419,7 +458,7 @@ function isPlaceQueryToken(token: string): boolean {
   const normalized = normalizeSearch(token);
   if (!normalized || PLACE_STOPWORDS.has(normalized)) return false;
   if (!/\p{L}/u.test(normalized)) return false;
-  return !isListingFilterToken(normalized);
+  return !isListingFilterToken(normalized) && !isDescriptiveListingToken(normalized);
 }
 
 export function unrefinedPlaceLeftover(query: string, place: Place): string {

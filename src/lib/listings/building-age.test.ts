@@ -5,6 +5,7 @@ import {
   listingMatchesBuildingAge,
   normalizeBuildingAgeFilter,
   parseBuiltYear,
+  parseMaxBuildingAge,
 } from "./building-age";
 
 describe("building age filter", () => {
@@ -32,5 +33,11 @@ describe("building age filter", () => {
     expect(normalizeBuildingAgeFilter({ maxBuildingAge: 2 })).toEqual({});
     expect(normalizeBuildingAgeFilter({ maxBuildingAge: 40 })).toEqual({});
     expect(describeBuildingAgeFilter(10)).toBe("Up to 10 years old");
+  });
+
+  it("parses less-than-N-years-old into a max building age", () => {
+    expect(parseMaxBuildingAge("less than 15 years old near guro digital")).toBe(15);
+    expect(parseMaxBuildingAge("under 10 years old")).toBe(10);
+    expect(parseMaxBuildingAge("studio near hongdae")).toBeUndefined();
   });
 });

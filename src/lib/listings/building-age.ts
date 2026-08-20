@@ -61,3 +61,27 @@ export function describeBuildingAgeFilter(maxBuildingAge?: number): string | nul
   if (maxBuildingAge === 1) return "Up to 1 year old";
   return `Up to ${maxBuildingAge} years old`;
 }
+
+export function parseMaxBuildingAge(text: string, now = new Date()): number | undefined {
+  const builtAfter = text.match(
+    /\b(?:built|constructed|approved)\s+(?:after|since|from)\s+((?:19|20)\d{2})\b/i,
+  );
+  if (builtAfter?.[1]) {
+    const year = Number(builtAfter[1]);
+    if (Number.isFinite(year)) {
+      return normalizeBuildingAgeFilter({
+        maxBuildingAge: Math.max(MAX_BUILDING_AGE_MIN, builtYearMax(now) - year),
+      }).maxBuildingAge;
+    }
+  }
+  const match = text.match(
+    /(?:(?:less than|under|up to|no more than|max(?:imum)?|within|younger than|no older than)\s+)?(\d{1,2})\s*(?:years?|yrs?)\s*old\b/i,
+  ) ?? text.match(
+    /(?:less than|under|up to|no more than|max(?:imum)?|within)\s+(\d{1,2})\s*(?:years?|yrs?)\b/i,
+  );
+  const years = Number(match?.[1]);
+  if (!Number.isFinite(years) || years <= 0) return undefined;
+  return normalizeBuildingAgeFilter({
+    maxBuildingAge: Math.max(MAX_BUILDING_AGE_MIN, years),
+  }).maxBuildingAge;
+}
