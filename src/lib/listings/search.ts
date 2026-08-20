@@ -365,6 +365,7 @@ const PLACE_STOPWORDS = new Set(
     "recent",
     "fresh",
     "근처",
+    "friendly",
   ].map(normalizeSearch),
 );
 
@@ -380,6 +381,16 @@ export function isListingFilterToken(token: string): boolean {
       variant !== "단지" &&
       FILTER_TOKENS.has(variant),
   );
+}
+
+/** Leftover words that should match listing titles (pet, furnished) after place/floor/age are stripped. */
+export function isDescriptiveListingToken(token: string): boolean {
+  const normalized = normalizeSearch(token);
+  if (!normalized || normalized.length < 3 || /^\d+$/.test(normalized)) return false;
+  if (PLACE_STOPWORDS.has(normalized)) return false;
+  if (normalized === "complex" || normalized === "단지") return false;
+  if (isListingFilterToken(normalized)) return false;
+  return /\p{L}/u.test(normalized);
 }
 
 export function looksLikePlaceQuery(query: string): boolean {
@@ -400,7 +411,7 @@ export function listingFilterQuery(query: string, place?: Place): string {
   const afterPlace = place ? stripPlaceFromQuery(rest, place) : rest;
   return stripStationWords(afterPlace)
     .split(/\s+/)
-    .filter((token) => isListingFilterToken(token))
+    .filter((token) => isListingFilterToken(token) || isDescriptiveListingToken(token))
     .join(" ");
 }
 

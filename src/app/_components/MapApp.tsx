@@ -1,7 +1,7 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api } from "~/trpc/react";
 import { isValidBounds } from "~/lib/geo/bounds";
 import { type CircleFilter, type LatLng, formatRadius } from "~/lib/geo/shape";
@@ -164,6 +164,8 @@ export default function MapApp() {
   const filterKeyRef = useRef<string>("");
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [visionById, setVisionById] = useState<Record<string, PhotoScoreInput>>({});
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
 
   const parsedSearch = useMemo(
     () => parseSearchQuery(debouncedQuery),
@@ -802,11 +804,13 @@ export default function MapApp() {
       foreignerOk,
       floorFilter,
       ageFilter,
+      listingQuery: listingQuery || undefined,
     }),
     [
       areaBucketIds,
       floorFilter,
       ageFilter,
+      listingQuery,
       maxDeposit,
       maxRent,
       minDeposit,
@@ -842,6 +846,15 @@ export default function MapApp() {
     : visible.listings.length;
 
   const showList = viewMode === "list" || viewMode === "saved" || viewMode === "best";
+  useLayoutEffect(() => {
+    const node = headerRef.current;
+    if (!node) return;
+    const update = () => setHeaderHeight(Math.round(node.getBoundingClientRect().height));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [showList, uiCompact, filterSummary]);
   const listListings = viewMode === "saved" ? savedHomes : visible.listings;
   const photoScores = usePhotoQuality(
     viewMode === "best" ? listListings.map((item) => item.thumbnail) : [],
@@ -942,9 +955,18 @@ export default function MapApp() {
             : null;
 
   return (
-    <div className="flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
-      <header className="z-[1100] shrink-0 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-slate-950/92 p-2.5 shadow-xl backdrop-blur">
+    <div className="relative h-[100dvh] w-screen overflow-hidden bg-slate-950 text-slate-100">
+      <header
+        ref={headerRef}
+        className={`pointer-events-none absolute top-0 z-[1300] p-3 pt-[max(0.75rem,env(safe-area-inset-top))] ${
+          showList ? "inset-x-0 md:right-auto md:w-[46%]" : "inset-x-0"
+        }`}
+      >
+        <div
+          className={`pointer-events-auto rounded-2xl border border-white/15 bg-slate-950/75 p-2.5 shadow-xl backdrop-blur-md ${
+            showList ? "w-full" : "mx-auto max-w-3xl"
+          }`}
+        >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] uppercase tracking-[0.18em] text-sky-300">
@@ -1339,7 +1361,7 @@ export default function MapApp() {
         </div>
       </header>
 
-      <div className="relative flex min-h-0 flex-1">
+      <div className="absolute inset-0 flex">
         <div
           data-map-chrome={
             viewMode === "map" && visible.listings.length ? "carousel" : undefined
@@ -1369,7 +1391,8 @@ export default function MapApp() {
         {showList ? (
           <div
             data-list-panel="portrait"
-            className="relative z-[1200] h-full min-h-0 w-full min-w-0 flex-1 bg-slate-950"
+            className="relative z-[1200] h-full min-h-0 w-full min-w-0 flex-1 bg-slate-950 max-md:pt-[var(--header-h)] md:pt-0"
+            style={{ ["--header-h" as string]: `${headerHeight}px` }}
           >
             <ListingList
               listings={listListings}

@@ -15,6 +15,7 @@ import {
   isStationQuery,
   listingFilterQuery,
   matchPlace,
+  normalizeSearch,
   unrefinedPlaceLeftover,
 } from "./search";
 import {
@@ -31,6 +32,7 @@ export type SearchSnapshot = {
   areaBucketIds: AreaBucketId[];
   radiusM: number;
   viewMode: ViewMode;
+  listingQuery?: string;
 } & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter; ageFilter?: AgeFilter };
 
 export type SearchIntent = {
@@ -47,6 +49,7 @@ export type SearchIntent = {
   foreignerOk?: boolean | null;
   floorFilter?: FloorFilter | null;
   ageFilter?: AgeFilter | null;
+  listingQuery?: string | null;
 };
 
 export type InterpretedSearch = {
@@ -341,6 +344,10 @@ export function mergeSearchIntent(
       patch.floorFilter === null ? undefined : (patch.floorFilter ?? current.floorFilter),
     ageFilter:
       patch.ageFilter === null ? undefined : (patch.ageFilter ?? current.ageFilter),
+    listingQuery:
+      patch.listingQuery === null
+        ? undefined
+        : (patch.listingQuery ?? current.listingQuery),
     ...price,
   };
 }
@@ -367,6 +374,7 @@ export function describeSearchSnapshot(snapshot: SearchSnapshot): string {
     snapshot.foreignerOk ? "Only listings that say foreigners are welcome." : null,
     snapshot.floorFilter ? `${floorFilterLabel[snapshot.floorFilter]}.` : null,
     snapshot.ageFilter ? `${ageFilterLabel[snapshot.ageFilter]}.` : null,
+    snapshot.listingQuery ? `Matching “${snapshot.listingQuery}”.` : null,
   ]
     .filter(Boolean)
     .join(" ");
@@ -376,6 +384,41 @@ function isFollowUp(text: string): boolean {
   return /^(?:a bit )?cheaper\b|higher budget|too expensive|clear |anywhere|less rent|more rent|make (?:the )?(?:rent|deposit)|bring (?:it|the rent) down/i.test(
     text.trim(),
   );
+}
+
+export function appendUniqueSearchTerms(base: string, extra?: string | null): string {
+  const extraTerms = normalizeSearch(extra ?? "")
+    .split(" ")
+    .filter(Boolean);
+  if (!extraTerms.length) return base.trim();
+  const hay = ` ${normalizeSearch(base)} `;
+  const missing = extraTerms.filter((term) => !hay.includes(` ${term} `));
+  if (!missing.length) return base.trim();
+  return [base.trim(), missing.join(" ")].filter(Boolean).join(" ");
+}
+
+/** Fold leftover title-match words into an OpenAI (or local) intent so Ask can filter on free text. */
+export function blendAskIntent(ai: SearchIntent, local: SearchIntent): SearchIntent {
+  const leftover =
+    ai.listingQuery === undefined ? local.listingQuery : ai.listingQuery;
+  const next: SearchIntent = {
+    ...ai,
+    viewMode: ai.viewMode ?? "list",
+  };
+  if (leftover === null) {
+    next.listingQuery = null;
+    return next;
+  }
+  if (leftover) {
+    next.listingQuery = leftover;
+    if (next.searchInput !== null) {
+      next.searchInput = appendUniqueSearchTerms(next.searchInput ?? "", leftover);
+    }
+  } else if (local.listingQuery && next.searchInput !== null && next.searchInput) {
+    next.searchInput = appendUniqueSearchTerms(next.searchInput, local.listingQuery);
+    next.listingQuery = local.listingQuery;
+  }
+  return next;
 }
 
 export function interpretSearch(
@@ -397,6 +440,7 @@ export function interpretSearch(
     }
   }
   const leftover = followUp ? undefined : listingFilterQuery(text, place) || undefined;
+  if (leftover) intent.listingQuery = leftover;
   if (leftover && intent.searchInput) {
     intent.searchInput = `${intent.searchInput} ${leftover}`;
   } else if (leftover && !place) {
@@ -437,6 +481,7 @@ export function interpretSearch(
   }
   if (/anywhere|clear (the )?(area|place|search)/i.test(text)) {
     intent.searchInput = null;
+    intent.listingQuery = null;
   }
   if (
     /foreigners?\s+welcome|accepts?\s+foreigners?|외국인\s*(환영|가능)|for foreigners/i.test(

@@ -78,6 +78,16 @@ describe("bilingual fuzzy search", () => {
     expect(parsed.listingQuery).toBe("");
   });
 
+  it("keeps leftover descriptive words as a title filter", () => {
+    expect(parseSearchQuery("hongdae pet").listingQuery.toLowerCase()).toContain("pet");
+    expect(parseSearchQuery("hongdae furnished rooftop").listingQuery.toLowerCase()).toContain(
+      "furnished",
+    );
+    expect(parseSearchQuery("hongdae furnished rooftop").listingQuery.toLowerCase()).toContain(
+      "rooftop",
+    );
+  });
+
   it("matches Dangsan station as a walk-radius place, not listing text", () => {
     expect(matchPlace("dangsan station")?.id).toBe("dangsan");
     expect(matchPlace("당산역")?.id).toBe("dangsan");

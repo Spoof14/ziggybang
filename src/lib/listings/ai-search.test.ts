@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { interpretSearch, mergeSearchIntent, type SearchSnapshot } from "./ai-search";
+import { blendAskIntent, interpretSearch, mergeSearchIntent, type SearchSnapshot } from "./ai-search";
 
 const current: SearchSnapshot = {
   searchInput: "",
@@ -83,6 +83,29 @@ describe("conversational listing search", () => {
     expect(result.snapshot.ageFilter).toBe("week");
     expect(result.snapshot.searchInput.toLowerCase()).toContain("hongdae");
     expect(result.reply.toLowerCase()).toContain("week");
+  });
+
+  it("keeps leftover listing words like pet and rooftop", () => {
+    const result = interpretSearch("pet friendly rooftop near hongdae", current);
+    expect(result.snapshot.searchInput.toLowerCase()).toContain("hongdae");
+    expect(result.snapshot.listingQuery?.toLowerCase()).toContain("pet");
+    expect(result.snapshot.listingQuery?.toLowerCase()).toContain("rooftop");
+    expect(result.snapshot.searchInput.toLowerCase()).toContain("pet");
+  });
+
+  it("blends OpenAI place-only searchInput with leftover listing text", () => {
+    const local = interpretSearch("furnished pet officetel near hongdae", current);
+    const blended = blendAskIntent(
+      {
+        searchInput: "Hongdae",
+        propertyTypes: ["officetel"],
+        viewMode: "list",
+      },
+      local.intent,
+    );
+    expect(blended.searchInput?.toLowerCase()).toContain("hongdae");
+    expect(blended.searchInput?.toLowerCase()).toContain("pet");
+    expect(blended.listingQuery?.toLowerCase()).toContain("pet");
   });
 
   it("merges a rent-only patch onto existing filters", () => {
