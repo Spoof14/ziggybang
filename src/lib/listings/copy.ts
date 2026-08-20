@@ -120,7 +120,7 @@ export function formatRoomType(value?: string): string | null {
 
 export function friendlySourceError(source: Source, message: string): string {
   if (source === "naver") {
-    return "Naver is ignoring this server. Functions already run in Seoul, but Naver blocks cloud IPs (including AWS Korea). It wants a Korean home/ISP address, not a Vercel datacenter. Zigbang and Peterpan still work.";
+    return "Naver is blocked from this server. Turn the Naver chip off, or retry later from a Korean home network. Zigbang and Peterpan still work.";
   }
   return `${sourceLabel[source]}: ${message}`;
 }

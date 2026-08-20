@@ -50,6 +50,20 @@ describe("conversational listing search", () => {
     expect(cheaper.snapshot.maxDeposit).toBe(1600);
   });
 
+  it("opens Best view for a recommended-homes request", () => {
+    const result = interpretSearch("recommend the best value studios near Hongdae", current);
+    expect(result.snapshot.viewMode).toBe("best");
+    expect(result.snapshot.searchInput.toLowerCase()).toContain("hongdae");
+    expect(result.snapshot.propertyTypes).toEqual(["oneroom"]);
+  });
+
+  it("turns a foreigners-welcome ask into that chip", () => {
+    const result = interpretSearch("Foreigners welcome near Hongdae", current);
+    expect(result.snapshot.foreignerOk).toBe(true);
+    expect(result.snapshot.searchInput.toLowerCase()).toContain("hongdae");
+    expect(result.reply.toLowerCase()).toContain("foreigners");
+  });
+
   it("merges a rent-only patch onto existing filters", () => {
     const merged = mergeSearchIntent(
       { ...current, searchInput: "hongdae", maxDeposit: 2000, propertyTypes: ["oneroom"] },

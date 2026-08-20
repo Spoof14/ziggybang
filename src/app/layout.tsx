@@ -8,8 +8,11 @@ import { TRPCReactProvider } from "~/trpc/react";
 export const metadata: Metadata = {
   title: "Ziggybang",
   description:
-    "English map of Zigbang and Naver Korea rentals, with KRW prices and jeonse vs monthly rent explained.",
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
+    "English map of Zigbang, Peterpan, and Naver Korea rentals, with KRW prices and jeonse vs monthly rent explained.",
+  icons: [
+    { rel: "icon", url: "/favicon.svg", type: "image/svg+xml" },
+    { rel: "icon", url: "/favicon.ico" },
+  ],
 };
 
 export default function RootLayout({

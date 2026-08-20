@@ -15,7 +15,11 @@ import {
   type Source,
   salesTypes as allSalesTypes,
 } from "~/lib/listings/types";
-import { filterListings, needsListingDetails } from "~/lib/listings/filter";
+import {
+  filterListings,
+  needsHydratedFilters,
+  needsListingDetails,
+} from "~/lib/listings/filter";
 import { parseSearchQuery } from "~/lib/listings/search";
 import { settledError, withTimeout } from "./http";
 import { fetchNaverDetail, fetchNaverListings } from "./naver";
@@ -80,10 +84,11 @@ export async function getMapData(
     maxDeposit: query.maxDeposit,
     minRent: query.minRent,
     maxRent: query.maxRent,
+    foreignerOk: query.foreignerOk,
   };
   const requireDetails =
-    (query.zoom >= 15 || Boolean(query.includeListings)) &&
-    needsListingDetails(detailFilters);
+    (query.zoom >= 15 && needsListingDetails(detailFilters)) ||
+    (Boolean(query.includeListings) && needsHydratedFilters(detailFilters));
 
   const fetchBounds = query.circle
     ? boundsAroundCircle(query.circle)
@@ -159,6 +164,7 @@ export async function getMapData(
   });
 
   let unique = filterListings(dedupeListings(fetched), {
+    propertyTypes,
     ...detailFilters,
     requireDetails,
   });

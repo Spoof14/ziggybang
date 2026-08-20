@@ -1,4 +1,4 @@
-import { salesTypes, type MapListing, type SalesType } from "./types";
+import { propertyTypes, salesTypes, type MapListing, type PropertyType, type SalesType } from "./types";
 import {
   isAllAreaBuckets,
   listingMatchesArea,
@@ -14,15 +14,41 @@ import {
 import { listingMatchesQuery } from "./search";
 
 export type ListingFilterInput = {
+  propertyTypes?: PropertyType[];
   salesTypes: SalesType[];
   areaBucketIds: AreaBucketId[];
   query: string;
   requireDetails: boolean;
+  foreignerOk?: boolean;
 } & PriceFilter;
+
+export function isAllPropertyTypes(selected: PropertyType[]): boolean {
+  if (selected.length === 0) return true;
+  return propertyTypes.every((type) => selected.includes(type));
+}
 
 export function isAllSalesTypes(selected: SalesType[]): boolean {
   if (selected.length === 0) return true;
   return salesTypes.every((type) => selected.includes(type));
+}
+
+/** Product default: jeonse + monthly, sale off. Untyped pins can stay until zoomed in. */
+export function isDefaultRentSales(selected: SalesType[]): boolean {
+  return (
+    selected.length === 2 &&
+    selected.includes("jeonse") &&
+    selected.includes("wolse")
+  );
+}
+
+/** Price, size, text, or a non-default sale mix — these need hydrated homes, not clusters. */
+export function needsHydratedFilters(
+  input: Omit<ListingFilterInput, "requireDetails" | "propertyTypes">,
+): boolean {
+  const salesTypesForDetails = isDefaultRentSales(input.salesTypes)
+    ? [...salesTypes]
+    : input.salesTypes;
+  return needsListingDetails({ ...input, salesTypes: salesTypesForDetails });
 }
 
 export function filterBySalesTypes(
@@ -41,7 +67,11 @@ export function filterListings(
   listings: MapListing[],
   input: ListingFilterInput,
 ): MapListing[] {
+  const types = input.propertyTypes ?? [];
   return listings.filter((listing) => {
+    if (!isAllPropertyTypes(types) && !types.includes(listing.propertyType)) {
+      return false;
+    }
     if (!filterBySalesTypes([listing], input.salesTypes, input.requireDetails).length) {
       return false;
     }
@@ -67,6 +97,10 @@ export function filterListings(
     if (input.query && !listingMatchesQuery(listing, input.query)) {
       return false;
     }
+    if (input.foreignerOk) {
+      if (input.requireDetails && listing.foreignerOk !== true) return false;
+      if (!input.requireDetails && listing.foreignerOk === false) return false;
+    }
     return true;
   });
 }
@@ -78,6 +112,7 @@ export function needsListingDetails(
     !isAllSalesTypes(input.salesTypes) ||
     !isAllAreaBuckets(input.areaBucketIds) ||
     Boolean(input.query.trim()) ||
+    Boolean(input.foreignerOk) ||
     !isEmptyPriceFilter(input)
   );
 }

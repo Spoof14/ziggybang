@@ -40,4 +40,14 @@ describe("listings router", () => {
     expect(result.snapshot.maxDeposit).toBe(2000);
     expect(result.snapshot.viewMode).toBe("list");
   });
+
+  it("returns English landlord notes without calling OpenAI", async () => {
+    const caller = createCaller({ headers: new Headers() });
+    await expect(
+      caller.listings.translateNotes({ text: "Newly built flat near Hongdae" }),
+    ).resolves.toEqual({
+      english: "Newly built flat near Hongdae",
+      source: "original",
+    });
+  });
 });

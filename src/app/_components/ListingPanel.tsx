@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { api } from "~/trpc/react";
 import {
   formatArea,
@@ -12,9 +13,27 @@ import {
   salesTypeLabel,
   sourceLabel,
 } from "~/lib/listings/copy";
-import { englishAddressLine, englishCardTitle } from "~/lib/listings/english";
+import {
+  englishAddressLine,
+  englishCardTitle,
+  koreanAddressForTaxi,
+} from "~/lib/listings/english";
+import { agencyFeeCopy } from "~/lib/listings/agency-fee";
+import { detectForeignerOk } from "~/lib/listings/foreigner";
+import { listingPagePath, stashListing } from "~/lib/listings/path";
 import { type MapListing } from "~/lib/listings/types";
+import { ForeignerBadge } from "./ForeignerBadge";
 import { ListingGallery } from "./ListingGallery";
+
+async function copyText(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    window.prompt("Copy this", value);
+    return false;
+  }
+}
 
 export function ListingPanel({
   listing,
@@ -27,6 +46,7 @@ export function ListingPanel({
   onClose: () => void;
   onToggleSave?: (listing: MapListing) => void;
 }) {
+  const [copied, setCopied] = useState<"address" | "link" | null>(null);
   const detailQuery = api.listings.getDetail.useQuery(
     {
       source: listing.source,
@@ -51,6 +71,18 @@ export function ListingPanel({
   const manageCost = formatKrwFromManwon(detail.manageCost);
   const englishTitle = englishCardTitle(detail);
   const where = englishAddressLine(detail);
+  const taxiAddress = koreanAddressForTaxi(detail.address);
+  const description = detail.description?.trim();
+  const foreignerOk =
+    detail.foreignerOk ?? detectForeignerOk(detail.title, detail.description);
+  const agencyFee = agencyFeeCopy(detail);
+
+  async function copy(kind: "address" | "link", value: string) {
+    const ok = await copyText(value);
+    if (!ok) return;
+    setCopied(kind);
+    window.setTimeout(() => setCopied(null), 1600);
+  }
 
   return (
     <aside className="pointer-events-auto fixed inset-0 z-[1300] flex flex-col overflow-auto bg-slate-950 text-slate-100 md:absolute md:inset-auto md:bottom-6 md:left-auto md:right-4 md:top-24 md:max-h-[calc(100dvh-7rem)] md:w-[390px] md:rounded-2xl md:border md:border-white/10 md:shadow-2xl">
@@ -73,6 +105,7 @@ export function ListingPanel({
               {salesTypeHint[detail.salesType]}
             </p>
           ) : null}
+          <ForeignerBadge ok={foreignerOk} className="mt-2 inline-flex" />
         </div>
         <div className="flex shrink-0 gap-1">
           {onToggleSave ? (
@@ -102,6 +135,17 @@ export function ListingPanel({
           <div className="col-span-2">
             <dt className="text-slate-400">Price</dt>
             <dd className="font-medium">{price}</dd>
+          </div>
+        ) : null}
+        {agencyFee ? (
+          <div className="col-span-2">
+            <dt className="text-slate-400">Agency fee cap</dt>
+            <dd>
+              {agencyFee.vatLabel} incl. VAT
+              <span className="mt-0.5 block text-[11px] font-normal text-slate-500">
+                Legal maximum at {agencyFee.ratePct}%. Who pays is negotiable.
+              </span>
+            </dd>
           </div>
         ) : null}
         {area ? (
@@ -134,10 +178,19 @@ export function ListingPanel({
             <dd>{where}</dd>
           </div>
         ) : null}
-        {detail.address ? (
+        {taxiAddress ? (
           <div className="col-span-2">
-            <dt className="text-slate-400">Address</dt>
-            <dd>{detail.address}</dd>
+            <dt className="text-slate-400">Korean address (for taxis)</dt>
+            <dd className="flex items-start justify-between gap-2">
+              <span>{taxiAddress}</span>
+              <button
+                type="button"
+                onClick={() => void copy("address", taxiAddress)}
+                className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-sky-300 hover:bg-white/20"
+              >
+                {copied === "address" ? "Copied" : "Copy"}
+              </button>
+            </dd>
           </div>
         ) : null}
         {listing.count && listing.count > 1 ? (
@@ -148,19 +201,39 @@ export function ListingPanel({
         ) : null}
       </dl>
 
+      {description ? (
+        <p className="px-4 pb-2 text-sm leading-relaxed text-slate-300">{description}</p>
+      ) : null}
+
       {detailQuery.isLoading ? (
         <p className="px-4 text-sm text-slate-400">Loading listing details…</p>
       ) : null}
 
-      <div className="mt-auto p-4">
+      <div className="mt-auto flex flex-col gap-2 p-4">
+        <a
+          href={listingPagePath(detail)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => stashListing(detail)}
+          className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
+        >
+          Open full page
+        </a>
         <a
           href={detail.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
+          className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/20"
         >
           Open on {sourceLabel[listing.source]}
         </a>
+        <button
+          type="button"
+          onClick={() => void copy("link", `${window.location.origin}${listingPagePath(detail)}`)}
+          className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/20"
+        >
+          {copied === "link" ? "Page link copied" : "Copy page link"}
+        </button>
       </div>
     </aside>
   );

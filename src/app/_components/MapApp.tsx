@@ -4,12 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "~/trpc/react";
 import { isValidBounds } from "~/lib/geo/bounds";
-import {
-  type CircleFilter,
-  type LatLng,
-  formatRadius,
-  listingInArea,
-} from "~/lib/geo/shape";
+import { type CircleFilter, type LatLng, formatRadius } from "~/lib/geo/shape";
 import {
   areaBuckets,
   isAllAreaBuckets,
@@ -22,10 +17,14 @@ import {
   salesTypeFilterLabel,
   sourceLabel,
 } from "~/lib/listings/copy";
-import { needsListingDetails } from "~/lib/listings/filter";
+import {
+  isAllPropertyTypes,
+  needsHydratedFilters,
+} from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
+import { describeActiveFilters, filterKeyOf, mapLayersForFilters } from "~/lib/listings/visible";
 import { loadPrefs, savePrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
-import { describePriceFilter, type PriceFilter } from "~/lib/listings/price";
+import { type PriceFilter } from "~/lib/listings/price";
 import {
   isStationQuery,
   looksLikePlaceQuery,
@@ -33,8 +32,9 @@ import {
   placeSearchToken,
   stripPlaceFromQuery,
 } from "~/lib/listings/search";
-import { englishCardTitle } from "~/lib/listings/english";
+import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
 import { type SearchSnapshot } from "~/lib/listings/ai-search";
+import { rankListings, type PhotoScoreInput } from "~/lib/listings/recommend";
 import {
   isSavedHome,
   loadSavedHomes,
@@ -49,6 +49,7 @@ import {
 import {
   type Bounds,
   type MapCluster,
+  type MapData,
   type MapListing,
   type PropertyType,
   type SalesType,
@@ -60,11 +61,21 @@ import { ListingPanel } from "./ListingPanel";
 import { ListingPhoto } from "./ListingPhoto";
 import { AskSearch } from "./AskSearch";
 import { PriceFilters } from "./PriceFilters";
+import { usePhotoQuality } from "./usePhotoQuality";
 
 const ALL_SOURCES: Source[] = ["zigbang", "naver", "peterpan"];
 const ALL_TYPES: PropertyType[] = ["oneroom", "villa", "officetel", "apartment"];
 const ALL_SALES: SalesType[] = ["jeonse", "wolse", "sale"];
+const DEFAULT_SOURCES: Source[] = ["zigbang", "peterpan"];
+const DEFAULT_SALES: SalesType[] = ["jeonse", "wolse"];
 const DEFAULT_RADIUS_M = 1200;
+const NAVER_HIDE_KEY = "ziggybang:hide-naver-error";
+const TYPE_CHIP_ON: Record<PropertyType, string> = {
+  oneroom: "bg-orange-500 text-slate-950",
+  villa: "bg-amber-300 text-slate-950",
+  officetel: "bg-violet-500 text-white",
+  apartment: "bg-sky-400 text-slate-950",
+};
 
 function roundCoord(value: number) {
   return Math.round(value * 10_000) / 10_000;
@@ -101,9 +112,9 @@ export default function MapApp() {
     east: 127.02,
   });
   const [zoom, setZoom] = useState(13);
-  const [sources, setSources] = useState<Source[]>(ALL_SOURCES);
+  const [sources, setSources] = useState<Source[]>(DEFAULT_SOURCES);
   const [propertyTypes, setPropertyTypes] = useState<PropertyType[]>(ALL_TYPES);
-  const [salesTypes, setSalesTypes] = useState<SalesType[]>(ALL_SALES);
+  const [salesTypes, setSalesTypes] = useState<SalesType[]>(DEFAULT_SALES);
   const [areaBucketIds, setAreaBucketIds] = useState<AreaBucketId[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -114,6 +125,7 @@ export default function MapApp() {
   const [maxDeposit, setMaxDeposit] = useState<number | undefined>();
   const [minRent, setMinRent] = useState<number | undefined>();
   const [maxRent, setMaxRent] = useState<number | undefined>();
+  const [foreignerOk, setForeignerOk] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [savedHomes, setSavedHomes] = useState<MapListing[]>([]);
   const [tool, setTool] = useState<"pan" | "radius" | "draw">("pan");
@@ -130,10 +142,19 @@ export default function MapApp() {
   } | null>(null);
   const [dismissedNaver, setDismissedNaver] = useState(false);
   const [uiCompact, setUiCompact] = useState(false);
+  const [shareHint, setShareHint] = useState<string | null>(null);
+  const [urlView, setUrlView] = useState({
+    lat: 37.565,
+    lng: 126.98,
+    zoom: 13,
+  });
   const lastViewportKey = useRef<string | null>(null);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPlaceId = useRef<string | null>(null);
+  const inspectedPhotos = useRef<string>("");
+  const filterKeyRef = useRef<string>("");
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [visionById, setVisionById] = useState<Record<string, PhotoScoreInput>>({});
 
   const parsedSearch = useMemo(
     () => parseSearchQuery(debouncedQuery),
@@ -176,9 +197,9 @@ export default function MapApp() {
       ? parseAppUrl(window.location.search)
       : {};
     const base = saved;
-    setSources(url.sources ?? base?.sources ?? ALL_SOURCES);
+    setSources(url.sources ?? base?.sources ?? DEFAULT_SOURCES);
     setPropertyTypes(url.propertyTypes ?? base?.propertyTypes ?? ALL_TYPES);
-    setSalesTypes(url.salesTypes ?? base?.salesTypes ?? ALL_SALES);
+    setSalesTypes(url.salesTypes ?? base?.salesTypes ?? DEFAULT_SALES);
     setAreaBucketIds(url.areaBucketIds ?? base?.areaBucketIds ?? []);
     setSearchInput(url.searchInput ?? base?.searchInput ?? "");
     setDebouncedQuery(url.searchInput ?? base?.searchInput ?? "");
@@ -188,12 +209,29 @@ export default function MapApp() {
     setMaxDeposit(url.maxDeposit ?? base?.maxDeposit);
     setMinRent(url.minRent ?? base?.minRent);
     setMaxRent(url.maxRent ?? base?.maxRent);
+    setForeignerOk(url.foreignerOk ?? base?.foreignerOk ?? false);
     setRadiusM(url.radiusM ?? base?.radiusM ?? DEFAULT_RADIUS_M);
     setManualCircle(base?.circle ?? null);
     setPolygon(base?.polygon ?? null);
-    setUiCompact(base?.uiCompact === true);
+    if (typeof base?.uiCompact === "boolean") {
+      setUiCompact(base.uiCompact);
+    } else {
+      setUiCompact(window.innerWidth < 768);
+    }
+    try {
+      setDismissedNaver(window.localStorage.getItem(NAVER_HIDE_KEY) === "1");
+    } catch {
+      /* private mode */
+    }
     const view = url.view ?? base?.view;
     const searchText = url.searchInput ?? base?.searchInput ?? "";
+    if (view) {
+      setUrlView({
+        lat: view.lat,
+        lng: view.lng,
+        zoom: Math.round(view.zoom),
+      });
+    }
     if (view && !parseSearchQuery(searchText).place) {
       setZoom(Math.round(view.zoom));
       setFocus({
@@ -230,6 +268,7 @@ export default function MapApp() {
       maxDeposit,
       minRent,
       maxRent,
+      foreignerOk,
     });
   }, [
     areaBucketIds,
@@ -250,6 +289,7 @@ export default function MapApp() {
     viewMode,
     zoom,
     listSort,
+    foreignerOk,
   ]);
 
   useEffect(() => {
@@ -262,16 +302,13 @@ export default function MapApp() {
       salesTypes,
       areaBucketIds,
       radiusM,
-      view: {
-        lat: (bounds.south + bounds.north) / 2,
-        lng: (bounds.west + bounds.east) / 2,
-        zoom,
-      },
+      view: urlView,
       listSort,
       minDeposit,
       maxDeposit,
       minRent,
       maxRent,
+      foreignerOk,
     });
     const url = `${window.location.pathname}${next}`;
     if (`${window.location.pathname}${window.location.search}` !== url) {
@@ -279,7 +316,6 @@ export default function MapApp() {
     }
   }, [
     areaBucketIds,
-    bounds,
     listSort,
     maxDeposit,
     maxRent,
@@ -291,9 +327,35 @@ export default function MapApp() {
     salesTypes,
     searchInput,
     sources,
+    urlView,
     viewMode,
-    zoom,
+    foreignerOk,
   ]);
+
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    const timer = setTimeout(() => {
+      setUrlView({
+        lat: (bounds.south + bounds.north) / 2,
+        lng: (bounds.west + bounds.east) / 2,
+        zoom,
+      });
+    }, 1400);
+    return () => clearTimeout(timer);
+  }, [bounds, prefsLoaded, zoom]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (askOpen) {
+        setAskOpen(false);
+        return;
+      }
+      if (selected) setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [askOpen, selected]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchInput), 280);
@@ -321,6 +383,33 @@ export default function MapApp() {
     }
   }, [debouncedQuery, place]);
 
+  const filtersNeedHomes =
+    !isAllPropertyTypes(propertyTypes.length ? propertyTypes : ALL_TYPES) ||
+    needsHydratedFilters({
+      salesTypes,
+      areaBucketIds,
+      query: listingQuery,
+      minDeposit,
+      maxDeposit,
+      minRent,
+      maxRent,
+      foreignerOk,
+    });
+  const currentFilterKey = filterKeyOf({
+    sources,
+    propertyTypes,
+    salesTypes,
+    areaBucketIds,
+    query: listingQuery,
+    minDeposit,
+    maxDeposit,
+    minRent,
+    maxRent,
+    foreignerOk,
+  });
+  const keepViewportPlaceholder = filterKeyRef.current === currentFilterKey;
+  filterKeyRef.current = currentFilterKey;
+
   const sharedInput = useMemo(
     () => ({
       bounds,
@@ -331,17 +420,29 @@ export default function MapApp() {
       areaBucketIds: isAllAreaBuckets(areaBucketIds) ? undefined : areaBucketIds,
       circle: circle ?? undefined,
       polygon: polygon && polygon.length >= 3 ? polygon : undefined,
-      includeListings: viewMode === "list" || Boolean(circle ?? polygon),
-      listingLimit: viewMode === "list" ? listingLimit : undefined,
+      includeListings:
+        viewMode === "list" ||
+        viewMode === "best" ||
+        Boolean(circle ?? polygon) ||
+        filtersNeedHomes,
+      listingLimit:
+        viewMode === "list" || viewMode === "best"
+          ? listingLimit
+          : filtersNeedHomes
+            ? 240
+            : undefined,
       minDeposit,
       maxDeposit,
       minRent,
       maxRent,
+      foreignerOk: foreignerOk || undefined,
     }),
     [
       areaBucketIds,
       bounds,
       circle,
+      filtersNeedHomes,
+      foreignerOk,
       listingLimit,
       listingQuery,
       maxDeposit,
@@ -356,22 +457,26 @@ export default function MapApp() {
     ],
   );
 
+  const mapQueryOptions = {
+    placeholderData: keepViewportPlaceholder
+      ? (previous: MapData | undefined) => previous
+      : undefined,
+    refetchOnWindowFocus: false as const,
+    retry: false as const,
+  };
+
   const zigbangQuery = api.listings.getMap.useQuery(
     { ...sharedInput, sources: ["zigbang"] },
     {
       enabled: prefsLoaded && sources.includes("zigbang"),
-      placeholderData: (previous) => previous,
-      refetchOnWindowFocus: false,
-      retry: false,
+      ...mapQueryOptions,
     },
   );
   const naverQuery = api.listings.getMap.useQuery(
     { ...sharedInput, sources: ["naver"] },
     {
       enabled: prefsLoaded && sources.includes("naver"),
-      placeholderData: (previous) => previous,
-      refetchOnWindowFocus: false,
-      retry: false,
+      ...mapQueryOptions,
     },
   );
 
@@ -379,11 +484,14 @@ export default function MapApp() {
     { ...sharedInput, sources: ["peterpan"] },
     {
       enabled: prefsLoaded && sources.includes("peterpan"),
-      placeholderData: (previous) => previous,
-      refetchOnWindowFocus: false,
-      retry: false,
+      ...mapQueryOptions,
     },
   );
+  const recommendAi = api.listings.aiStatus.useQuery(undefined, {
+    staleTime: 60_000,
+    enabled: viewMode === "best",
+  });
+  const inspectPhotos = api.listings.inspectPhotos.useMutation();
 
   const data = useMemo(
     () =>
@@ -396,23 +504,68 @@ export default function MapApp() {
   );
 
   const visible = useMemo(() => {
-    const hasArea = Boolean(circle ?? (polygon && polygon.length >= 3));
-    const listings = data.listings.filter((listing) =>
-      listingInArea(listing, circle ?? undefined, polygon ?? undefined),
-    );
+    const layers = mapLayersForFilters(data.listings, data.clusters, {
+      propertyTypes: propertyTypes.length ? propertyTypes : ALL_TYPES,
+      salesTypes: salesTypes.length ? salesTypes : ALL_SALES,
+      areaBucketIds,
+      query: listingQuery,
+      circle: circle ?? undefined,
+      polygon,
+      zoom,
+      minDeposit,
+      maxDeposit,
+      minRent,
+      maxRent,
+      foreignerOk,
+    });
     return {
-      clusters: hasArea ? [] : data.clusters,
-      listings,
+      clusters: layers.clusters,
+      listings: layers.listings,
       stats: data.stats,
       errors: data.errors,
     };
-  }, [circle, data, polygon]);
+  }, [
+    areaBucketIds,
+    circle,
+    data,
+    listingQuery,
+    maxDeposit,
+    maxRent,
+    minDeposit,
+    minRent,
+    polygon,
+    propertyTypes,
+    salesTypes,
+    zoom,
+    foreignerOk,
+  ]);
 
   const waitingForFirst =
     (sources.includes("zigbang") && zigbangQuery.isLoading) ||
     (sources.includes("peterpan") && peterpanQuery.isLoading && !zigbangQuery.data) ||
     (sources.includes("naver") && naverQuery.isLoading && !zigbangQuery.data);
   const refreshing = zigbangQuery.isFetching && !zigbangQuery.isLoading;
+
+  useEffect(() => {
+    if (!selected || viewMode === "saved") return;
+    if (visible.listings.some((item) => item.id === selected.id)) return;
+    if (waitingForFirst) return;
+    if (
+      refreshing &&
+      visible.listings.length === 0 &&
+      visible.clusters.length === 0
+    ) {
+      return;
+    }
+    setSelected(null);
+  }, [
+    refreshing,
+    selected,
+    viewMode,
+    visible.clusters.length,
+    visible.listings,
+    waitingForFirst,
+  ]);
 
   const onViewport = useCallback((next: Bounds & { zoom: number }) => {
     if (!isValidBounds(next)) return;
@@ -438,6 +591,10 @@ export default function MapApp() {
 
   const onMapClick = useCallback(
     (point: LatLng) => {
+      if (tool === "pan") {
+        setSelected(null);
+        return;
+      }
       if (tool === "radius") {
         setPolygon(null);
         setDraftPoints([]);
@@ -469,9 +626,20 @@ export default function MapApp() {
     }
   };
 
+  const clearChipFilters = () => {
+    setPropertyTypes(ALL_TYPES);
+    setSalesTypes(DEFAULT_SALES);
+    setAreaBucketIds([]);
+    setMinDeposit(undefined);
+    setMaxDeposit(undefined);
+    setMinRent(undefined);
+    setMaxRent(undefined);
+    setForeignerOk(false);
+  };
+
   useEffect(() => {
-    setListingLimit(60);
-  }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent]);
+    setListingLimit(viewMode === "best" ? 120 : 60);
+  }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent, foreignerOk]);
 
   const onToggleSave = useCallback((listing: MapListing) => {
     setSavedHomes((currentHomes) => {
@@ -479,6 +647,68 @@ export default function MapApp() {
       saveSavedHomes(next);
       return next;
     });
+  }, []);
+
+  const copySearchLink = useCallback(async () => {
+    const next = buildAppSearch({
+      searchInput,
+      viewMode,
+      sources,
+      propertyTypes,
+      salesTypes,
+      areaBucketIds,
+      radiusM,
+      view: {
+        lat: (bounds.south + bounds.north) / 2,
+        lng: (bounds.west + bounds.east) / 2,
+        zoom,
+      },
+      listSort,
+      minDeposit,
+      maxDeposit,
+      minRent,
+      maxRent,
+      foreignerOk,
+    });
+    const href = `${window.location.origin}${window.location.pathname}${next}`;
+    try {
+      await navigator.clipboard.writeText(href);
+      setShareHint("Copied");
+    } catch {
+      window.prompt("Copy this search link", href);
+    }
+    window.setTimeout(() => setShareHint(null), 1600);
+  }, [
+    areaBucketIds,
+    bounds,
+    listSort,
+    maxDeposit,
+    maxRent,
+    minDeposit,
+    minRent,
+    propertyTypes,
+    radiusM,
+    salesTypes,
+    searchInput,
+    sources,
+    viewMode,
+    zoom,
+    foreignerOk,
+  ]);
+
+  const hideNaverError = useCallback((turnOff = false) => {
+    setDismissedNaver(true);
+    if (turnOff) {
+      setSources((current) => {
+        const next = current.filter((source) => source !== "naver");
+        return next.length ? next : current;
+      });
+    }
+    try {
+      window.localStorage.setItem(NAVER_HIDE_KEY, "1");
+    } catch {
+      /* private mode */
+    }
   }, []);
 
   const applySearchSnapshot = useCallback((snapshot: SearchSnapshot) => {
@@ -491,6 +721,7 @@ export default function MapApp() {
     setMaxDeposit(snapshot.maxDeposit);
     setMinRent(snapshot.minRent);
     setMaxRent(snapshot.maxRent);
+    setForeignerOk(Boolean(snapshot.foreignerOk));
     setRadiusM(snapshot.radiusM);
     setViewMode(snapshot.viewMode);
   }, []);
@@ -507,6 +738,7 @@ export default function MapApp() {
       maxDeposit,
       minRent,
       maxRent,
+      foreignerOk,
     }),
     [
       areaBucketIds,
@@ -519,6 +751,7 @@ export default function MapApp() {
       salesTypes,
       searchInput,
       viewMode,
+      foreignerOk,
     ],
   );
 
@@ -526,17 +759,107 @@ export default function MapApp() {
     () => ({ minDeposit, maxDeposit, minRent, maxRent }),
     [maxDeposit, maxRent, minDeposit, minRent],
   );
-  const priceHint = describePriceFilter(priceFilter);
+  const filterSummary = describeActiveFilters({
+    propertyTypes,
+    salesTypes,
+    areaBucketIds,
+    minDeposit,
+    maxDeposit,
+    minRent,
+    maxRent,
+    foreignerOk,
+  });
+  const visibleHomeCount = visible.clusters.length
+    ? visible.clusters.reduce((sum, cluster) => sum + cluster.count, 0)
+    : visible.listings.length;
 
-  const showList = viewMode === "list" || viewMode === "saved";
+  const showList = viewMode === "list" || viewMode === "saved" || viewMode === "best";
   const listListings = viewMode === "saved" ? savedHomes : visible.listings;
+  const photoScores = usePhotoQuality(
+    viewMode === "best" ? listListings.map((item) => item.thumbnail) : [],
+    viewMode === "best",
+  );
+  const photoInputs = useMemo(() => {
+    const next: Record<string, PhotoScoreInput> = {};
+    for (const listing of listListings) {
+      const url = listing.thumbnail;
+      if (!url) continue;
+      const local = photoScores[url];
+      const vision = visionById[listing.id];
+      if (vision && local) {
+        next[url] = {
+          score: Math.round(local.score * 0.4 + vision.score * 0.6),
+          summary: vision.summary ?? local.summary,
+          likelyFloorplan: local.likelyFloorplan,
+          likelyDim: local.likelyDim,
+        };
+      } else if (vision) {
+        next[url] = vision;
+      } else if (local) {
+        next[url] = local;
+      }
+    }
+    return next;
+  }, [listListings, photoScores, visionById]);
+  const ranked = useMemo(
+    () => (viewMode === "best" ? rankListings(listListings, photoInputs) : undefined),
+    [listListings, photoInputs, viewMode],
+  );
+  const listingIdsKey = listListings.map((item) => item.id).join(",");
+
+  useEffect(() => {
+    if (viewMode !== "best" || !recommendAi.data?.openai || !listingIdsKey) return;
+    const top = rankListings(listListings, photoScores)
+      .slice(0, 6)
+      .flatMap((item) => {
+        const raw = item.listing.thumbnail;
+        if (!raw) return [];
+        const url = raw.startsWith("//") ? `https:${raw}` : raw;
+        if (!/^https?:\/\//.test(url)) return [];
+        return [{ id: item.listing.id, url }];
+      });
+    const key = top.map((item) => item.id).join(",");
+    if (!key || inspectedPhotos.current === key) return;
+    inspectedPhotos.current = key;
+    void inspectPhotos
+      .mutateAsync({ items: top })
+      .then((rows) => {
+        setVisionById(
+          Object.fromEntries(
+            rows.map((row) => [
+              row.id,
+              {
+                score: row.score,
+                summary: row.summary,
+                likelyFloorplan: false,
+                likelyDim: false,
+              },
+            ]),
+          ),
+        );
+      })
+      .catch(() => undefined);
+  }, [inspectPhotos, listListings, listingIdsKey, photoScores, recommendAi.data?.openai, viewMode]);
+
   const naverError = dismissedNaver
     ? undefined
     : visible.errors.find((error) => error.source === "naver");
 
   const statusLabel = waitingForFirst
     ? "Loading…"
-    : `Zigbang ${visible.stats.zigbang.toLocaleString("en-US")} · Naver ${visible.stats.naver.toLocaleString("en-US")} · Peterpan ${visible.stats.peterpan.toLocaleString("en-US")}`;
+    : [
+        sources.includes("zigbang")
+          ? `Zigbang ${visible.stats.zigbang.toLocaleString("en-US")}`
+          : null,
+        sources.includes("naver")
+          ? `Naver ${visible.stats.naver.toLocaleString("en-US")}`
+          : null,
+        sources.includes("peterpan")
+          ? `Peterpan ${visible.stats.peterpan.toLocaleString("en-US")}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
   const areaHint = place
     ? `${place.names[1] ?? place.names[0]} · ${formatRadius(circle?.radiusM ?? radiusM)}`
@@ -578,6 +901,13 @@ export default function MapApp() {
                 className="rounded-full bg-sky-400 px-2.5 py-1 text-[11px] font-medium text-slate-950 hover:bg-sky-300"
               >
                 Ask
+              </button>
+              <button
+                type="button"
+                onClick={() => void copySearchLink()}
+                className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
+              >
+                {shareHint ?? "Copy link"}
               </button>
               <button
                 type="button"
@@ -627,7 +957,7 @@ export default function MapApp() {
                 }
                 className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
                   propertyTypes.includes(type)
-                    ? "bg-white text-slate-950"
+                    ? TYPE_CHIP_ON[type]
                     : "bg-white/10 text-slate-300"
                 }`}
               >
@@ -655,6 +985,18 @@ export default function MapApp() {
                 {salesTypeFilterLabel[type]}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setForeignerOk((current) => !current)}
+              title="Only ads that mention foreigners are welcome. Most landlords never write it."
+              className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+                foreignerOk
+                  ? "bg-emerald-400 text-slate-950"
+                  : "bg-white/10 text-slate-300"
+              }`}
+            >
+              Foreigners welcome
+            </button>
           </div>
           </>
           ) : null}
@@ -688,12 +1030,26 @@ export default function MapApp() {
           {areaHint ? (
             <p className="mt-1 text-[11px] text-sky-300">{areaHint}</p>
           ) : null}
-          {priceHint ? (
-            <p className="mt-1 text-[11px] text-violet-300">{priceHint}</p>
+          {uiCompact && filterSummary ? (
+            <p className="mt-1 flex items-center justify-between gap-2 text-[11px] text-violet-200">
+              <span className="min-w-0 truncate">
+                {filterSummary}
+                {visibleHomeCount
+                  ? ` · ${visibleHomeCount.toLocaleString("en-US")} on map`
+                  : ""}
+              </span>
+              <button
+                type="button"
+                onClick={clearChipFilters}
+                className="shrink-0 text-slate-400 hover:text-white"
+              >
+                Clear filters
+              </button>
+            </p>
           ) : null}
 
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {(["map", "list", "saved"] as ViewMode[]).map((mode) => (
+            {(["map", "list", "best", "saved"] as ViewMode[]).map((mode) => (
               <button
                 key={mode}
                 type="button"
@@ -702,7 +1058,9 @@ export default function MapApp() {
                   viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
                 }`}
               >
-                {mode === "saved" ? `Saved${savedHomes.length ? ` ${savedHomes.length}` : ""}` : mode}
+                {mode === "saved"
+                  ? `Saved${savedHomes.length ? ` ${savedHomes.length}` : ""}`
+                  : mode}
               </button>
             ))}
           </div>
@@ -739,6 +1097,23 @@ export default function MapApp() {
               setMaxRent(next.maxRent);
             }}
           />
+          {filterSummary ? (
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <p className="min-w-0 truncate text-[11px] text-violet-200">
+                {filterSummary}
+                {visibleHomeCount
+                  ? ` · ${visibleHomeCount.toLocaleString("en-US")} on map`
+                  : ""}
+              </p>
+              <button
+                type="button"
+                onClick={clearChipFilters}
+                className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : null}
 
           <div className="mt-2 flex flex-wrap gap-1.5">
             {(["pan", "radius", "draw"] as const).map((nextTool) => (
@@ -822,36 +1197,28 @@ export default function MapApp() {
               Tap the map to drop a search radius, or use map center.
             </p>
           ) : null}
-
-          {zoom < 15 &&
-          !circle &&
-          !polygon &&
-          needsListingDetails({
-            salesTypes,
-            areaBucketIds,
-            query: listingQuery,
-            minDeposit,
-            maxDeposit,
-            minRent,
-            maxRent,
-          }) ? (
-            <p className="mt-1.5 text-[11px] text-slate-400">
-              Zoom in to apply size, price, and listing-text filters to individual homes.
-            </p>
-          ) : null}
           </>
           ) : null}
 
           {naverError ? (
             <p className="mt-1.5 flex items-start justify-between gap-2 text-[11px] text-amber-300">
               <span>{friendlySourceError(naverError.source, naverError.message)}</span>
-              <button
-                type="button"
-                className="shrink-0 text-slate-400 hover:text-white"
-                onClick={() => setDismissedNaver(true)}
-              >
-                Dismiss
-              </button>
+              <span className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  className="text-slate-400 hover:text-white"
+                  onClick={() => hideNaverError(true)}
+                >
+                  Turn off
+                </button>
+                <button
+                  type="button"
+                  className="text-slate-400 hover:text-white"
+                  onClick={() => hideNaverError(false)}
+                >
+                  Dismiss
+                </button>
+              </span>
             </p>
           ) : null}
         </div>
@@ -859,6 +1226,9 @@ export default function MapApp() {
 
       <div className="relative flex min-h-0 flex-1">
         <div
+          data-map-chrome={
+            viewMode === "map" && visible.listings.length ? "carousel" : undefined
+          }
           className={
             showList
               ? "pointer-events-none invisible absolute inset-0 z-0 h-full md:visible md:pointer-events-auto md:static md:z-auto md:w-[46%]"
@@ -867,7 +1237,7 @@ export default function MapApp() {
         >
           <ListingMap
             clusters={visible.clusters}
-            listings={showList && visible.clusters.length ? [] : visible.listings}
+            listings={visible.clusters.length ? [] : visible.listings}
             selectedId={selected?.id}
             focus={focus}
             circle={circle}
@@ -898,15 +1268,38 @@ export default function MapApp() {
               }
               sort={listSort}
               savedIds={savedHomes.map((item) => item.id)}
-              canLoadMore={viewMode === "list" && visible.stats.truncated && listingLimit < 300}
+              canLoadMore={
+                (viewMode === "list" || viewMode === "best") &&
+                visible.stats.truncated &&
+                listingLimit < 300
+              }
+              ranked={ranked}
+              recommendHint={
+                viewMode !== "best"
+                  ? undefined
+                  : zoom < 14 && !circle && !polygon
+                    ? "Search a neighborhood or zoom in. Best ranks homes by ₩/m², popular areas, and photo quality."
+                    : recommendAi.data?.openai
+                      ? "Ranked by neighborhood, ₩/m², and listing photos. OpenAI is double-checking the top interiors."
+                      : "Ranked by neighborhood, ₩/m², and listing photos scored on this device."
+              }
               emptyHint={
                 viewMode === "saved"
                   ? "No saved homes yet. Tap the heart on a listing to keep it here."
-                  : undefined
+                  : viewMode === "best" && zoom < 14 && !circle && !polygon
+                    ? "Search Hongdae, Dangsan station, or zoom in so Best has homes to rank."
+                    : foreignerOk
+                      ? "Few ads say foreigners are welcome in the title. Widen the area, or turn that chip off."
+                      : undefined
               }
               onSort={setListSort}
               onSelect={setSelected}
               onToggleSave={onToggleSave}
+              loadingMore={
+                (viewMode === "list" || viewMode === "best") &&
+                refreshing &&
+                visible.stats.truncated
+              }
               onLoadMore={() => setListingLimit((current) => Math.min(300, current + 60))}
             />
           </div>
@@ -923,6 +1316,7 @@ export default function MapApp() {
           <div className="pointer-events-auto absolute bottom-4 left-4 right-16 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:right-20">
             {visible.listings.slice(0, 24).map((listing) => {
               const price = formatPrice(listing);
+              const meta = listingCardMeta(listing);
               return (
                 <button
                   key={listing.id}
@@ -946,6 +1340,11 @@ export default function MapApp() {
                     <span className="mt-1 block truncate text-sm font-medium">
                       {price ?? englishCardTitle(listing)}
                     </span>
+                    {meta ? (
+                      <span className="mt-0.5 block truncate text-[10px] text-slate-400">
+                        {meta}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
               );

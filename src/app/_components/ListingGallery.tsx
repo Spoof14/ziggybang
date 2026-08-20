@@ -6,9 +6,11 @@ import { preloadListingPhotos, uniquePhotoUrls } from "~/lib/listings/photo";
 export function ListingGallery({
   urls,
   alt,
+  layout = "sheet",
 }: {
   urls: Array<string | undefined>;
   alt: string;
+  layout?: "sheet" | "page";
 }) {
   const photos = uniquePhotoUrls(urls, 800);
   const photoKey = photos.join("|");
@@ -52,10 +54,26 @@ export function ListingGallery({
     setIndex((currentIndex) => (currentIndex + delta + visible.length) % visible.length);
   };
 
+  useEffect(() => {
+    if (layout !== "page" || visible.length < 2) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        setIndex(
+          (currentIndex) => (currentIndex - 1 + visible.length) % visible.length,
+        );
+      }
+      if (event.key === "ArrowRight") {
+        setIndex((currentIndex) => (currentIndex + 1) % visible.length);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [layout, visible.length]);
+
   if (!current) return null;
 
   return (
-    <div className="relative px-4">
+    <div className={layout === "page" ? "relative" : "relative px-4"}>
       <div
         ref={frame}
         className="relative touch-pan-y overflow-hidden rounded-xl"
@@ -93,7 +111,11 @@ export function ListingGallery({
           src={current}
           alt={alt}
           draggable={false}
-          className="h-52 w-full select-none object-cover"
+          className={
+            layout === "page"
+              ? "h-72 w-full select-none object-cover sm:h-[28rem]"
+              : "h-52 w-full select-none object-cover"
+          }
           onError={() => {
             setFailed((currentFailed) => new Set(currentFailed).add(current));
             setIndex((currentIndex) => Math.min(currentIndex, Math.max(visible.length - 2, 0)));
@@ -122,8 +144,28 @@ export function ListingGallery({
       </div>
       {visible.length > 1 ? (
         <p className="mt-1 text-center text-[11px] text-slate-400">
-          {Math.min(index + 1, visible.length)} / {visible.length} · swipe for more
+          {Math.min(index + 1, visible.length)} / {visible.length}
+          {layout === "page" ? " · arrows or swipe" : " · swipe for more"}
         </p>
+      ) : null}
+      {layout === "page" && visible.length > 1 ? (
+        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+          {visible.map((src, photoIndex) => (
+            <button
+              key={src}
+              type="button"
+              onClick={() => setIndex(photoIndex)}
+              className={`h-14 w-20 shrink-0 overflow-hidden rounded-lg border ${
+                photoIndex === Math.min(index, visible.length - 1)
+                  ? "border-sky-400"
+                  : "border-white/10"
+              }`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt="" className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
       ) : null}
     </div>
   );

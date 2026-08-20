@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterBySalesTypes, filterListings, isAllSalesTypes } from "./filter";
+import { filterBySalesTypes, filterListings, isAllSalesTypes, isDefaultRentSales, needsHydratedFilters } from "./filter";
 import { type MapListing } from "./types";
 
 function listing(id: string, salesType?: MapListing["salesType"]): MapListing {
@@ -71,5 +71,78 @@ describe("sales type filters", () => {
         maxRent: 60,
       }).map((item) => item.id),
     ).toEqual(["cheap"]);
+  });
+
+  it("drops apartments when that property type is unchecked", () => {
+    const listings = [
+      listing("studio", "wolse"),
+      {
+        ...listing("apt", "wolse"),
+        id: "apt",
+        sourceId: "apt",
+        propertyType: "apartment" as const,
+      },
+    ];
+    expect(
+      filterListings(listings, {
+        propertyTypes: ["oneroom"],
+        salesTypes: ["wolse"],
+        areaBucketIds: [],
+        query: "",
+        requireDetails: false,
+      }).map((item) => item.id),
+    ).toEqual(["studio"]);
+  });
+
+  it("keeps only listings that say foreigners are welcome", () => {
+    const listings = [
+      { ...listing("ok", "wolse"), foreignerOk: true },
+      { ...listing("silent", "wolse") },
+      { ...listing("no", "wolse"), foreignerOk: false },
+    ];
+    expect(
+      filterListings(listings, {
+        salesTypes: ["wolse"],
+        areaBucketIds: [],
+        query: "",
+        requireDetails: true,
+        foreignerOk: true,
+      }).map((item) => item.id),
+    ).toEqual(["ok"]);
+  });
+});
+
+describe("hydrated vs default rent filters", () => {
+  it("does not treat jeonse + monthly as needing hydrated homes", () => {
+    expect(isDefaultRentSales(["jeonse", "wolse"])).toBe(true);
+    expect(
+      needsHydratedFilters({
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        query: "",
+      }),
+    ).toBe(false);
+    expect(
+      needsHydratedFilters({
+        salesTypes: ["jeonse"],
+        areaBucketIds: [],
+        query: "",
+      }),
+    ).toBe(true);
+    expect(
+      needsHydratedFilters({
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: ["s"],
+        query: "",
+      }),
+    ).toBe(true);
+    expect(
+      needsHydratedFilters({
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        query: "",
+        foreignerOk: true,
+      }),
+    ).toBe(true);
   });
 });
