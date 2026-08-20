@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Circle,
   CircleMarker,
@@ -14,15 +15,44 @@ import {
   useMap,
   useMapEvents,
 } from "react-leaflet";
-import { DivIcon, DomEvent, type Map as LeafletMap } from "leaflet";
+import {
+  Control,
+  DivIcon,
+  DomEvent,
+  DomUtil,
+  type Map as LeafletMap,
+} from "leaflet";
 import { isUsableMapViewport } from "~/lib/geo/bounds";
 import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
 import { formatPrice, propertyTypeLabel } from "~/lib/listings/copy";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
 
 const SEOUL: [number, number] = [37.5665, 126.978];
+const USER_ZOOM = 16;
 
-function sourceColor(sources: Partial<Record<"zigbang" | "naver" | "peterpan", number>>) {
+function flyToUserLocation(
+  map: LeafletMap,
+  point: { lat: number; lng: number; accuracy: number },
+) {
+  if (point.accuracy > 150) {
+    const pad = point.accuracy / 111_320;
+    map.flyToBounds(
+      [
+        [point.lat - pad, point.lng - pad],
+        [point.lat + pad, point.lng + pad],
+      ],
+      { maxZoom: USER_ZOOM, padding: [48, 48], duration: 0.55 },
+    );
+    return;
+  }
+  map.flyTo([point.lat, point.lng], Math.max(map.getZoom(), USER_ZOOM), {
+    duration: 0.55,
+  });
+}
+
+function sourceColor(
+  sources: Partial<Record<"zigbang" | "naver" | "peterpan", number>>,
+) {
   const active = (["zigbang", "naver", "peterpan"] as const).filter(
     (source) => (sources[source] ?? 0) > 0,
   );
@@ -155,6 +185,179 @@ function MapEvents({
   return null;
 }
 
+function LocateIcon({ spinning }: { spinning: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {spinning ? (
+        <circle
+          cx="12"
+          cy="12"
+          r="8"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.25"
+          strokeDasharray="32 18"
+        />
+      ) : (
+        <>
+          <circle cx="12" cy="12" r="2.4" fill="currentColor" />
+          <circle
+            cx="12"
+            cy="12"
+            r="7"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
+          <path
+            d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function LocateMeControl() {
+  const map = useMap();
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  const [status, setStatus] = useState<
+    "idle" | "locating" | "denied" | "unavailable"
+  >("idle");
+  const [me, setMe] = useState<{
+    lat: number;
+    lng: number;
+    accuracy: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const control = new Control({ position: "bottomright" });
+    control.onAdd = () => {
+      const el = DomUtil.create(
+        "div",
+        "leaflet-bar leaflet-control leaflet-control-locate",
+      );
+      DomEvent.disableClickPropagation(el);
+      DomEvent.disableScrollPropagation(el);
+      return el;
+    };
+    control.addTo(map);
+    setHost(control.getContainer() ?? null);
+    return () => {
+      control.remove();
+      setHost(null);
+    };
+  }, [map]);
+
+  useEffect(() => {
+    if (status !== "denied" && status !== "unavailable") return;
+    const timer = window.setTimeout(() => setStatus("idle"), 4000);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+
+  const locate = () => {
+    if (!navigator.geolocation) {
+      setStatus("unavailable");
+      return;
+    }
+    setStatus("locating");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const next = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: Number.isFinite(position.coords.accuracy)
+            ? position.coords.accuracy
+            : 40,
+        };
+        setMe(next);
+        setStatus("idle");
+        flyToUserLocation(map, next);
+      },
+      (error) => {
+        setStatus(
+          error.code === error.PERMISSION_DENIED ? "denied" : "unavailable",
+        );
+      },
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 12_000 },
+    );
+  };
+
+  const title =
+    status === "denied"
+      ? "Location permission denied"
+      : status === "unavailable"
+        ? "Location unavailable"
+        : status === "locating"
+          ? "Finding your location…"
+          : "Center on me";
+
+  return (
+    <>
+      {me ? (
+        <>
+          <Circle
+            center={[me.lat, me.lng]}
+            radius={Math.max(me.accuracy, 24)}
+            interactive={false}
+            pathOptions={{
+              color: "#0284c7",
+              weight: 1,
+              fillColor: "#38bdf8",
+              fillOpacity: 0.16,
+            }}
+          />
+          <CircleMarker
+            center={[me.lat, me.lng]}
+            radius={7}
+            interactive={false}
+            pathOptions={{
+              color: "#ffffff",
+              weight: 2,
+              fillColor: "#0ea5e9",
+              fillOpacity: 1,
+            }}
+          >
+            <Tooltip direction="top" offset={[0, -8]}>
+              You are here
+            </Tooltip>
+          </CircleMarker>
+        </>
+      ) : null}
+      {host
+        ? createPortal(
+            <a
+              href="#"
+              role="button"
+              title={title}
+              aria-label={title}
+              aria-busy={status === "locating"}
+              className={
+                status === "locating"
+                  ? "is-locating"
+                  : status === "idle"
+                    ? undefined
+                    : "is-error"
+              }
+              onClick={(event) => {
+                event.preventDefault();
+                if (status === "locating") return;
+                locate();
+              }}
+            >
+              <LocateIcon spinning={status === "locating"} />
+            </a>,
+            host,
+          )
+        : null}
+    </>
+  );
+}
+
 function clusterIcon(count: number, color: string) {
   const size = Math.min(44, 26 + Math.log2(count + 1) * 5);
   return new DivIcon({
@@ -181,13 +384,13 @@ function ClusterLayer({
           key={cluster.id}
           position={[cluster.lat, cluster.lng]}
           icon={clusterIcon(cluster.count, sourceColor(cluster.sources))}
-            eventHandlers={{
-              click: (event) => {
-                if (tool !== "pan") return;
-                DomEvent.stopPropagation(event);
-                onSelect(cluster);
-              },
-            }}
+          eventHandlers={{
+            click: (event) => {
+              if (tool !== "pan") return;
+              DomEvent.stopPropagation(event);
+              onSelect(cluster);
+            },
+          }}
         />
       ))}
     </>
@@ -272,7 +475,11 @@ export function ListingMap({
 }) {
   const clusterLayer = useMemo(
     () => (
-      <ClusterLayer clusters={clusters} tool={tool} onSelect={onSelectCluster} />
+      <ClusterLayer
+        clusters={clusters}
+        tool={tool}
+        onSelect={onSelectCluster}
+      />
     ),
     [clusters, onSelectCluster, tool],
   );
@@ -304,6 +511,7 @@ export function ListingMap({
         subdomains={["a", "b", "c", "d"]}
         maxZoom={20}
       />
+      <LocateMeControl />
       <ZoomControl position="bottomright" />
       <MapEvents
         onViewport={onViewport}
@@ -321,13 +529,17 @@ export function ListingMap({
       ) : null}
       {polygon && polygon.length >= 3 ? (
         <Polygon
-          positions={polygon.map((point) => [point.lat, point.lng] as [number, number])}
+          positions={polygon.map(
+            (point) => [point.lat, point.lng] as [number, number],
+          )}
           pathOptions={{ color: "#a78bfa", weight: 2, fillOpacity: 0.12 }}
         />
       ) : null}
       {draftPoints.length ? (
         <Polyline
-          positions={draftPoints.map((point) => [point.lat, point.lng] as [number, number])}
+          positions={draftPoints.map(
+            (point) => [point.lat, point.lng] as [number, number],
+          )}
           pathOptions={{ color: "#a78bfa", weight: 2, dashArray: "6 6" }}
         />
       ) : null}
