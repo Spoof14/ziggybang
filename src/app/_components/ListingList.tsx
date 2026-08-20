@@ -56,6 +56,8 @@ export function ListingList({
   onSelect,
   onToggleSave,
   onLoadMore,
+  scrollToId,
+  scrollToAt,
 }: {
   listings: MapListing[];
   selectedId?: string;
@@ -73,6 +75,8 @@ export function ListingList({
   onSelect: (listing: MapListing) => void;
   onToggleSave: (listing: MapListing) => void;
   onLoadMore?: () => void;
+  scrollToId?: string;
+  scrollToAt?: number;
 }) {
   const sorted = useMemo(() => {
     if (ranked?.length) return ranked.map((item) => item.listing);
@@ -86,6 +90,7 @@ export function ListingList({
     return next;
   }, [ranked]);
   const sentinel = useRef<HTMLDivElement>(null);
+  const listRoot = useRef<HTMLDivElement>(null);
   const loadLock = useRef(false);
 
   useEffect(() => {
@@ -107,6 +112,20 @@ export function ListingList({
     observer.observe(node);
     return () => observer.disconnect();
   }, [canLoadMore, onLoadMore, sorted.length]);
+
+  useEffect(() => {
+    if (!scrollToId) return;
+    const root = listRoot.current;
+    if (!root) return;
+    const escaped =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(scrollToId)
+        : scrollToId.replace(/"/g, '\\"');
+    const node = root.querySelector(`[data-listing-id="${escaped}"]`);
+    if (node instanceof HTMLElement) {
+      node.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [scrollToId, scrollToAt, sorted.length]);
 
   const countLabel = loading
     ? "Loading homes…"
@@ -146,7 +165,7 @@ export function ListingList({
               "No homes in the current map area. Search a neighborhood, draw a shape, or zoom in."}
         </div>
       ) : (
-        <div data-list-scroll className="min-h-0 flex-1 overflow-auto p-3">
+        <div ref={listRoot} data-list-scroll className="min-h-0 flex-1 overflow-auto p-3">
           <ul className="space-y-2">
             {sorted.map((listing, index) => {
               const title = englishCardTitle(listing);
@@ -160,7 +179,7 @@ export function ListingList({
                 foreignerOk === true &&
                 !rankedItem?.reasons.includes("Foreigners welcome");
               return (
-                <li key={listing.id}>
+                <li key={listing.id} data-listing-id={listing.id}>
                   <div
                     className={`flex w-full gap-3 rounded-2xl border p-2 ${
                       selectedId === listing.id

@@ -142,6 +142,8 @@ export default function MapApp() {
   const [polygon, setPolygon] = useState<LatLng[] | null>(null);
   const [draftPoints, setDraftPoints] = useState<LatLng[]>([]);
   const [selected, setSelected] = useState<MapListing | null>(null);
+  const [listScrollId, setListScrollId] = useState<string | undefined>();
+  const [listScrollAt, setListScrollAt] = useState(0);
   useHistoryOverlay({ selected, setSelected });
   const [focus, setFocus] = useState<{
     lat: number;
@@ -634,6 +636,13 @@ export default function MapApp() {
       });
       setZoom(Math.round(next.zoom));
     }, 280);
+  }, []);
+
+  const onSelectFromMap = useCallback((listing: MapListing) => {
+    setSelected(listing);
+    setListScrollId(listing.id);
+    setListScrollAt(Date.now());
+    setViewMode((current) => (current === "map" ? "list" : current));
   }, []);
 
   const onSelectCluster = useCallback((cluster: MapCluster) => {
@@ -1383,7 +1392,7 @@ export default function MapApp() {
             draftPoints={draftPoints}
             tool={tool}
             onViewport={onViewport}
-            onSelectListing={setSelected}
+            onSelectListing={onSelectFromMap}
             onSelectCluster={onSelectCluster}
             onMapClick={onMapClick}
             onFinishDraw={finishDraw}
@@ -1433,6 +1442,8 @@ export default function MapApp() {
               }
               onSort={setListSort}
               onSelect={setSelected}
+              scrollToId={listScrollId}
+              scrollToAt={listScrollAt}
               onToggleSave={onToggleSave}
               loadingMore={
                 (viewMode === "list" || viewMode === "best") &&
