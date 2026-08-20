@@ -168,6 +168,7 @@ export default function MapApp() {
   const [visionById, setVisionById] = useState<Record<string, PhotoScoreInput>>({});
   const headerRef = useRef<HTMLElement>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
+  const carouselRef = useRef<HTMLDivElement>(null);
 
   const parsedSearch = useMemo(
     () => parseSearchQuery(debouncedQuery),
@@ -642,8 +643,21 @@ export default function MapApp() {
     setSelected(listing);
     setListScrollId(listing.id);
     setListScrollAt(Date.now());
-    setViewMode((current) => (current === "map" ? "list" : current));
   }, []);
+
+  useEffect(() => {
+    if (!listScrollId || viewMode !== "map") return;
+    const root = carouselRef.current;
+    if (!root) return;
+    const escaped =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(listScrollId)
+        : listScrollId.replace(/"/g, '\\"');
+    const node = root.querySelector(`[data-listing-id="${escaped}"]`);
+    if (node instanceof HTMLElement) {
+      node.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  }, [listScrollId, listScrollAt, viewMode]);
 
   const onSelectCluster = useCallback((cluster: MapCluster) => {
     setSelected(null);
@@ -855,6 +869,11 @@ export default function MapApp() {
     : visible.listings.length;
 
   const showList = viewMode === "list" || viewMode === "saved" || viewMode === "best";
+  const carouselListings = useMemo(() => {
+    const items = visible.listings.slice(0, 24);
+    if (!selected || items.some((item) => item.id === selected.id)) return items;
+    return [selected, ...items.slice(0, 23)];
+  }, [selected, visible.listings]);
   useLayoutEffect(() => {
     const node = headerRef.current;
     if (!node) return;
@@ -1462,20 +1481,27 @@ export default function MapApp() {
             onClose={() => setSelected(null)}
             onToggleSave={onToggleSave}
           />
-        ) : viewMode === "map" && visible.listings.length ? (
+        ) : null}
+        {viewMode === "map" && visible.listings.length ? (
           <div
+            ref={carouselRef}
             className={`pointer-events-auto absolute bottom-4 left-4 right-4 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar ${
               uiCompact ? "" : "max-md:hidden"
-            }`}
+            } ${selected ? "max-md:invisible max-md:pointer-events-none" : ""}`}
           >
-            {visible.listings.slice(0, 24).map((listing) => {
+            {carouselListings.map((listing) => {
               const meta = listingCardMeta(listing);
               return (
                 <button
                   key={listing.id}
                   type="button"
+                  data-listing-id={listing.id}
                   onClick={() => setSelected(listing)}
-                  className="min-w-[9.5rem] shrink-0 overflow-hidden rounded-2xl border border-white/15 bg-slate-950 text-left text-slate-100 shadow-xl"
+                  className={`min-w-[9.5rem] shrink-0 overflow-hidden rounded-2xl border text-left text-slate-100 shadow-xl ${
+                    selected?.id === listing.id
+                      ? "border-sky-400"
+                      : "border-white/15"
+                  } bg-slate-950`}
                 >
                   <ListingPhoto
                     url={listing.thumbnail}
