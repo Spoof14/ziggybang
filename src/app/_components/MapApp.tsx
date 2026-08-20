@@ -946,7 +946,7 @@ export default function MapApp() {
       <header className="z-[1100] shrink-0 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-slate-950/92 p-2.5 shadow-xl backdrop-blur">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] uppercase tracking-[0.18em] text-sky-300">
                 Ziggybang
                 {refreshing && !waitingForFirst ? (
@@ -958,11 +958,13 @@ export default function MapApp() {
               <h1 className="truncate text-sm font-semibold sm:text-lg">
                 Korea rentals, in English
               </h1>
+              {statusLabel ? (
+                <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                  {statusLabel}
+                </p>
+              ) : null}
             </div>
-            <div className="flex shrink-0 items-start gap-2">
-              <p className="max-w-[11rem] pt-0.5 text-right text-[11px] leading-tight text-slate-400 sm:max-w-[46%]">
-                {statusLabel}
-              </p>
+            <div className="flex shrink-0 flex-wrap items-start justify-end gap-1.5">
               <button
                 type="button"
                 onClick={() => setAskOpen(true)}
