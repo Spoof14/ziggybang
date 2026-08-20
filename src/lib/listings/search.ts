@@ -6,6 +6,8 @@ import {
   salesTypeLabel,
   sourceLabel,
 } from "./copy";
+import { parseAgeFilter, type AgeFilter } from "./age";
+import { parseFloorFilter, type FloorFilter } from "./floor";
 import { type MapListing } from "./types";
 
 const CHO = ["g", "kk", "n", "d", "tt", "r", "m", "b", "pp", "s", "ss", "", "j", "jj", "ch", "k", "t", "p", "h"];
@@ -119,11 +121,18 @@ function levenshtein(a: string, b: string): number {
   return row[b.length]!;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function fuzzyIncludes(haystack: string, needle: string): boolean {
   const h = normalizeSearch(haystack);
   const n = normalizeSearch(needle);
   if (!n) return true;
   if (!h) return false;
+  if (n.length <= 2) {
+    return new RegExp(`(?:^|\\s)${escapeRegExp(n)}(?:$|\\s)`).test(` ${h} `);
+  }
   if (h.includes(n)) return true;
   const romanHay = normalizeSearch(romanizeHangul(haystack));
   const romanNeedle = normalizeSearch(romanizeHangul(needle));
@@ -200,38 +209,55 @@ export function isStationQuery(query: string): boolean {
 }
 
 export function matchPlace(query: string): Place | undefined {
-  const tokens = [
-    ...normalizeSearch(query).split(" ").filter(Boolean),
-    ...normalizeSearch(stripStationWords(query)).split(" ").filter(Boolean),
-  ];
-  if (!tokens.length) return undefined;
+  const full = normalizeSearch(stripStationWords(query));
+  const tokens = full.split(" ").filter((token) => token.length >= 2);
+  if (!full) return undefined;
   let best: { place: Place; score: number } | undefined;
   for (const place of places) {
+    let bestForPlace = 0;
     for (const name of place.names) {
       const normalizedName = normalizeSearch(name);
       const romanName = normalizeSearch(romanizeHangul(name));
-      for (const token of tokens) {
-        if (token.length < 2) continue;
-        const romanToken = normalizeSearch(romanizeHangul(token));
-        let score = 0;
-        if (token === normalizedName || romanToken === romanName) score = 100 + name.length;
-        else if (
-          token.length >= 3 &&
-          (normalizedName.includes(token) || romanName.includes(romanToken))
-        ) {
-          score = 60 + token.length;
-        } else if (token.length >= 4 && levenshtein(token, normalizedName) <= 1) {
-          score = 50;
-        } else if (
-          romanToken.length >= 4 &&
-          levenshtein(romanToken, romanName) <= 1
-        ) {
-          score = 50;
-        }
-        if (score && (!best || score > best.score)) {
-          best = { place, score };
+      if (!normalizedName) continue;
+      let score = 0;
+      if (full === normalizedName || full === romanName) {
+        score = 10_000 + normalizedName.length;
+      } else if (
+        normalizedName.length >= 3 &&
+        (full.startsWith(`${normalizedName} `) ||
+          full.endsWith(` ${normalizedName}`) ||
+          full.includes(` ${normalizedName} `))
+      ) {
+        score = 5_000 + normalizedName.length * 10;
+      } else if (
+        full.length >= 3 &&
+        (normalizedName.startsWith(`${full} `) || normalizedName.includes(` ${full}`))
+      ) {
+        score = 1_500 + full.length;
+      } else {
+        for (const token of tokens) {
+          const romanToken = normalizeSearch(romanizeHangul(token));
+          if (token === normalizedName || romanToken === romanName) {
+            score = Math.max(score, 800 + normalizedName.length);
+          } else if (
+            token.length >= 3 &&
+            (normalizedName.includes(token) || romanName.includes(romanToken))
+          ) {
+            score = Math.max(score, 400 + token.length + normalizedName.length);
+          } else if (token.length >= 4 && levenshtein(token, normalizedName) <= 1) {
+            score = Math.max(score, 300);
+          } else if (
+            romanToken.length >= 4 &&
+            levenshtein(romanToken, romanName) <= 1
+          ) {
+            score = Math.max(score, 300);
+          }
         }
       }
+      bestForPlace = Math.max(bestForPlace, score);
+    }
+    if (bestForPlace && (!best || bestForPlace > best.score)) {
+      best = { place, score: bestForPlace };
     }
   }
   return best?.place;
@@ -264,12 +290,134 @@ const FILTER_TOKENS = new Set(
   ].map(normalizeSearch),
 );
 
+const PLACE_STOPWORDS = new Set(
+  [
+    "i",
+    "im",
+    "i'm",
+    "id",
+    "want",
+    "wanted",
+    "looking",
+    "need",
+    "needs",
+    "find",
+    "search",
+    "show",
+    "get",
+    "please",
+    "something",
+    "somewhere",
+    "maybe",
+    "around",
+    "near",
+    "nearby",
+    "close",
+    "in",
+    "at",
+    "to",
+    "with",
+    "and",
+    "or",
+    "my",
+    "me",
+    "us",
+    "we",
+    "for",
+    "a",
+    "an",
+    "the",
+    "of",
+    "on",
+    "by",
+    "from",
+    "no",
+    "not",
+    "without",
+    "exclude",
+    "any",
+    "cheap",
+    "cheaper",
+    "bit",
+    "foreigner",
+    "foreigners",
+    "welcome",
+    "accepts",
+    "landlord",
+    "recommend",
+    "recommended",
+    "best",
+    "value",
+    "korea",
+    "seoul",
+    "place",
+    "home",
+    "homes",
+    "room",
+    "rooms",
+    "listing",
+    "listings",
+    "this",
+    "week",
+    "month",
+    "days",
+    "new",
+    "recent",
+    "fresh",
+    "근처",
+  ].map(normalizeSearch),
+);
+
+export function isListingFilterToken(token: string): boolean {
+  const normalized = normalizeSearch(token);
+  if (!normalized || /^\d+$/.test(normalized)) return false;
+  // "complex" / 단지 show up in station names (Guro Digital Complex), not as a type filter.
+  if (normalized === "complex" || normalized === "단지") return false;
+  if (FILTER_TOKENS.has(normalized)) return true;
+  return expandQuery(normalized).some(
+    (variant) =>
+      variant !== "complex" &&
+      variant !== "단지" &&
+      FILTER_TOKENS.has(variant),
+  );
+}
+
 export function looksLikePlaceQuery(query: string): boolean {
   const tokens = normalizeSearch(query).split(" ").filter(Boolean);
   if (!tokens.length) return false;
   return tokens.some(
-    (token) => token.length >= 2 && !FILTER_TOKENS.has(token) && !/^\d+$/.test(token),
+    (token) =>
+      token.length >= 2 &&
+      !FILTER_TOKENS.has(token) &&
+      !PLACE_STOPWORDS.has(token) &&
+      !/^\d+$/.test(token),
   );
+}
+
+export function listingFilterQuery(query: string, place?: Place): string {
+  const { rest: afterFloor } = parseFloorFilter(query);
+  const { rest } = parseAgeFilter(afterFloor);
+  const afterPlace = place ? stripPlaceFromQuery(rest, place) : rest;
+  return stripStationWords(afterPlace)
+    .split(/\s+/)
+    .filter((token) => isListingFilterToken(token))
+    .join(" ");
+}
+
+function isPlaceQueryToken(token: string): boolean {
+  const normalized = normalizeSearch(token);
+  if (!normalized || PLACE_STOPWORDS.has(normalized)) return false;
+  if (!/\p{L}/u.test(normalized)) return false;
+  return !isListingFilterToken(normalized);
+}
+
+export function unrefinedPlaceLeftover(query: string, place: Place): string {
+  const { rest: afterFloor } = parseFloorFilter(query);
+  const { rest } = parseAgeFilter(afterFloor);
+  return stripStationWords(stripPlaceFromQuery(rest, place))
+    .split(/\s+/)
+    .filter(isPlaceQueryToken)
+    .join(" ");
 }
 
 export function placeSearchToken(query: string): string | undefined {
@@ -291,8 +439,16 @@ export function stripPlaceFromQuery(query: string, place: Place): string {
 export function parseSearchQuery(query: string): {
   place?: Place;
   listingQuery: string;
+  floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
 } {
+  const { floorFilter, rest: afterFloor } = parseFloorFilter(query);
+  const { ageFilter } = parseAgeFilter(afterFloor);
   const place = matchPlace(query);
-  if (!place) return { listingQuery: stripStationWords(query.trim()) };
-  return { place, listingQuery: stripStationWords(stripPlaceFromQuery(query, place)) };
+  return {
+    place,
+    listingQuery: listingFilterQuery(query, place),
+    floorFilter,
+    ageFilter,
+  };
 }

@@ -38,6 +38,8 @@ describe("saved map prefs", () => {
       maxDeposit: 2000,
       maxRent: 80,
       foreignerOk: true,
+      floorFilter: "no-basement",
+      ageFilter: "week",
     });
 
     expect(loadPrefs()).toMatchObject({
@@ -52,6 +54,8 @@ describe("saved map prefs", () => {
       maxDeposit: 2000,
       maxRent: 80,
       foreignerOk: true,
+      floorFilter: "no-basement",
+      ageFilter: "week",
     });
   });
 

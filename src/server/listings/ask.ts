@@ -9,6 +9,8 @@ import {
 import { areaBuckets } from "~/lib/listings/area";
 import { type ViewMode } from "~/lib/listings/prefs";
 import { propertyTypes, salesTypes } from "~/lib/listings/types";
+import { ageFilters, type AgeFilter } from "~/lib/listings/age";
+import { floorFilters, type FloorFilter } from "~/lib/listings/floor";
 
 const VIEW_MODES: ViewMode[] = ["map", "list", "saved", "best"];
 
@@ -56,6 +58,20 @@ function intentFromUnknown(raw: unknown): SearchIntent {
     maxRent: asNumber(data.maxRent),
     foreignerOk:
       data.foreignerOk === null ? null : typeof data.foreignerOk === "boolean" ? data.foreignerOk : undefined,
+    floorFilter:
+      data.floorFilter === null
+        ? null
+        : typeof data.floorFilter === "string" &&
+            (floorFilters as readonly string[]).includes(data.floorFilter)
+          ? (data.floorFilter as FloorFilter)
+          : undefined,
+    ageFilter:
+      data.ageFilter === null
+        ? null
+        : typeof data.ageFilter === "string" &&
+            (ageFilters as readonly string[]).includes(data.ageFilter)
+          ? (data.ageFilter as AgeFilter)
+          : undefined,
   };
 }
 
@@ -87,8 +103,9 @@ async function interpretWithOpenAi(
           {
             role: "system",
             content: `You help foreigners search Korea rentals on Ziggybang.
-Return JSON with: reply (short English), searchInput (neighborhood or station text, null to clear), propertyTypes (oneroom, villa, officetel, apartment), salesTypes (jeonse, wolse, sale), areaBucketIds (xs, s, m, l), radiusM, viewMode (map, list, or best), minDeposit, maxDeposit, minRent, maxRent, foreignerOk (true if they need a landlord who accepts foreigners).
+Return JSON with: reply (short English), searchInput (neighborhood or station text, null to clear), propertyTypes (oneroom, villa, officetel, apartment), salesTypes (jeonse, wolse, sale), areaBucketIds (xs, s, m, l), radiusM, viewMode (map, list, or best), minDeposit, maxDeposit, minRent, maxRent, foreignerOk (true if they need a landlord who accepts foreigners), floorFilter (no-basement, min-2, or min-5), ageFilter (week or month).
 Prices are 만원 (10,000 KRW). 1억 = 10000. ₩20 million deposit = 2000. ₩800,000/month = 80.
+searchInput should be the neighborhood or station only — do not put leftover English words like digital, complex, or no basement into searchInput.
 Use null to clear a field, omit unchanged fields. Prefer viewMode list, or best when they ask for recommendations, nicest homes, or best value.`,
           },
           {

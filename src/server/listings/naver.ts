@@ -89,6 +89,7 @@ type NaverArticle = {
   spc2?: number | string;
   flrInfo?: string;
   repImgUrl?: string;
+  atclCfmYmd?: string;
 };
 
 type NaverArticleResponse = {
@@ -164,6 +165,7 @@ export function articleToListing(article: NaverArticle): MapListing | null {
       : undefined,
     url: naverListingUrl(sourceId),
     foreignerOk: detectForeignerOk(article.atclNm),
+    updatedAt: article.atclCfmYmd,
   };
 }
 

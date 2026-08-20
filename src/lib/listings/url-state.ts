@@ -1,4 +1,6 @@
 import { areaBuckets, type AreaBucketId } from "./area";
+import { type AgeFilter } from "./age";
+import { type FloorFilter } from "./floor";
 import { type ListSort, type ViewMode } from "./prefs";
 import { normalizePriceFilter, type PriceFilter } from "./price";
 import {
@@ -21,6 +23,8 @@ export type AppUrlState = {
   view?: { lat: number; lng: number; zoom: number };
   listSort?: ListSort;
   foreignerOk?: boolean;
+  floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
 } & PriceFilter;
 
 const VIEW_MODES: ViewMode[] = ["map", "list", "best", "saved"];
@@ -71,6 +75,13 @@ export function parseAppUrl(search: string): AppUrlState {
     next.listSort = sort as ListSort;
   }
   if (params.get("ok") === "1") next.foreignerOk = true;
+  const floor = params.get("floor");
+  if (floor === "nb") next.floorFilter = "no-basement";
+  if (floor === "2") next.floorFilter = "min-2";
+  if (floor === "5") next.floorFilter = "min-5";
+  const age = params.get("age");
+  if (age === "7") next.ageFilter = "week";
+  if (age === "30") next.ageFilter = "month";
   Object.assign(
     next,
     normalizePriceFilter({
@@ -100,6 +111,8 @@ export function buildAppSearch(state: {
   view: { lat: number; lng: number; zoom: number };
   listSort: ListSort;
   foreignerOk?: boolean;
+  floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
 } & PriceFilter): string {
   const params = new URLSearchParams();
   if (state.searchInput.trim()) params.set("q", state.searchInput.trim());
@@ -120,6 +133,11 @@ export function buildAppSearch(state: {
   params.set("z", String(Math.round(state.view.zoom)));
   if (state.listSort !== "featured") params.set("sort", state.listSort);
   if (state.foreignerOk) params.set("ok", "1");
+  if (state.floorFilter === "no-basement") params.set("floor", "nb");
+  if (state.floorFilter === "min-2") params.set("floor", "2");
+  if (state.floorFilter === "min-5") params.set("floor", "5");
+  if (state.ageFilter === "week") params.set("age", "7");
+  if (state.ageFilter === "month") params.set("age", "30");
   const price = normalizePriceFilter(state);
   if (price.minDeposit != null) params.set("dmin", String(price.minDeposit));
   if (price.maxDeposit != null) params.set("dmax", String(price.maxDeposit));
@@ -131,7 +149,7 @@ export function buildAppSearch(state: {
 
 export function hasAppUrlState(search: string): boolean {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort", "ok", "dmin", "dmax", "rmin", "rmax"].some(
+  return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort", "ok", "floor", "age", "dmin", "dmax", "rmin", "rmax"].some(
     (key) => params.has(key),
   );
 }

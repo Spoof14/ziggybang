@@ -11,7 +11,9 @@ import {
   listingMatchesPrice,
   type PriceFilter,
 } from "./price";
+import { listingMatchesAge, type AgeFilter } from "./age";
 import { listingMatchesQuery } from "./search";
+import { listingMatchesFloor, type FloorFilter } from "./floor";
 
 export type ListingFilterInput = {
   propertyTypes?: PropertyType[];
@@ -20,6 +22,8 @@ export type ListingFilterInput = {
   query: string;
   requireDetails: boolean;
   foreignerOk?: boolean;
+  floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
 } & PriceFilter;
 
 export function isAllPropertyTypes(selected: PropertyType[]): boolean {
@@ -101,6 +105,24 @@ export function filterListings(
       if (input.requireDetails && listing.foreignerOk !== true) return false;
       if (!input.requireDetails && listing.foreignerOk === false) return false;
     }
+    if (
+      !listingMatchesFloor(
+        listing.floor,
+        input.floorFilter,
+        input.requireDetails && Boolean(input.floorFilter),
+      )
+    ) {
+      return false;
+    }
+    if (
+      !listingMatchesAge(
+        listing.updatedAt,
+        input.ageFilter,
+        input.requireDetails && Boolean(input.ageFilter),
+      )
+    ) {
+      return false;
+    }
     return true;
   });
 }
@@ -113,6 +135,8 @@ export function needsListingDetails(
     !isAllAreaBuckets(input.areaBucketIds) ||
     Boolean(input.query.trim()) ||
     Boolean(input.foreignerOk) ||
+    Boolean(input.floorFilter) ||
+    Boolean(input.ageFilter) ||
     !isEmptyPriceFilter(input)
   );
 }

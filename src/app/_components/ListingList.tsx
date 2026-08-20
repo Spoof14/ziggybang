@@ -2,19 +2,20 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import {
-  formatPrice,
   propertyTypeLabel,
   salesTypeFilterLabel,
   sourceLabel,
 } from "~/lib/listings/copy";
 import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
-import { listingPagePath, stashListing } from "~/lib/listings/path";
 import { type ListSort } from "~/lib/listings/prefs";
 import { type RankedListing } from "~/lib/listings/recommend";
 import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
+import { ListingAgeDot } from "./ListingAgeDot";
+import { ListingPageLink } from "./ListingPageLink";
 import { ListingPhoto } from "./ListingPhoto";
+import { ListingPrice } from "./ListingPrice";
 
 const SORT_OPTIONS: Array<{ id: ListSort; label: string }> = [
   { id: "featured", label: "Featured" },
@@ -148,7 +149,6 @@ export function ListingList({
         <div data-list-scroll className="min-h-0 flex-1 overflow-auto p-3">
           <ul className="space-y-2">
             {sorted.map((listing, index) => {
-              const price = formatPrice(listing);
               const title = englishCardTitle(listing);
               const meta = listingCardMeta(listing);
               const saved = savedIds.includes(listing.id);
@@ -188,6 +188,7 @@ export function ListingList({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-1">
+                          <ListingAgeDot updatedAt={listing.updatedAt} />
                           <span className="text-[11px] uppercase tracking-wide text-slate-400">
                             {propertyTypeLabel[listing.propertyType]}
                             {listing.salesType
@@ -196,9 +197,10 @@ export function ListingList({
                           </span>
                           {showForeignerBadge ? <ForeignerBadge ok /> : null}
                         </span>
-                        <span className="mt-1 block truncate text-sm font-medium text-white">
-                          {price ?? title}
-                        </span>
+                        <ListingPrice
+                          listing={listing}
+                          className="mt-1 text-sm font-medium leading-snug text-white"
+                        />
                         <span className="mt-1 block truncate text-xs text-slate-400">
                           {title}
                         </span>
@@ -228,15 +230,12 @@ export function ListingList({
                       >
                         {saved ? "♥" : "♡"}
                       </button>
-                      <a
-                        href={listingPagePath(listing)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => stashListing(listing)}
+                      <ListingPageLink
+                        listing={listing}
                         className="rounded-full bg-white/10 px-2 py-1 text-center text-[11px] text-sky-300"
                       >
-                        Page ↗
-                      </a>
+                        Page
+                      </ListingPageLink>
                       <a
                         href={listing.url}
                         target="_blank"

@@ -110,6 +110,62 @@ describe("sales type filters", () => {
       }).map((item) => item.id),
     ).toEqual(["ok"]);
   });
+
+  it("drops basement floors when that chip is on", () => {
+    const listings = [
+      { ...listing("base", "wolse"), floor: "반지하/3" },
+      { ...listing("second", "wolse"), floor: "2/5" },
+      { ...listing("first", "wolse"), floor: "1/4" },
+      listing("unknown", "wolse"),
+    ];
+    expect(
+      filterListings(listings, {
+        salesTypes: ["wolse"],
+        areaBucketIds: [],
+        query: "",
+        requireDetails: true,
+        floorFilter: "no-basement",
+      }).map((item) => item.id),
+    ).toEqual(["second", "first"]);
+    expect(
+      filterListings(listings, {
+        salesTypes: ["wolse"],
+        areaBucketIds: [],
+        query: "",
+        requireDetails: true,
+        floorFilter: "min-2",
+      }).map((item) => item.id),
+    ).toEqual(["second"]);
+  });
+
+  it("drops older listings when the age chip is on", () => {
+    const day = 24 * 60 * 60 * 1000;
+    const iso = (daysAgo: number) => new Date(Date.now() - daysAgo * day).toISOString();
+    const listings = [
+      { ...listing("new", "wolse"), updatedAt: iso(2) },
+      { ...listing("mid", "wolse"), updatedAt: iso(14) },
+      { ...listing("old", "wolse"), updatedAt: iso(60) },
+      listing("unknown", "wolse"),
+    ];
+    expect(
+      filterListings(listings, {
+        salesTypes: ["wolse"],
+        areaBucketIds: [],
+        query: "",
+        requireDetails: true,
+        ageFilter: "week",
+      }).map((item) => item.id),
+    ).toEqual(["new"]);
+    expect(
+      filterListings(listings, {
+        salesTypes: ["wolse"],
+        areaBucketIds: [],
+        query: "",
+        requireDetails: true,
+        ageFilter: "month",
+      }).map((item) => item.id),
+    ).toEqual(["new", "mid"]);
+  });
 });
 
 describe("hydrated vs default rent filters", () => {
@@ -142,6 +198,22 @@ describe("hydrated vs default rent filters", () => {
         areaBucketIds: [],
         query: "",
         foreignerOk: true,
+      }),
+    ).toBe(true);
+    expect(
+      needsHydratedFilters({
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        query: "",
+        floorFilter: "no-basement",
+      }),
+    ).toBe(true);
+    expect(
+      needsHydratedFilters({
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        query: "",
+        ageFilter: "week",
       }),
     ).toBe(true);
   });

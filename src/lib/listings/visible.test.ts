@@ -95,5 +95,21 @@ describe("map layers follow filters", () => {
         foreignerOk: true,
       }),
     ).toBe("Foreigners welcome");
+    expect(
+      describeActiveFilters({
+        propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        floorFilter: "no-basement",
+      }),
+    ).toBe("No basement");
+    expect(
+      describeActiveFilters({
+        propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        ageFilter: "week",
+      }),
+    ).toBe("This week");
   });
 });

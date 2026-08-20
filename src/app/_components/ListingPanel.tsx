@@ -6,7 +6,7 @@ import {
   formatArea,
   formatFloor,
   formatKrwFromManwon,
-  formatPrice,
+  formatPriceLines,
   formatRoomType,
   propertyTypeLabel,
   salesTypeHint,
@@ -20,10 +20,13 @@ import {
 } from "~/lib/listings/english";
 import { agencyFeeCopy } from "~/lib/listings/agency-fee";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
-import { listingPagePath, stashListing } from "~/lib/listings/path";
+import { listingPagePath } from "~/lib/listings/path";
 import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
+import { ListingAgeLine } from "./ListingAgeLine";
 import { ListingGallery } from "./ListingGallery";
+import { ListingPageLink } from "./ListingPageLink";
+import { ListingPrice } from "./ListingPrice";
 
 async function copyText(value: string) {
   try {
@@ -64,7 +67,7 @@ export function ListingPanel({
       ),
     ),
   ];
-  const price = formatPrice(detail);
+  const priceLines = formatPriceLines(detail);
   const area = formatArea(detail.areaM2);
   const floor = formatFloor(detail.floor);
   const roomType = formatRoomType(detail.roomType);
@@ -131,10 +134,12 @@ export function ListingPanel({
       <ListingGallery urls={photos} alt={detail.title ?? "listing"} />
 
       <dl className="grid grid-cols-2 gap-2 p-4 text-sm">
-        {price ? (
+        {priceLines.length ? (
           <div className="col-span-2">
             <dt className="text-slate-400">Price</dt>
-            <dd className="font-medium">{price}</dd>
+            <dd className="font-medium">
+              <ListingPrice listing={detail} />
+            </dd>
           </div>
         ) : null}
         {agencyFee ? (
@@ -158,6 +163,14 @@ export function ListingPanel({
           <div>
             <dt className="text-slate-400">Floor</dt>
             <dd>{floor}</dd>
+          </div>
+        ) : null}
+        {detail.updatedAt ? (
+          <div className="col-span-2">
+            <dt className="text-slate-400">Listed</dt>
+            <dd>
+              <ListingAgeLine updatedAt={detail.updatedAt} />
+            </dd>
           </div>
         ) : null}
         {roomType ? (
@@ -210,15 +223,12 @@ export function ListingPanel({
       ) : null}
 
       <div className="mt-auto flex flex-col gap-2 p-4">
-        <a
-          href={listingPagePath(detail)}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => stashListing(detail)}
+        <ListingPageLink
+          listing={detail}
           className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
         >
           Open full page
-        </a>
+        </ListingPageLink>
         <a
           href={detail.url}
           target="_blank"

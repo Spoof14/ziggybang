@@ -64,6 +64,27 @@ describe("conversational listing search", () => {
     expect(result.reply.toLowerCase()).toContain("foreigners");
   });
 
+  it("moves to Guro Digital without filtering titles for digital", () => {
+    const result = interpretSearch("guro digital", current);
+    expect(result.snapshot.searchInput.toLowerCase()).toBe("guro digital");
+    expect(result.snapshot.radiusM).toBe(800);
+  });
+
+  it("turns no basement into a floor filter instead of a title search", () => {
+    const result = interpretSearch("no basement near hongdae", current);
+    expect(result.snapshot.floorFilter).toBe("no-basement");
+    expect(result.snapshot.searchInput.toLowerCase()).toContain("hongdae");
+    expect(result.snapshot.searchInput.toLowerCase()).not.toContain("basement");
+    expect(result.reply.toLowerCase()).toContain("basement");
+  });
+
+  it("turns this week into an age filter", () => {
+    const result = interpretSearch("new listings this week near hongdae", current);
+    expect(result.snapshot.ageFilter).toBe("week");
+    expect(result.snapshot.searchInput.toLowerCase()).toContain("hongdae");
+    expect(result.reply.toLowerCase()).toContain("week");
+  });
+
   it("merges a rent-only patch onto existing filters", () => {
     const merged = mergeSearchIntent(
       { ...current, searchInput: "hongdae", maxDeposit: 2000, propertyTypes: ["oneroom"] },

@@ -1,14 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "~/trpc/react";
 import {
   formatArea,
   formatFloor,
   formatKrwFromManwon,
-  formatPrice,
   formatRoomType,
   propertyTypeLabel,
   salesTypeHint,
@@ -18,7 +16,6 @@ import {
 import {
   formatApproveYear,
   formatKoreanPhone,
-  formatListedAt,
   formatMoveIn,
   telHref,
   translateAmenity,
@@ -51,9 +48,12 @@ import {
   toggleSavedHome,
 } from "~/lib/listings/saved";
 import { type ListingDetail, type MapListing } from "~/lib/listings/types";
+import { BackToMap } from "./BackToMap";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { LandlordNotes } from "./LandlordNotes";
+import { ListingAgeLine } from "./ListingAgeLine";
 import { ListingGallery } from "./ListingGallery";
+import { ListingPrice } from "./ListingPrice";
 
 const MiniMap = dynamic(
   () => import("./ListingMiniMap").then((mod) => mod.ListingMiniMap),
@@ -117,12 +117,10 @@ export function ListingDetailView({
         <p className="mt-2 text-sm">
           This home may have been taken down. Back to the map still works.
         </p>
-        <Link
+        <BackToMap
           href="/"
           className="mt-6 inline-flex rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
-        >
-          Back to map
-        </Link>
+        />
       </main>
     );
   }
@@ -134,7 +132,6 @@ export function ListingDetailView({
       ),
     ),
   ];
-  const price = formatPrice(listing);
   const deposit = formatKrwFromManwon(listing.deposit);
   const rent = formatKrwFromManwon(listing.rent);
   const salePrice = formatKrwFromManwon(listing.price);
@@ -156,7 +153,7 @@ export function ListingDetailView({
   const residence = translateResidence(listing.residenceType);
   const moveIn = formatMoveIn(listing.moveIn);
   const built = formatApproveYear(listing.approveDate);
-  const listed = formatListedAt(listing.updatedAt);
+  const listed = listing.updatedAt;
   const mapHref = listingMapHref(listing);
   const saved = isSavedHome(savedHomes, listing.id);
   const officePhone = formatKoreanPhone(listing.agent?.phone);
@@ -191,21 +188,10 @@ export function ListingDetailView({
             </h1>
           </div>
           <div className="flex shrink-0 gap-2">
-            {mapHref ? (
-              <Link
-                href={mapHref}
-                className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/20"
-              >
-                View on map
-              </Link>
-            ) : (
-              <Link
-                href="/"
-                className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/20"
-              >
-                Back to map
-              </Link>
-            )}
+            <BackToMap
+              href={mapHref ?? "/"}
+              className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/20"
+            />
             <button
               type="button"
               onClick={() => {
@@ -245,9 +231,10 @@ export function ListingDetailView({
                 {salesTypeHint[listing.salesType]}
               </p>
             ) : null}
-            {price ? (
-              <p className="mt-3 text-xl font-semibold text-sky-300">{price}</p>
-            ) : null}
+            <ListingPrice
+              listing={listing}
+              className="mt-3 text-xl font-semibold leading-snug text-sky-300"
+            />
           </div>
 
           {listing.description ? (
@@ -345,7 +332,14 @@ export function ListingDetailView({
               {residence ? <Fact label="Building" value={residence} /> : null}
               {moveIn ? <Fact label="Move-in" value={moveIn} wide /> : null}
               {built ? <Fact label="Age" value={built} /> : null}
-              {listed ? <Fact label="Updated" value={listed} /> : null}
+              {listed ? (
+                <div className="col-span-2">
+                  <dt className="text-slate-400">Listed</dt>
+                  <dd className="font-medium text-slate-100">
+                    <ListingAgeLine updatedAt={listing.updatedAt} />
+                  </dd>
+                </div>
+              ) : null}
               {listing.count && listing.count > 1 ? (
                 <Fact
                   label="Homes in this complex"

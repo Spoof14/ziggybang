@@ -1,3 +1,6 @@
+import { type AgeFilter } from "./age";
+import { type FloorFilter } from "./floor";
+
 export const sources = ["zigbang", "naver", "peterpan"] as const;
 export type Source = (typeof sources)[number];
 
@@ -40,6 +43,8 @@ export type MapQuery = {
   minRent?: number;
   maxRent?: number;
   foreignerOk?: boolean;
+  floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
 };
 
 export type MapListing = {

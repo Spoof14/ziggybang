@@ -21,6 +21,22 @@ export function listingPagePath(listing: {
   return `/listing/${listing.source}/${listing.propertyType}/${encodeURIComponent(listing.sourceId)}`;
 }
 
+/** True when the listing page was opened from Ziggybang, so history.back() returns to the map. */
+export function cameFromApp(
+  historyState: unknown = typeof window === "undefined" ? null : window.history.state,
+  referrer = typeof document === "undefined" ? "" : document.referrer,
+  origin = typeof window === "undefined" ? "" : window.location.origin,
+): boolean {
+  const idx = (historyState as { idx?: number } | null)?.idx;
+  if (typeof idx === "number" && idx > 0) return true;
+  if (!referrer || !origin) return false;
+  try {
+    return new URL(referrer).origin === origin;
+  } catch {
+    return false;
+  }
+}
+
 export function listingMapHref(listing: Pick<MapListing, "lat" | "lng">): string | null {
   if (!hasListingCoords(listing)) return null;
   const params = new URLSearchParams({
