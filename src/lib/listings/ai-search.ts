@@ -414,9 +414,6 @@ export function blendAskIntent(ai: SearchIntent, local: SearchIntent): SearchInt
     if (next.searchInput !== null) {
       next.searchInput = appendUniqueSearchTerms(next.searchInput ?? "", leftover);
     }
-  } else if (local.listingQuery && next.searchInput !== null && next.searchInput) {
-    next.searchInput = appendUniqueSearchTerms(next.searchInput, local.listingQuery);
-    next.listingQuery = local.listingQuery;
   }
   return next;
 }
