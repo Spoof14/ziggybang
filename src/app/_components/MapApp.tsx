@@ -967,13 +967,6 @@ export default function MapApp() {
             <div className="flex shrink-0 flex-wrap items-start justify-end gap-1.5">
               <button
                 type="button"
-                onClick={() => setAskOpen(true)}
-                className="rounded-full bg-sky-400 px-2.5 py-1 text-[11px] font-medium text-slate-950 hover:bg-sky-300"
-              >
-                Ask
-              </button>
-              <button
-                type="button"
                 onClick={() => void copySearchLink()}
                 className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
               >
@@ -1157,21 +1150,30 @@ export default function MapApp() {
             </p>
           ) : null}
 
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {(["map", "list", "best", "saved"] as ViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setViewMode(mode)}
-                className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
-                  viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
-                }`}
-              >
-                {mode === "saved"
-                  ? `Saved${savedHomes.length ? ` ${savedHomes.length}` : ""}`
-                  : mode}
-              </button>
-            ))}
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap gap-1.5">
+              {(["map", "list", "best", "saved"] as ViewMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setViewMode(mode)}
+                  className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
+                    viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
+                  }`}
+                >
+                  {mode === "saved"
+                    ? `Saved${savedHomes.length ? ` ${savedHomes.length}` : ""}`
+                    : mode}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setAskOpen(true)}
+              className="shrink-0 rounded-full bg-sky-400 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-sky-300 sm:text-sm"
+            >
+              Ask
+            </button>
           </div>
 
           {!uiCompact ? (
