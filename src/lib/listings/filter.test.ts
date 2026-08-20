@@ -138,7 +138,7 @@ describe("sales type filters", () => {
     ).toEqual(["second"]);
   });
 
-  it("drops older buildings when the built-year slider is set", () => {
+  it("drops older buildings when the max-age slider is set", () => {
     const listings = [
       { ...listing("new", "wolse"), approveDate: "2020.03.15" },
       { ...listing("mid", "wolse"), approveDate: "2010-06-01" },
@@ -151,7 +151,7 @@ describe("sales type filters", () => {
         areaBucketIds: [],
         query: "",
         requireDetails: true,
-        minBuiltYear: 2010,
+        maxBuildingAge: 20,
       }).map((item) => item.id),
     ).toEqual(["new", "mid"]);
   });
@@ -239,7 +239,7 @@ describe("hydrated vs default rent filters", () => {
         salesTypes: ["jeonse", "wolse"],
         areaBucketIds: [],
         query: "",
-        minBuiltYear: 2015,
+        maxBuildingAge: 10,
       }),
     ).toBe(true);
   });

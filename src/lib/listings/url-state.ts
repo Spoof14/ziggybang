@@ -1,6 +1,6 @@
 import { areaBuckets, type AreaBucketId } from "./area";
 import { type AgeFilter } from "./age";
-import { normalizeBuiltYearFilter } from "./building-age";
+import { normalizeBuildingAgeFilter } from "./building-age";
 import { type FloorFilter } from "./floor";
 import { type ListSort, type ViewMode } from "./prefs";
 import { normalizePriceFilter, type PriceFilter } from "./price";
@@ -26,7 +26,7 @@ export type AppUrlState = {
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
-  minBuiltYear?: number;
+  maxBuildingAge?: number;
 } & PriceFilter;
 
 const VIEW_MODES: ViewMode[] = ["map", "list", "best", "saved"];
@@ -84,9 +84,9 @@ export function parseAppUrl(search: string): AppUrlState {
   const age = params.get("age");
   if (age === "7") next.ageFilter = "week";
   if (age === "30") next.ageFilter = "month";
-  const built = Number(params.get("built"));
-  if (Number.isFinite(built) && built >= 1985) {
-    next.minBuiltYear = Math.round(built);
+  const maxAge = Number(params.get("maxage"));
+  if (Number.isFinite(maxAge) && maxAge >= 5 && maxAge < 40) {
+    next.maxBuildingAge = Math.round(maxAge);
   }
   Object.assign(
     next,
@@ -119,7 +119,7 @@ export function buildAppSearch(state: {
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
-  minBuiltYear?: number;
+  maxBuildingAge?: number;
 } & PriceFilter): string {
   const params = new URLSearchParams();
   if (state.searchInput.trim()) params.set("q", state.searchInput.trim());
@@ -145,7 +145,7 @@ export function buildAppSearch(state: {
   if (state.floorFilter === "min-5") params.set("floor", "5");
   if (state.ageFilter === "week") params.set("age", "7");
   if (state.ageFilter === "month") params.set("age", "30");
-  if (state.minBuiltYear != null) params.set("built", String(state.minBuiltYear));
+  if (state.maxBuildingAge != null) params.set("maxage", String(state.maxBuildingAge));
   const price = normalizePriceFilter(state);
   if (price.minDeposit != null) params.set("dmin", String(price.minDeposit));
   if (price.maxDeposit != null) params.set("dmax", String(price.maxDeposit));
@@ -157,7 +157,7 @@ export function buildAppSearch(state: {
 
 export function hasAppUrlState(search: string): boolean {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort", "ok", "floor", "age", "built", "dmin", "dmax", "rmin", "rmax"].some(
+  return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort", "ok", "floor", "age", "maxage", "dmin", "dmax", "rmin", "rmax"].some(
     (key) => params.has(key),
   );
 }

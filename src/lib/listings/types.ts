@@ -45,7 +45,7 @@ export type MapQuery = {
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
-  minBuiltYear?: number;
+  maxBuildingAge?: number;
 };
 
 export type MapListing = {

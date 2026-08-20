@@ -81,7 +81,7 @@ describe("shareable search URLs", () => {
     expect(parseAppUrl(search).floorFilter).toBe("no-basement");
   });
 
-  it("round-trips the built-year slider", () => {
+  it("round-trips the max building-age slider", () => {
     const search = buildAppSearch({
       searchInput: "hongdae",
       viewMode: "map",
@@ -92,10 +92,10 @@ describe("shareable search URLs", () => {
       radiusM: 800,
       view: { lat: 37.556, lng: 126.923, zoom: 15 },
       listSort: "featured",
-      minBuiltYear: 2015,
+      maxBuildingAge: 10,
     });
-    expect(search).toContain("built=2015");
-    expect(parseAppUrl(search).minBuiltYear).toBe(2015);
+    expect(search).toContain("maxage=10");
+    expect(parseAppUrl(search).maxBuildingAge).toBe(10);
   });
 
   it("round-trips the this-week age chip", () => {

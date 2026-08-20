@@ -116,8 +116,8 @@ describe("map layers follow filters", () => {
         propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
         salesTypes: ["jeonse", "wolse"],
         areaBucketIds: [],
-        minBuiltYear: 2015,
+        maxBuildingAge: 10,
       }),
-    ).toBe("Built 2015 or newer");
+    ).toBe("Up to 10 years old");
   });
 });

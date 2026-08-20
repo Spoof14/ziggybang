@@ -1,21 +1,20 @@
 "use client";
 
 import {
-  BUILT_YEAR_MIN,
-  builtYearMax,
-  describeBuiltYearFilter,
+  MAX_BUILDING_AGE_ANY,
+  MAX_BUILDING_AGE_MIN,
+  describeBuildingAgeFilter,
 } from "~/lib/listings/building-age";
 
 export function BuildingAgeSlider({
-  minBuiltYear,
+  maxBuildingAge,
   onChange,
 }: {
-  minBuiltYear?: number;
-  onChange: (minBuiltYear?: number) => void;
+  maxBuildingAge?: number;
+  onChange: (maxBuildingAge?: number) => void;
 }) {
-  const maxYear = builtYearMax();
-  const sliderValue = minBuiltYear ?? BUILT_YEAR_MIN;
-  const label = describeBuiltYearFilter(minBuiltYear) ?? "Any age";
+  const sliderValue = maxBuildingAge ?? MAX_BUILDING_AGE_ANY;
+  const label = describeBuildingAgeFilter(maxBuildingAge) ?? "Any age";
 
   return (
     <div className="mt-1.5">
@@ -27,24 +26,24 @@ export function BuildingAgeSlider({
       </div>
       <input
         type="range"
-        min={BUILT_YEAR_MIN}
-        max={maxYear}
-        step={1}
+        min={MAX_BUILDING_AGE_MIN}
+        max={MAX_BUILDING_AGE_ANY}
+        step={5}
         value={sliderValue}
         onChange={(event) => {
-          const year = Number(event.target.value);
-          if (!Number.isFinite(year) || year <= BUILT_YEAR_MIN) {
+          const years = Number(event.target.value);
+          if (!Number.isFinite(years) || years >= MAX_BUILDING_AGE_ANY) {
             onChange(undefined);
             return;
           }
-          onChange(year);
+          onChange(years);
         }}
         className="mt-2 h-1.5 w-full cursor-pointer accent-sky-400"
-        aria-label="Minimum building year"
+        aria-label="Maximum building age in years"
       />
       <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-slate-500">
-        <span>Older ({BUILT_YEAR_MIN})</span>
-        {minBuiltYear ? (
+        <span>Up to {MAX_BUILDING_AGE_MIN}y</span>
+        {maxBuildingAge ? (
           <button
             type="button"
             onClick={() => onChange(undefined)}
@@ -55,7 +54,7 @@ export function BuildingAgeSlider({
         ) : (
           <span />
         )}
-        <span>Newer ({maxYear})</span>
+        <span>Any age</span>
       </div>
     </div>
   );

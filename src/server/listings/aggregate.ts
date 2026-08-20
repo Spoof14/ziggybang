@@ -87,7 +87,7 @@ export async function getMapData(
     foreignerOk: query.foreignerOk,
     floorFilter: query.floorFilter,
     ageFilter: query.ageFilter,
-    minBuiltYear: query.minBuiltYear,
+    maxBuildingAge: query.maxBuildingAge,
   };
   const requireDetails =
     (query.zoom >= 15 && needsListingDetails(detailFilters)) ||

@@ -76,7 +76,7 @@ export const listingsRouter = createTRPCRouter({
         foreignerOk: z.boolean().optional(),
         floorFilter: floorFilterSchema.optional(),
         ageFilter: ageFilterSchema.optional(),
-        minBuiltYear: z.number().int().min(1985).max(2100).optional(),
+        maxBuildingAge: z.number().int().min(5).max(39).optional(),
       }),
     )
     .query(({ input }) => getMapData(input)),

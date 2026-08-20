@@ -12,9 +12,9 @@ import {
   type PriceFilter,
 } from "./price";
 import {
-  isEmptyBuiltYearFilter,
-  listingMatchesBuiltYear,
-  type BuiltYearFilter,
+  isEmptyBuildingAgeFilter,
+  listingMatchesBuildingAge,
+  type BuildingAgeFilter,
 } from "./building-age";
 import { listingMatchesAge, type AgeFilter } from "./age";
 import { listingMatchesQuery } from "./search";
@@ -29,7 +29,7 @@ export type ListingFilterInput = {
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
-} & PriceFilter & BuiltYearFilter;
+} & PriceFilter & BuildingAgeFilter;
 
 export function isAllPropertyTypes(selected: PropertyType[]): boolean {
   if (selected.length === 0) return true;
@@ -129,10 +129,10 @@ export function filterListings(
       return false;
     }
     if (
-      !listingMatchesBuiltYear(
+      !listingMatchesBuildingAge(
         listing.approveDate,
-        input.minBuiltYear,
-        input.requireDetails && !isEmptyBuiltYearFilter(input),
+        input.maxBuildingAge,
+        input.requireDetails && !isEmptyBuildingAgeFilter(input),
       )
     ) {
       return false;
@@ -151,7 +151,7 @@ export function needsListingDetails(
     Boolean(input.foreignerOk) ||
     Boolean(input.floorFilter) ||
     Boolean(input.ageFilter) ||
-    !isEmptyBuiltYearFilter(input) ||
+    !isEmptyBuildingAgeFilter(input) ||
     !isEmptyPriceFilter(input)
   );
 }

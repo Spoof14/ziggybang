@@ -1,7 +1,7 @@
 import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
 import { ageFilters, type AgeFilter } from "./age";
 import { areaBuckets, type AreaBucketId } from "./area";
-import { normalizeBuiltYearFilter } from "./building-age";
+import { normalizeBuildingAgeFilter } from "./building-age";
 import { floorFilters, type FloorFilter } from "./floor";
 import { normalizePriceFilter, type PriceFilter } from "./price";
 import {
@@ -32,7 +32,7 @@ export type SavedPrefs = {
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
-  minBuiltYear?: number;
+  maxBuildingAge?: number;
 } & PriceFilter;
 
 const KEY = "ziggybang:prefs:v1";
@@ -143,7 +143,7 @@ export function loadPrefs(): SavedPrefs | null {
       foreignerOk: parsed.foreignerOk === true,
       floorFilter: pickKnown([parsed.floorFilter], floorFilters)[0],
       ageFilter: pickKnown([parsed.ageFilter], ageFilters)[0],
-      ...normalizeBuiltYearFilter({ minBuiltYear: parsed.minBuiltYear }),
+      ...normalizeBuildingAgeFilter({ maxBuildingAge: parsed.maxBuildingAge }),
       ...normalizePriceFilter({
         minDeposit: parsed.minDeposit,
         maxDeposit: parsed.maxDeposit,
