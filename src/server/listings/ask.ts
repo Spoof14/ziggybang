@@ -2,6 +2,7 @@ import { env } from "~/env";
 import {
   describeSearchSnapshot,
   interpretSearch,
+  blendAskIntent,
   mergeSearchIntent,
   type SearchIntent,
   type SearchSnapshot,
@@ -72,6 +73,12 @@ function intentFromUnknown(raw: unknown): SearchIntent {
             (ageFilters as readonly string[]).includes(data.ageFilter)
           ? (data.ageFilter as AgeFilter)
           : undefined,
+    listingQuery:
+      data.listingQuery === null
+        ? null
+        : typeof data.listingQuery === "string"
+          ? data.listingQuery.trim().slice(0, 80) || undefined
+          : undefined,
   };
 }
 
@@ -103,9 +110,9 @@ async function interpretWithOpenAi(
           {
             role: "system",
             content: `You help foreigners search Korea rentals on Ziggybang.
-Return JSON with: reply (short English), searchInput (neighborhood or station text, null to clear), propertyTypes (oneroom, villa, officetel, apartment), salesTypes (jeonse, wolse, sale), areaBucketIds (xs, s, m, l), radiusM, viewMode (map, list, or best), minDeposit, maxDeposit, minRent, maxRent, foreignerOk (true if they need a landlord who accepts foreigners), floorFilter (no-basement, min-2, or min-5), ageFilter (week or month).
+Return JSON with: reply (short English), searchInput (neighborhood or station text, null to clear), listingQuery (leftover words that should match listing titles/descriptions, like pet, rooftop, furnished, parking, duplex; empty/omit if none), propertyTypes (oneroom, villa, officetel, apartment), salesTypes (jeonse, wolse, sale), areaBucketIds (xs, s, m, l), radiusM, viewMode (map, list, or best), minDeposit, maxDeposit, minRent, maxRent, foreignerOk (true if they need a landlord who accepts foreigners), floorFilter (no-basement, min-2, or min-5), ageFilter (week or month).
 Prices are 만원 (10,000 KRW). 1억 = 10000. ₩20 million deposit = 2000. ₩800,000/month = 80.
-searchInput should be the neighborhood or station only — do not put leftover English words like digital, complex, or no basement into searchInput.
+searchInput should be the neighborhood or station plus listingQuery words. Do not put geographic leftovers like digital or complex into listingQuery. Do not put no basement, this week, or prices into listingQuery — those are structured filters.
 Use null to clear a field, omit unchanged fields. Prefer viewMode list, or best when they ask for recommendations, nicest homes, or best value.`,
           },
           {
@@ -147,7 +154,10 @@ export async function askListings(
   if (!ai) {
     return { snapshot: local.snapshot, reply: local.reply, provider: "local" };
   }
-  const snapshot = mergeSearchIntent(current, { ...ai.intent, viewMode: ai.intent.viewMode ?? "list" });
+  const snapshot = mergeSearchIntent(
+    current,
+    blendAskIntent({ ...ai.intent, viewMode: ai.intent.viewMode ?? "list" }, local.intent),
+  );
   const reply = ai.reply?.trim();
   return {
     snapshot,

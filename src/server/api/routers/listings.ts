@@ -39,6 +39,7 @@ const snapshotSchema = z.object({
   foreignerOk: z.boolean().optional(),
   floorFilter: floorFilterSchema.optional(),
   ageFilter: ageFilterSchema.optional(),
+  listingQuery: z.string().max(80).optional(),
 });
 
 export const listingsRouter = createTRPCRouter({

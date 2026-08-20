@@ -88,7 +88,7 @@ export function ListingPanel({
   }
 
   return (
-    <aside className="pointer-events-auto fixed inset-0 z-[1300] flex flex-col overflow-auto bg-slate-950 text-slate-100 md:absolute md:inset-auto md:bottom-6 md:left-auto md:right-4 md:top-24 md:max-h-[calc(100dvh-7rem)] md:w-[390px] md:rounded-2xl md:border md:border-white/10 md:shadow-2xl">
+    <aside className="pointer-events-auto fixed inset-0 z-[1350] flex flex-col overflow-auto bg-slate-950 text-slate-100 md:absolute md:inset-auto md:bottom-6 md:left-auto md:right-4 md:top-24 md:max-h-[calc(100dvh-7rem)] md:w-[390px] md:rounded-2xl md:border md:border-white/10 md:shadow-2xl">
       <div className="flex items-start justify-between gap-3 p-4">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wide text-slate-400">
