@@ -61,6 +61,7 @@ import { ListingPanel } from "./ListingPanel";
 import { ListingPhoto } from "./ListingPhoto";
 import { AskSearch } from "./AskSearch";
 import { PriceFilters } from "./PriceFilters";
+import { useHistoryOverlay } from "./useHistoryOverlay";
 import { usePhotoQuality } from "./usePhotoQuality";
 
 const ALL_SOURCES: Source[] = ["zigbang", "naver", "peterpan"];
@@ -134,6 +135,7 @@ export default function MapApp() {
   const [polygon, setPolygon] = useState<LatLng[] | null>(null);
   const [draftPoints, setDraftPoints] = useState<LatLng[]>([]);
   const [selected, setSelected] = useState<MapListing | null>(null);
+  useHistoryOverlay({ selected, setSelected });
   const [focus, setFocus] = useState<{
     lat: number;
     lng: number;
@@ -312,7 +314,7 @@ export default function MapApp() {
     });
     const url = `${window.location.pathname}${next}`;
     if (`${window.location.pathname}${window.location.search}` !== url) {
-      window.history.replaceState(null, "", url);
+      window.history.replaceState(window.history.state, "", url);
     }
   }, [
     areaBucketIds,
