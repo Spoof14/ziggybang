@@ -5,6 +5,7 @@ import { geocodeKorea } from "~/server/listings/geocode";
 import { inspectListingPhotos } from "~/server/listings/vision";
 import { translateListingNotes } from "~/server/listings/translate";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
+import { ageFilters } from "~/lib/listings/age";
 import { floorFilters } from "~/lib/listings/floor";
 
 const boundsSchema = z.object({
@@ -23,6 +24,7 @@ const propertyTypeSchema = z.enum([
 ]);
 const salesTypeSchema = z.enum(["jeonse", "wolse", "sale"]);
 const floorFilterSchema = z.enum(floorFilters);
+const ageFilterSchema = z.enum(ageFilters);
 const snapshotSchema = z.object({
   searchInput: z.string().max(120),
   propertyTypes: z.array(propertyTypeSchema).min(1),
@@ -36,6 +38,7 @@ const snapshotSchema = z.object({
   maxRent: z.number().min(0).max(50_000).optional(),
   foreignerOk: z.boolean().optional(),
   floorFilter: floorFilterSchema.optional(),
+  ageFilter: ageFilterSchema.optional(),
 });
 
 export const listingsRouter = createTRPCRouter({
@@ -72,6 +75,7 @@ export const listingsRouter = createTRPCRouter({
         maxRent: z.number().min(0).max(50_000).optional(),
         foreignerOk: z.boolean().optional(),
         floorFilter: floorFilterSchema.optional(),
+        ageFilter: ageFilterSchema.optional(),
       }),
     )
     .query(({ input }) => getMapData(input)),

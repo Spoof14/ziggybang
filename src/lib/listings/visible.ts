@@ -9,6 +9,7 @@ import {
   needsListingDetails,
 } from "./filter";
 import { describePriceFilter, type PriceFilter } from "./price";
+import { ageFilterLabel, type AgeFilter } from "./age";
 import { floorFilterLabel, type FloorFilter } from "./floor";
 import {
   propertyTypeLabel,
@@ -29,7 +30,7 @@ export type VisibleFilterInput = {
   circle?: CircleFilter;
   polygon?: LatLng[] | null;
   zoom: number;
-} & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter };
+} & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter; ageFilter?: AgeFilter };
 
 function detailInputOf(input: VisibleFilterInput) {
   return {
@@ -42,6 +43,7 @@ function detailInputOf(input: VisibleFilterInput) {
     maxRent: input.maxRent,
     foreignerOk: input.foreignerOk,
     floorFilter: input.floorFilter,
+    ageFilter: input.ageFilter,
   };
 }
 
@@ -67,6 +69,7 @@ export function listingsMatchingFilters(
     maxRent: input.maxRent,
     foreignerOk: input.foreignerOk,
     floorFilter: input.floorFilter,
+    ageFilter: input.ageFilter,
   });
 }
 
@@ -104,6 +107,7 @@ export function describeActiveFilters(input: {
   areaBucketIds: AreaBucketId[];
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
 } & PriceFilter): string | null {
   const parts: string[] = [];
   if (!isAllPropertyTypes(input.propertyTypes) && input.propertyTypes.length) {
@@ -128,6 +132,7 @@ export function describeActiveFilters(input: {
   if (price) parts.push(price);
   if (input.foreignerOk) parts.push("Foreigners welcome");
   if (input.floorFilter) parts.push(floorFilterLabel[input.floorFilter]);
+  if (input.ageFilter) parts.push(ageFilterLabel[input.ageFilter]);
   return parts.length ? parts.join(" · ") : null;
 }
 
@@ -139,6 +144,7 @@ export function filterKeyOf(input: {
   query: string;
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
 } & PriceFilter): string {
   return [
     input.sources.join(","),
@@ -148,6 +154,7 @@ export function filterKeyOf(input: {
     input.query,
     input.foreignerOk ? "ok" : "",
     input.floorFilter ?? "",
+    input.ageFilter ?? "",
     input.minDeposit ?? "",
     input.maxDeposit ?? "",
     input.minRent ?? "",

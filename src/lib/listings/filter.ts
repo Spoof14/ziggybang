@@ -11,6 +11,7 @@ import {
   listingMatchesPrice,
   type PriceFilter,
 } from "./price";
+import { listingMatchesAge, type AgeFilter } from "./age";
 import { listingMatchesQuery } from "./search";
 import { listingMatchesFloor, type FloorFilter } from "./floor";
 
@@ -22,6 +23,7 @@ export type ListingFilterInput = {
   requireDetails: boolean;
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
 } & PriceFilter;
 
 export function isAllPropertyTypes(selected: PropertyType[]): boolean {
@@ -112,6 +114,15 @@ export function filterListings(
     ) {
       return false;
     }
+    if (
+      !listingMatchesAge(
+        listing.updatedAt,
+        input.ageFilter,
+        input.requireDetails && Boolean(input.ageFilter),
+      )
+    ) {
+      return false;
+    }
     return true;
   });
 }
@@ -125,6 +136,7 @@ export function needsListingDetails(
     Boolean(input.query.trim()) ||
     Boolean(input.foreignerOk) ||
     Boolean(input.floorFilter) ||
+    Boolean(input.ageFilter) ||
     !isEmptyPriceFilter(input)
   );
 }

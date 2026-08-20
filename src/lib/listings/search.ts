@@ -6,6 +6,7 @@ import {
   salesTypeLabel,
   sourceLabel,
 } from "./copy";
+import { parseAgeFilter, type AgeFilter } from "./age";
 import { parseFloorFilter, type FloorFilter } from "./floor";
 import { type MapListing } from "./types";
 
@@ -356,6 +357,13 @@ const PLACE_STOPWORDS = new Set(
     "rooms",
     "listing",
     "listings",
+    "this",
+    "week",
+    "month",
+    "days",
+    "new",
+    "recent",
+    "fresh",
     "근처",
   ].map(normalizeSearch),
 );
@@ -387,7 +395,8 @@ export function looksLikePlaceQuery(query: string): boolean {
 }
 
 export function listingFilterQuery(query: string, place?: Place): string {
-  const { rest } = parseFloorFilter(query);
+  const { rest: afterFloor } = parseFloorFilter(query);
+  const { rest } = parseAgeFilter(afterFloor);
   const afterPlace = place ? stripPlaceFromQuery(rest, place) : rest;
   return stripStationWords(afterPlace)
     .split(/\s+/)
@@ -403,7 +412,8 @@ function isPlaceQueryToken(token: string): boolean {
 }
 
 export function unrefinedPlaceLeftover(query: string, place: Place): string {
-  const { rest } = parseFloorFilter(query);
+  const { rest: afterFloor } = parseFloorFilter(query);
+  const { rest } = parseAgeFilter(afterFloor);
   return stripStationWords(stripPlaceFromQuery(rest, place))
     .split(/\s+/)
     .filter(isPlaceQueryToken)
@@ -430,12 +440,15 @@ export function parseSearchQuery(query: string): {
   place?: Place;
   listingQuery: string;
   floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
 } {
-  const { floorFilter } = parseFloorFilter(query);
+  const { floorFilter, rest: afterFloor } = parseFloorFilter(query);
+  const { ageFilter } = parseAgeFilter(afterFloor);
   const place = matchPlace(query);
   return {
     place,
     listingQuery: listingFilterQuery(query, place),
     floorFilter,
+    ageFilter,
   };
 }

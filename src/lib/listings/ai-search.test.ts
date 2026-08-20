@@ -78,6 +78,13 @@ describe("conversational listing search", () => {
     expect(result.reply.toLowerCase()).toContain("basement");
   });
 
+  it("turns this week into an age filter", () => {
+    const result = interpretSearch("new listings this week near hongdae", current);
+    expect(result.snapshot.ageFilter).toBe("week");
+    expect(result.snapshot.searchInput.toLowerCase()).toContain("hongdae");
+    expect(result.reply.toLowerCase()).toContain("week");
+  });
+
   it("merges a rent-only patch onto existing filters", () => {
     const merged = mergeSearchIntent(
       { ...current, searchInput: "hongdae", maxDeposit: 2000, propertyTypes: ["oneroom"] },

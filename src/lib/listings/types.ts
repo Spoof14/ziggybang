@@ -1,3 +1,4 @@
+import { type AgeFilter } from "./age";
 import { type FloorFilter } from "./floor";
 
 export const sources = ["zigbang", "naver", "peterpan"] as const;
@@ -43,6 +44,7 @@ export type MapQuery = {
   maxRent?: number;
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
 };
 
 export type MapListing = {

@@ -23,6 +23,7 @@ import { detectForeignerOk } from "~/lib/listings/foreigner";
 import { listingPagePath } from "~/lib/listings/path";
 import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
+import { ListingAgeLine } from "./ListingAgeLine";
 import { ListingGallery } from "./ListingGallery";
 import { ListingPageLink } from "./ListingPageLink";
 import { ListingPrice } from "./ListingPrice";
@@ -162,6 +163,14 @@ export function ListingPanel({
           <div>
             <dt className="text-slate-400">Floor</dt>
             <dd>{floor}</dd>
+          </div>
+        ) : null}
+        {detail.updatedAt ? (
+          <div className="col-span-2">
+            <dt className="text-slate-400">Listed</dt>
+            <dd>
+              <ListingAgeLine updatedAt={detail.updatedAt} />
+            </dd>
           </div>
         ) : null}
         {roomType ? (

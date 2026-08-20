@@ -71,6 +71,13 @@ describe("bilingual fuzzy search", () => {
     expect(parseSearchQuery("hongdae no basement").listingQuery).toBe("");
   });
 
+  it("treats this week as an age filter, not listing text", () => {
+    const parsed = parseSearchQuery("hongdae this week");
+    expect(parsed.place?.id).toBe("hongdae");
+    expect(parsed.ageFilter).toBe("week");
+    expect(parsed.listingQuery).toBe("");
+  });
+
   it("matches Dangsan station as a walk-radius place, not listing text", () => {
     expect(matchPlace("dangsan station")?.id).toBe("dangsan");
     expect(matchPlace("당산역")?.id).toBe("dangsan");

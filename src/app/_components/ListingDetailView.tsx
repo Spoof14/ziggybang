@@ -16,7 +16,6 @@ import {
 import {
   formatApproveYear,
   formatKoreanPhone,
-  formatListedAt,
   formatMoveIn,
   telHref,
   translateAmenity,
@@ -52,6 +51,7 @@ import { type ListingDetail, type MapListing } from "~/lib/listings/types";
 import { BackToMap } from "./BackToMap";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { LandlordNotes } from "./LandlordNotes";
+import { ListingAgeLine } from "./ListingAgeLine";
 import { ListingGallery } from "./ListingGallery";
 import { ListingPrice } from "./ListingPrice";
 
@@ -153,7 +153,7 @@ export function ListingDetailView({
   const residence = translateResidence(listing.residenceType);
   const moveIn = formatMoveIn(listing.moveIn);
   const built = formatApproveYear(listing.approveDate);
-  const listed = formatListedAt(listing.updatedAt);
+  const listed = listing.updatedAt;
   const mapHref = listingMapHref(listing);
   const saved = isSavedHome(savedHomes, listing.id);
   const officePhone = formatKoreanPhone(listing.agent?.phone);
@@ -332,7 +332,14 @@ export function ListingDetailView({
               {residence ? <Fact label="Building" value={residence} /> : null}
               {moveIn ? <Fact label="Move-in" value={moveIn} wide /> : null}
               {built ? <Fact label="Age" value={built} /> : null}
-              {listed ? <Fact label="Updated" value={listed} /> : null}
+              {listed ? (
+                <div className="col-span-2">
+                  <dt className="text-slate-400">Listed</dt>
+                  <dd className="font-medium text-slate-100">
+                    <ListingAgeLine updatedAt={listing.updatedAt} />
+                  </dd>
+                </div>
+              ) : null}
               {listing.count && listing.count > 1 ? (
                 <Fact
                   label="Homes in this complex"

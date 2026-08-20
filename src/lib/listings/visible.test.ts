@@ -103,5 +103,13 @@ describe("map layers follow filters", () => {
         floorFilter: "no-basement",
       }),
     ).toBe("No basement");
+    expect(
+      describeActiveFilters({
+        propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        ageFilter: "week",
+      }),
+    ).toBe("This week");
   });
 });

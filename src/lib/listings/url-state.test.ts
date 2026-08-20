@@ -80,4 +80,21 @@ describe("shareable search URLs", () => {
     expect(search).toContain("floor=nb");
     expect(parseAppUrl(search).floorFilter).toBe("no-basement");
   });
+
+  it("round-trips the this-week age chip", () => {
+    const search = buildAppSearch({
+      searchInput: "hongdae",
+      viewMode: "map",
+      sources: ["zigbang", "peterpan"],
+      propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+      salesTypes: ["jeonse", "wolse"],
+      areaBucketIds: [],
+      radiusM: 800,
+      view: { lat: 37.556, lng: 126.923, zoom: 15 },
+      listSort: "featured",
+      ageFilter: "week",
+    });
+    expect(search).toContain("age=7");
+    expect(parseAppUrl(search).ageFilter).toBe("week");
+  });
 });

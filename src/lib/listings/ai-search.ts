@@ -3,6 +3,7 @@ import {
   propertyTypeLabel,
   salesTypeFilterLabel,
 } from "./copy";
+import { ageFilterLabel, parseAgeFilter, type AgeFilter } from "./age";
 import { floorFilterLabel, parseFloorFilter, type FloorFilter } from "./floor";
 import { type ViewMode } from "./prefs";
 import {
@@ -30,7 +31,7 @@ export type SearchSnapshot = {
   areaBucketIds: AreaBucketId[];
   radiusM: number;
   viewMode: ViewMode;
-} & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter };
+} & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter; ageFilter?: AgeFilter };
 
 export type SearchIntent = {
   searchInput?: string | null;
@@ -45,6 +46,7 @@ export type SearchIntent = {
   maxRent?: number | null;
   foreignerOk?: boolean | null;
   floorFilter?: FloorFilter | null;
+  ageFilter?: AgeFilter | null;
 };
 
 export type InterpretedSearch = {
@@ -337,6 +339,8 @@ export function mergeSearchIntent(
       patch.foreignerOk === null ? false : (patch.foreignerOk ?? current.foreignerOk),
     floorFilter:
       patch.floorFilter === null ? undefined : (patch.floorFilter ?? current.floorFilter),
+    ageFilter:
+      patch.ageFilter === null ? undefined : (patch.ageFilter ?? current.ageFilter),
     ...price,
   };
 }
@@ -362,6 +366,7 @@ export function describeSearchSnapshot(snapshot: SearchSnapshot): string {
     size ? `Size: ${size}.` : null,
     snapshot.foreignerOk ? "Only listings that say foreigners are welcome." : null,
     snapshot.floorFilter ? `${floorFilterLabel[snapshot.floorFilter]}.` : null,
+    snapshot.ageFilter ? `${ageFilterLabel[snapshot.ageFilter]}.` : null,
   ]
     .filter(Boolean)
     .join(" ");
@@ -447,6 +452,11 @@ export function interpretSearch(
   if (floor.floorFilter) intent.floorFilter = floor.floorFilter;
   if (/any floor|clear floor|basement (ok|fine)|include basement/i.test(text)) {
     intent.floorFilter = null;
+  }
+  const age = followUp ? { ageFilter: undefined } : parseAgeFilter(text);
+  if (age.ageFilter) intent.ageFilter = age.ageFilter;
+  if (/any age|clear age|old (ok|fine)|include old/i.test(text)) {
+    intent.ageFilter = null;
   }
 
   const snapshot = mergeSearchIntent(current, intent);

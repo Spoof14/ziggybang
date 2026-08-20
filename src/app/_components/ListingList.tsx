@@ -12,6 +12,7 @@ import { type ListSort } from "~/lib/listings/prefs";
 import { type RankedListing } from "~/lib/listings/recommend";
 import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
+import { ListingAgeDot } from "./ListingAgeDot";
 import { ListingPageLink } from "./ListingPageLink";
 import { ListingPhoto } from "./ListingPhoto";
 import { ListingPrice } from "./ListingPrice";
@@ -187,6 +188,7 @@ export function ListingList({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-1">
+                          <ListingAgeDot updatedAt={listing.updatedAt} />
                           <span className="text-[11px] uppercase tracking-wide text-slate-400">
                             {propertyTypeLabel[listing.propertyType]}
                             {listing.salesType
