@@ -111,5 +111,13 @@ describe("map layers follow filters", () => {
         ageFilter: "week",
       }),
     ).toBe("This week");
+    expect(
+      describeActiveFilters({
+        propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        minBuiltYear: 2015,
+      }),
+    ).toBe("Built 2015 or newer");
   });
 });

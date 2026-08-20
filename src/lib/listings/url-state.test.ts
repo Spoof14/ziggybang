@@ -81,6 +81,23 @@ describe("shareable search URLs", () => {
     expect(parseAppUrl(search).floorFilter).toBe("no-basement");
   });
 
+  it("round-trips the built-year slider", () => {
+    const search = buildAppSearch({
+      searchInput: "hongdae",
+      viewMode: "map",
+      sources: ["zigbang", "peterpan"],
+      propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+      salesTypes: ["jeonse", "wolse"],
+      areaBucketIds: [],
+      radiusM: 800,
+      view: { lat: 37.556, lng: 126.923, zoom: 15 },
+      listSort: "featured",
+      minBuiltYear: 2015,
+    });
+    expect(search).toContain("built=2015");
+    expect(parseAppUrl(search).minBuiltYear).toBe(2015);
+  });
+
   it("round-trips the this-week age chip", () => {
     const search = buildAppSearch({
       searchInput: "hongdae",

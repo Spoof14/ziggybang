@@ -63,6 +63,7 @@ import { ListingPhoto } from "./ListingPhoto";
 import { AskSearch } from "./AskSearch";
 import { ListingAgeDot } from "./ListingAgeDot";
 import { ListingPrice } from "./ListingPrice";
+import { BuildingAgeSlider } from "./BuildingAgeSlider";
 import { PriceFilters } from "./PriceFilters";
 import { useHistoryOverlay } from "./useHistoryOverlay";
 import { usePhotoQuality } from "./usePhotoQuality";
@@ -132,6 +133,7 @@ export default function MapApp() {
   const [foreignerOk, setForeignerOk] = useState(false);
   const [floorFilter, setFloorFilter] = useState<FloorFilter | undefined>();
   const [ageFilter, setAgeFilter] = useState<AgeFilter | undefined>();
+  const [minBuiltYear, setMinBuiltYear] = useState<number | undefined>();
   const [askOpen, setAskOpen] = useState(false);
   const [savedHomes, setSavedHomes] = useState<MapListing[]>([]);
   const [tool, setTool] = useState<"pan" | "radius" | "draw">("pan");
@@ -227,6 +229,7 @@ export default function MapApp() {
     setForeignerOk(url.foreignerOk ?? base?.foreignerOk ?? false);
     setFloorFilter(url.floorFilter ?? base?.floorFilter);
     setAgeFilter(url.ageFilter ?? base?.ageFilter);
+    setMinBuiltYear(url.minBuiltYear ?? base?.minBuiltYear);
     setRadiusM(url.radiusM ?? base?.radiusM ?? DEFAULT_RADIUS_M);
     setManualCircle(base?.circle ?? null);
     setPolygon(base?.polygon ?? null);
@@ -288,6 +291,7 @@ export default function MapApp() {
       foreignerOk,
       floorFilter,
       ageFilter,
+      minBuiltYear,
     });
   }, [
     areaBucketIds,
@@ -311,6 +315,7 @@ export default function MapApp() {
     foreignerOk,
     floorFilter,
     ageFilter,
+    minBuiltYear,
   ]);
 
   useEffect(() => {
@@ -332,6 +337,7 @@ export default function MapApp() {
       foreignerOk,
       floorFilter,
       ageFilter,
+      minBuiltYear,
     });
     const url = `${window.location.pathname}${next}`;
     if (`${window.location.pathname}${window.location.search}` !== url) {
@@ -355,6 +361,7 @@ export default function MapApp() {
     foreignerOk,
     floorFilter,
     ageFilter,
+    minBuiltYear,
   ]);
 
   useEffect(() => {
@@ -421,6 +428,7 @@ export default function MapApp() {
       foreignerOk,
       floorFilter,
       ageFilter,
+      minBuiltYear,
     });
   const currentFilterKey = filterKeyOf({
     sources,
@@ -435,6 +443,7 @@ export default function MapApp() {
     foreignerOk,
     floorFilter,
     ageFilter,
+    minBuiltYear,
   });
   const keepViewportPlaceholder = filterKeyRef.current === currentFilterKey;
   filterKeyRef.current = currentFilterKey;
@@ -467,6 +476,7 @@ export default function MapApp() {
       foreignerOk: foreignerOk || undefined,
       floorFilter,
       ageFilter,
+      minBuiltYear,
     }),
     [
       areaBucketIds,
@@ -475,6 +485,7 @@ export default function MapApp() {
       filtersNeedHomes,
       floorFilter,
       ageFilter,
+      minBuiltYear,
       foreignerOk,
       listingLimit,
       listingQuery,
@@ -552,6 +563,7 @@ export default function MapApp() {
       foreignerOk,
       floorFilter,
       ageFilter,
+      minBuiltYear,
     });
     return {
       clusters: layers.clusters,
@@ -565,6 +577,7 @@ export default function MapApp() {
     data,
     floorFilter,
     ageFilter,
+    minBuiltYear,
     listingQuery,
     maxDeposit,
     maxRent,
@@ -674,11 +687,12 @@ export default function MapApp() {
     setForeignerOk(false);
     setFloorFilter(undefined);
     setAgeFilter(undefined);
+    setMinBuiltYear(undefined);
   };
 
   useEffect(() => {
     setListingLimit(viewMode === "best" ? 120 : 60);
-  }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent, foreignerOk, floorFilter, ageFilter]);
+  }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent, foreignerOk, floorFilter, ageFilter, minBuiltYear]);
 
   const onToggleSave = useCallback((listing: MapListing) => {
     setSavedHomes((currentHomes) => {
@@ -710,6 +724,7 @@ export default function MapApp() {
       foreignerOk,
       floorFilter,
       ageFilter,
+      minBuiltYear,
     });
     const href = `${window.location.origin}${window.location.pathname}${next}`;
     try {
@@ -724,6 +739,7 @@ export default function MapApp() {
     bounds,
     floorFilter,
     ageFilter,
+    minBuiltYear,
     listSort,
     maxDeposit,
     maxRent,
@@ -819,6 +835,7 @@ export default function MapApp() {
     foreignerOk,
     floorFilter,
     ageFilter,
+    minBuiltYear,
   });
   const visibleHomeCount = visible.clusters.length
     ? visible.clusters.reduce((sum, cluster) => sum + cluster.count, 0)
@@ -1186,6 +1203,10 @@ export default function MapApp() {
               setMinRent(next.minRent);
               setMaxRent(next.maxRent);
             }}
+          />
+          <BuildingAgeSlider
+            minBuiltYear={minBuiltYear}
+            onChange={setMinBuiltYear}
           />
           {filterSummary ? (
             <div className="mt-1.5 flex items-center justify-between gap-2">

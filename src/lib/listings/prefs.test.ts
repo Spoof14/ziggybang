@@ -40,6 +40,7 @@ describe("saved map prefs", () => {
       foreignerOk: true,
       floorFilter: "no-basement",
       ageFilter: "week",
+      minBuiltYear: 2015,
     });
 
     expect(loadPrefs()).toMatchObject({
@@ -56,6 +57,7 @@ describe("saved map prefs", () => {
       foreignerOk: true,
       floorFilter: "no-basement",
       ageFilter: "week",
+      minBuiltYear: 2015,
     });
   });
 

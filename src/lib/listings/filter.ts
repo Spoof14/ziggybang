@@ -11,6 +11,11 @@ import {
   listingMatchesPrice,
   type PriceFilter,
 } from "./price";
+import {
+  isEmptyBuiltYearFilter,
+  listingMatchesBuiltYear,
+  type BuiltYearFilter,
+} from "./building-age";
 import { listingMatchesAge, type AgeFilter } from "./age";
 import { listingMatchesQuery } from "./search";
 import { listingMatchesFloor, type FloorFilter } from "./floor";
@@ -24,7 +29,7 @@ export type ListingFilterInput = {
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
-} & PriceFilter;
+} & PriceFilter & BuiltYearFilter;
 
 export function isAllPropertyTypes(selected: PropertyType[]): boolean {
   if (selected.length === 0) return true;
@@ -123,6 +128,15 @@ export function filterListings(
     ) {
       return false;
     }
+    if (
+      !listingMatchesBuiltYear(
+        listing.approveDate,
+        input.minBuiltYear,
+        input.requireDetails && !isEmptyBuiltYearFilter(input),
+      )
+    ) {
+      return false;
+    }
     return true;
   });
 }
@@ -137,6 +151,7 @@ export function needsListingDetails(
     Boolean(input.foreignerOk) ||
     Boolean(input.floorFilter) ||
     Boolean(input.ageFilter) ||
+    !isEmptyBuiltYearFilter(input) ||
     !isEmptyPriceFilter(input)
   );
 }

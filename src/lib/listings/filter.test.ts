@@ -138,6 +138,24 @@ describe("sales type filters", () => {
     ).toEqual(["second"]);
   });
 
+  it("drops older buildings when the built-year slider is set", () => {
+    const listings = [
+      { ...listing("new", "wolse"), approveDate: "2020.03.15" },
+      { ...listing("mid", "wolse"), approveDate: "2010-06-01" },
+      { ...listing("old", "wolse"), approveDate: "1998/12" },
+      listing("unknown", "wolse"),
+    ];
+    expect(
+      filterListings(listings, {
+        salesTypes: ["wolse"],
+        areaBucketIds: [],
+        query: "",
+        requireDetails: true,
+        minBuiltYear: 2010,
+      }).map((item) => item.id),
+    ).toEqual(["new", "mid"]);
+  });
+
   it("drops older listings when the age chip is on", () => {
     const day = 24 * 60 * 60 * 1000;
     const iso = (daysAgo: number) => new Date(Date.now() - daysAgo * day).toISOString();
@@ -214,6 +232,14 @@ describe("hydrated vs default rent filters", () => {
         areaBucketIds: [],
         query: "",
         ageFilter: "week",
+      }),
+    ).toBe(true);
+    expect(
+      needsHydratedFilters({
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        query: "",
+        minBuiltYear: 2015,
       }),
     ).toBe(true);
   });
