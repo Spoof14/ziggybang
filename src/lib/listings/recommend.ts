@@ -31,6 +31,7 @@ const NEIGHBORHOOD_SCORE: Record<string, number> = {
   yeouido: 86,
   dangsan: 85,
   magok: 84,
+  gangseo: 73,
   sinchon: 82,
   yongsan: 82,
   jongno: 80,

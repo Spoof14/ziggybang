@@ -3,6 +3,7 @@ import {
   englishAddressLine,
   englishCardTitle,
   englishDistrict,
+  englishNeighborhood,
   koreanAddressForTaxi,
   listingCardMeta,
 } from "./english";
@@ -30,6 +31,11 @@ describe("English listing cards", () => {
     expect(englishCardTitle(listing)).toContain("Monthly");
     expect(englishAddressLine(listing)).toBe("Yeonnam · Mapo-gu");
     expect(englishAddressLine(listing)).not.toMatch(/[가-힣]/);
+  });
+
+  it("keeps Magok listings labeled Magok inside Gangseo-gu", () => {
+    expect(englishNeighborhood("서울 강서구 마곡동")).toBe("Magok");
+    expect(englishDistrict("서울 강서구 화곡동")).toBe("Gangseo-gu");
   });
 
   it("romanizes the district instead of appending Hangul", () => {

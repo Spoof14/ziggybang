@@ -104,6 +104,15 @@ describe("bilingual fuzzy search", () => {
     );
     expect(parseSearchQuery("dangsan station").listingQuery).toBe("");
   });
+
+  it("maps 강서 to Gangseo-gu, not Gangnam", () => {
+    expect(matchPlace("강서")?.id).toBe("gangseo");
+    expect(matchPlace("gangseo")?.id).toBe("gangseo");
+    expect(matchPlace("강서구")?.id).toBe("gangseo");
+    expect(matchPlace("강서")?.lng).toBeLessThan(127);
+    expect(matchPlace("강남")?.id).toBe("gangnam");
+    expect(parseSearchQuery("강서").listingQuery).toBe("");
+  });
 });
 
 describe("area buckets", () => {
