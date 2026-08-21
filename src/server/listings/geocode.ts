@@ -31,6 +31,8 @@ const SKIP_CATEGORIES = new Set([
   "natural",
   "man_made",
   "aeroway",
+  "landuse",
+  "waterway",
 ]);
 
 function inKorea(lat: number, lng: number) {
@@ -116,7 +118,7 @@ export async function geocodeKorea(query: string): Promise<Place | null> {
   const catalog = matchPlace(trimmed);
   if (catalog) return catalog;
 
-  return cached(`geo:${trimmed.toLowerCase()}`, GEOCODE_TTL_MS, async () => {
+  return cached(`geo:v2:${trimmed.toLowerCase()}`, GEOCODE_TTL_MS, async () => {
     for (const q of geocodeQueryCandidates(trimmed)) {
       const params = new URLSearchParams({
         format: "jsonv2",

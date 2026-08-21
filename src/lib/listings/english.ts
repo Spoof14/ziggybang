@@ -1,4 +1,3 @@
-import { places } from "~/lib/geo/places";
 import {
   formatArea,
   formatFloor,
@@ -6,6 +5,7 @@ import {
   propertyTypeLabel,
   salesTypeFilterLabel,
 } from "./copy";
+import { matchPlaceInAddress } from "./search";
 import { type MapListing } from "./types";
 
 const DISTRICT_LABEL: Record<string, string> = {
@@ -60,18 +60,9 @@ function titleCase(value: string): string {
 
 export function englishNeighborhood(address?: string): string | null {
   if (!address) return null;
-  let best: { name: string; length: number } | undefined;
-  for (const place of places) {
-    const english = titleCase(place.names[0] ?? place.id);
-    for (const name of place.names) {
-      if (!/[가-힣]/.test(name)) continue;
-      if (!address.includes(name)) continue;
-      if (!best || name.length > best.length) {
-        best = { name: english, length: name.length };
-      }
-    }
-  }
-  return best?.name ?? null;
+  const place = matchPlaceInAddress(address);
+  if (!place) return null;
+  return titleCase(place.names[0] ?? place.id);
 }
 
 export function englishDistrict(address?: string): string | null {

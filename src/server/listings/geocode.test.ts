@@ -43,6 +43,40 @@ const seoulGangseo: NominatimHit = {
   boundingbox: ["37.5264842", "37.6046024", "126.7645064", "126.8807919"],
 };
 
+const daeguGangbukLanduse: NominatimHit = {
+  lat: "35.9161439",
+  lon: "128.5437517",
+  category: "landuse",
+  type: "residential",
+  addresstype: "residential",
+  name: "강북 이진 캐스빌",
+  display_name: "강북 이진 캐스빌, 태전1동, 북구, 대구광역시, 대한민국",
+  importance: 0.0001,
+  place_rank: 30,
+};
+
+const geumcheonRiver: NominatimHit = {
+  lat: "36.2312454",
+  lon: "126.8637882",
+  category: "waterway",
+  type: "river",
+  addresstype: "river",
+  name: "금천",
+  display_name: "금천, 석동리, 부여군, 충청남도, 대한민국",
+};
+
+const seoulGangbuk: NominatimHit = {
+  lat: "37.6395000",
+  lon: "127.0255000",
+  category: "boundary",
+  type: "administrative",
+  addresstype: "borough",
+  name: "강북구",
+  display_name: "강북구, 서울특별시, 대한민국",
+  importance: 0.5,
+  place_rank: 12,
+};
+
 describe("Nominatim neighborhood picks", () => {
   it("skips a Gangnam building named 강서 and prefers Seoul Gangseo-gu", () => {
     const hit = pickNominatimHit(
@@ -62,6 +96,14 @@ describe("Nominatim neighborhood picks", () => {
     expect(geocodeQueryCandidates("강서")[0]).toBe("강서구");
     expect(geocodeQueryCandidates("강서구")[0]).toBe("강서구 서울");
   });
+
+  it("skips Daegu apartments and rivers named after Seoul districts", () => {
+    expect(pickNominatimHit([daeguGangbukLanduse], "강북")).toBeUndefined();
+    expect(pickNominatimHit([geumcheonRiver], "금천")).toBeUndefined();
+    const hit = pickNominatimHit([daeguGangbukLanduse, seoulGangbuk], "강북");
+    expect(hit?.name).toBe("강북구");
+    expect(hit?.lat).toBe("37.6395000");
+  });
 });
 
 describe("geocodeKorea catalog", () => {
@@ -70,5 +112,11 @@ describe("geocodeKorea catalog", () => {
     expect(place?.id).toBe("gangseo");
     expect(place?.lng).toBeLessThan(127);
     expect(place?.lat).toBeCloseTo(37.55, 1);
+  });
+
+  it("returns Seoul Gangbuk-gu for 강북", async () => {
+    const place = await geocodeKorea("강북");
+    expect(place?.id).toBe("gangbuk");
+    expect(place?.lat).toBeCloseTo(37.64, 1);
   });
 });

@@ -35,6 +35,7 @@ describe("English listing cards", () => {
 
   it("keeps Magok listings labeled Magok inside Gangseo-gu", () => {
     expect(englishNeighborhood("서울 강서구 마곡동")).toBe("Magok");
+    expect(englishNeighborhood("서울 서대문구 신촌동")).toBe("Sinchon");
     expect(englishDistrict("서울 강서구 화곡동")).toBe("Gangseo-gu");
   });
 
