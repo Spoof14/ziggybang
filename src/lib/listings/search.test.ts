@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { listingMatchesArea } from "./area";
-import { listingMatchesQuery, looksLikePlaceQuery, matchPlace, parseSearchQuery, romanizeHangul } from "./search";
+import {
+  circleForPlaceSearch,
+  listingMatchesQuery,
+  looksLikePlaceQuery,
+  matchPlace,
+  matchPlaceInAddress,
+  parseSearchQuery,
+  romanizeHangul,
+} from "./search";
 import { type MapListing } from "./types";
 
 function listing(partial: Partial<MapListing> = {}): MapListing {
@@ -103,6 +111,45 @@ describe("bilingual fuzzy search", () => {
       "studio",
     );
     expect(parseSearchQuery("dangsan station").listingQuery).toBe("");
+  });
+
+  it("maps 강서 to Gangseo-gu, not Gangnam", () => {
+    expect(matchPlace("강서")?.id).toBe("gangseo");
+    expect(matchPlace("gangseo")?.id).toBe("gangseo");
+    expect(matchPlace("강서구")?.id).toBe("gangseo");
+    expect(matchPlace("강서")?.lng).toBeLessThan(127);
+    expect(matchPlace("강남")?.id).toBe("gangnam");
+    expect(parseSearchQuery("강서").listingQuery).toBe("");
+  });
+
+  it("maps other 강 districts to Seoul, not a nearby 강남-style name", () => {
+    expect(matchPlace("강북")?.id).toBe("gangbuk");
+    expect(matchPlace("강북")?.lat).toBeCloseTo(37.64, 2);
+    expect(matchPlace("강동")?.id).toBe("gangdong");
+    expect(matchPlace("노원")?.id).toBe("nowon");
+    expect(matchPlace("성북")?.id).toBe("seongbuk");
+    expect(matchPlace("성북")?.lat).toBeLessThan(37.64);
+  });
+
+  it("maps Gangseo neighborhoods and Apgujeong by name", () => {
+    expect(matchPlace("화곡")?.id).toBe("hwagok");
+    expect(matchPlace("가양")?.id).toBe("gayang");
+    expect(matchPlace("압구정")?.id).toBe("apgujeong");
+    expect(matchPlace("금천")?.id).toBe("geumcheon");
+    expect(matchPlace("은평")?.id).toBe("eunpyeong");
+  });
+
+  it("does not clip a 구 search to a leftover station radius", () => {
+    const gangseo = matchPlace("강서")!;
+    expect(circleForPlaceSearch(gangseo, "강서", 800)).toBeNull();
+    const hwagok = matchPlace("화곡")!;
+    expect(circleForPlaceSearch(hwagok, "화곡", 1200)?.radiusM).toBe(800);
+  });
+
+  it("labels Magok and Sinchon instead of their parent 구", () => {
+    expect(matchPlaceInAddress("서울 강서구 마곡동")?.id).toBe("magok");
+    expect(matchPlaceInAddress("서울 서대문구 신촌동")?.id).toBe("sinchon");
+    expect(matchPlaceInAddress("서울 광진구 화양동")?.id).toBe("konkuk");
   });
 });
 

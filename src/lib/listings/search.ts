@@ -1,4 +1,5 @@
 import { places, type Place } from "~/lib/geo/places";
+import { type CircleFilter } from "~/lib/geo/shape";
 import {
   formatRoomType,
   propertyTypeLabel,
@@ -261,6 +262,46 @@ export function matchPlace(query: string): Place | undefined {
     }
   }
   return best?.place;
+}
+
+function nameSpecificity(name: string): number {
+  if (/입구$/.test(name)) return 1;
+  if (/구$/.test(name) || /-gu$/i.test(name)) return 0;
+  if (/동$/.test(name) || /-dong$/i.test(name)) return 2;
+  return 1;
+}
+
+/** Prefer 마곡동 over 강서구 so district catalog entries do not relabel neighborhoods. */
+export function matchPlaceInAddress(address: string): Place | undefined {
+  if (!address) return undefined;
+  const lower = address.toLowerCase();
+  let best: { place: Place; rank: number; length: number } | undefined;
+  for (const place of places) {
+    for (const name of place.names) {
+      const hangul = /[가-힣]/.test(name);
+      const hit = hangul ? address.includes(name) : lower.includes(name.toLowerCase());
+      if (!hit) continue;
+      const rank = nameSpecificity(name);
+      const length = name.length;
+      if (!best || rank > best.rank || (rank === best.rank && length > best.length)) {
+        best = { place, rank, length };
+      }
+    }
+  }
+  return best?.place;
+}
+
+/** Stations keep a walk radius; 구-scale searches use the map viewport instead. */
+export function circleForPlaceSearch(
+  place: Place,
+  query: string,
+  radiusM: number,
+): CircleFilter | null {
+  if (isStationQuery(query) || place.radiusM) {
+    return { lat: place.lat, lng: place.lng, radiusM: place.radiusM ?? 800 };
+  }
+  if (place.zoom <= 14) return null;
+  return { lat: place.lat, lng: place.lng, radiusM };
 }
 
 const FILTER_TOKENS = new Set(

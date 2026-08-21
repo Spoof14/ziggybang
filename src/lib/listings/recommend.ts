@@ -1,6 +1,7 @@
 import { places } from "~/lib/geo/places";
 import { distanceM } from "~/lib/geo/shape";
 import { englishDistrict, englishNeighborhood } from "./english";
+import { matchPlaceInAddress } from "./search";
 import { type MapListing } from "./types";
 
 export type PhotoScoreInput = {
@@ -25,12 +26,17 @@ const NEIGHBORHOOD_SCORE: Record<string, number> = {
   yeonnam: 95,
   hongdae: 94,
   itaewon: 93,
+  apgujeong: 92,
+  cheongdam: 89,
   gangnam: 90,
   seocho: 88,
   jamsil: 87,
   yeouido: 86,
   dangsan: 85,
   magok: 84,
+  hwagok: 71,
+  gayang: 69,
+  gangseo: 73,
   sinchon: 82,
   yongsan: 82,
   jongno: 80,
@@ -39,6 +45,16 @@ const NEIGHBORHOOD_SCORE: Record<string, number> = {
   munrae: 75,
   mokdong: 74,
   dongdaemun: 72,
+  seongbuk: 61,
+  gangdong: 60,
+  eunpyeong: 57,
+  nowon: 54,
+  gangbuk: 52,
+  dobong: 50,
+  jungnang: 50,
+  seodaemun: 64,
+  gwangjin: 76,
+  geumcheon: 49,
   sadang: 70,
   mapo: 68,
   myeongdong: 66,
@@ -52,7 +68,6 @@ const NEIGHBORHOOD_SCORE: Record<string, number> = {
   "guro-digital": 51,
   "gasan-digital": 51,
   guro: 50,
-  gangbuk: 50,
   daerim: 48,
   seongnam: 48,
   suwon: 44,
@@ -97,23 +112,11 @@ export function neighborhoodForListing(listing: MapListing): {
   score: number;
 } {
   const address = listing.address ?? "";
-  let named: { id: string; label: string; length: number } | undefined;
-  for (const place of places) {
-    const label = titleCase(place.names[0] ?? place.id);
-    for (const name of place.names) {
-      const hit = /[가-힣]/.test(name)
-        ? address.includes(name)
-        : Boolean(address) && address.toLowerCase().includes(name.toLowerCase());
-      if (!hit) continue;
-      if (!named || name.length > named.length) {
-        named = { id: place.id, label, length: name.length };
-      }
-    }
-  }
+  const named = matchPlaceInAddress(address);
   if (named) {
     return {
       id: named.id,
-      label: named.label,
+      label: titleCase(named.names[0] ?? named.id),
       score: NEIGHBORHOOD_SCORE[named.id] ?? 50,
     };
   }

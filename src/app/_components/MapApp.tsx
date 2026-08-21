@@ -25,6 +25,7 @@ import { describeActiveFilters, filterKeyOf, mapLayersForFilters } from "~/lib/l
 import { loadPrefs, savePrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
 import { type PriceFilter } from "~/lib/listings/price";
 import {
+  circleForPlaceSearch,
   isStationQuery,
   looksLikePlaceQuery,
   parseSearchQuery,
@@ -205,12 +206,7 @@ export default function MapApp() {
     if (polygon) return null;
     if (manualCircle) return { ...manualCircle, radiusM };
     if (!place) return null;
-    const stationWalk = isStationQuery(debouncedQuery) ? (place.radiusM ?? 800) : radiusM;
-    return {
-      lat: place.lat,
-      lng: place.lng,
-      radiusM: stationWalk,
-    };
+    return circleForPlaceSearch(place, debouncedQuery, radiusM);
   }, [debouncedQuery, manualCircle, place, polygon, radiusM]);
 
   useEffect(() => {
@@ -412,7 +408,7 @@ export default function MapApp() {
     setFocus({
       lat: place.lat,
       lng: place.lng,
-      zoom: Math.max(place.zoom, 15),
+      zoom: place.zoom,
       token: Date.now(),
     });
     if (isStationQuery(debouncedQuery) || place.radiusM) {
@@ -976,8 +972,11 @@ export default function MapApp() {
         .filter(Boolean)
         .join(" · ");
 
+  const placeLabel = place ? (place.names[1] ?? place.names[0]) : null;
   const areaHint = place
-    ? `${place.names[1] ?? place.names[0]} · ${formatRadius(circle?.radiusM ?? radiusM)}`
+    ? circle
+      ? `${placeLabel} · ${formatRadius(circle.radiusM)}`
+      : placeLabel
     : circle
       ? `Within ${formatRadius(radiusM)}`
       : polygon
