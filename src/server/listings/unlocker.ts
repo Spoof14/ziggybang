@@ -22,6 +22,7 @@ export function unlockerConfigured(): boolean {
 export function buildUnlockerRequest(
   targetUrl: string,
   config: UnlockerConfig,
+  targetHeaders?: Record<string, string>,
 ): { url: string; init: RequestInit } {
   return {
     url: config.endpoint ?? UNLOCKER_ENDPOINT,
@@ -37,6 +38,10 @@ export function buildUnlockerRequest(
         format: "raw",
         method: "GET",
         country: "kr",
+        // Ignored unless "Custom headers & cookies" is enabled on the zone.
+        // Naver's AJAX endpoints return null without a referer, so that
+        // zone setting is required for this transport.
+        ...(targetHeaders ? { headers: targetHeaders } : {}),
       }),
     },
   };
@@ -48,11 +53,12 @@ export async function fetchJsonViaUnlocker<T>(
   config: UnlockerConfig | undefined = env.BRIGHTDATA_API_KEY
     ? { apiKey: env.BRIGHTDATA_API_KEY, zone: env.BRIGHTDATA_UNLOCKER_ZONE }
     : undefined,
+  targetHeaders?: Record<string, string>,
 ): Promise<T> {
   if (!config) {
     throw new HttpError("Web Unlocker is not configured");
   }
-  const { url, init } = buildUnlockerRequest(targetUrl, config);
+  const { url, init } = buildUnlockerRequest(targetUrl, config, targetHeaders);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {

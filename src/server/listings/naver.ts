@@ -44,7 +44,10 @@ export function naverBudgetMs(transport: NaverTransport = naverTransport()): num
 async function naverJson<T>(url: string): Promise<T> {
   const transport = naverTransport();
   if (transport === "unlocker") {
-    return fetchJsonViaUnlocker<T>(url, naverRequestTimeoutMs(transport));
+    return fetchJsonViaUnlocker<T>(url, naverRequestTimeoutMs(transport), undefined, {
+      referer: NAVER_HEADERS.referer,
+      "x-requested-with": "XMLHttpRequest",
+    });
   }
   return fetchJson<T>(url, {
     headers: NAVER_HEADERS,

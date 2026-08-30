@@ -64,6 +64,18 @@ describe("Web Unlocker transport", () => {
     expect(JSON.parse(String(custom.init.body))).toMatchObject({ zone: "my_zone" });
   });
 
+  it("forwards target headers for zones with custom headers enabled", () => {
+    const { init } = buildUnlockerRequest(
+      "https://m.land.naver.com/x",
+      { apiKey: "k" },
+      { referer: "https://m.land.naver.com/" },
+    );
+    const body = JSON.parse(String(init.body)) as { headers?: Record<string, string> };
+    expect(body.headers?.referer).toBe("https://m.land.naver.com/");
+    const bare = buildUnlockerRequest("https://m.land.naver.com/x", { apiKey: "k" });
+    expect(JSON.parse(String(bare.init.body))).not.toHaveProperty("headers");
+  });
+
   it("returns the target JSON through the unlocker endpoint", async () => {
     const result = await fetchJsonViaUnlocker<{ body: Array<{ atclNo: string }> }>(
       "https://m.land.naver.com/cluster/ajax/articleList?page=1",

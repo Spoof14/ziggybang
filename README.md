@@ -47,11 +47,17 @@ BRIGHTDATA_UNLOCKER_ZONE="your-zone-name"
 ```
 
 Naver API calls are then sent through `https://api.brightdata.com/request` with
-`country=kr`, and Bright Data handles IP selection and retries. Billing is per
-*successful* request, so blocked attempts cost nothing. The REST endpoint is used
-rather than their proxy mode because proxy mode intercepts TLS and requires
-installing Bright Data's CA certificate. If both variables are set,
+`country=kr`, and Bright Data handles IP selection and retries. The REST endpoint
+is used rather than their proxy mode because proxy mode intercepts TLS and
+requires installing Bright Data's CA certificate. If both variables are set,
 `NAVER_PROXY_URL` takes precedence.
+
+**Required zone setting:** Naver's AJAX endpoints return `null` unless the
+request carries a `Referer`, and by default Web Unlocker ignores caller headers.
+In the Bright Data control panel open your zone → Configuration → Advanced
+Settings and enable **Custom headers & cookies**, then the app's referer goes
+through. Note that with this setting Bright Data bills all requests, not only
+successful ones.
 
 ## Develop
 
