@@ -9,6 +9,12 @@ export const env = createEnv({
   server: {
     NODE_ENV: z.enum(["development", "test", "production"]),
     OPENAI_API_KEY: z.string().optional(),
+    /**
+     * HTTP(S) proxy with a Korean egress IP, e.g. http://user:pass@host:port.
+     * Naver Land drops packets from non-Korean and datacenter IPs, so without
+     * this the Naver source fails soft and only Zigbang/Peterpan load.
+     */
+    NAVER_PROXY_URL: z.string().url().optional(),
   },
 
   /**
@@ -27,6 +33,7 @@ export const env = createEnv({
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    NAVER_PROXY_URL: process.env.NAVER_PROXY_URL,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

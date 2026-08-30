@@ -3,7 +3,9 @@ import {
   articleToListing,
   mapNaverPropertyType,
   mapNaverSalesType,
+  naverBudgetMs,
   naverListingUrl,
+  naverRequestTimeoutMs,
   naverZoom,
 } from "./naver";
 
@@ -60,5 +62,14 @@ describe("naver mappers", () => {
     expect(mapNaverSalesType("B1")).toBe("jeonse");
     expect(mapNaverPropertyType("VL")).toBe("villa");
     expect(naverListingUrl("9")).toContain("/article/info/9");
+  });
+
+  it("gives proxied Naver requests more time than direct ones", () => {
+    expect(naverRequestTimeoutMs(false)).toBe(2500);
+    expect(naverRequestTimeoutMs(true)).toBeGreaterThan(naverRequestTimeoutMs(false));
+    expect(naverBudgetMs(false)).toBe(2500);
+    expect(naverBudgetMs(true)).toBeGreaterThan(naverBudgetMs(false));
+    // Two sequential article pages must fit inside the aggregate budget.
+    expect(naverRequestTimeoutMs(true) * 2).toBeLessThanOrEqual(naverBudgetMs(true));
   });
 });

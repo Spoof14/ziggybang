@@ -1,3 +1,5 @@
+import { fetch as proxiedFetch, ProxyAgent } from "undici";
+
 export class HttpError extends Error {
   constructor(
     message: string,
@@ -7,23 +9,45 @@ export class HttpError extends Error {
   }
 }
 
+const proxyAgents = new Map<string, ProxyAgent>();
+
+/** One connection pool per proxy URL, reused across requests. */
+export function proxyDispatcher(proxyUrl: string): ProxyAgent {
+  let agent = proxyAgents.get(proxyUrl);
+  if (!agent) {
+    agent = new ProxyAgent(proxyUrl);
+    proxyAgents.set(proxyUrl, agent);
+  }
+  return agent;
+}
+
 export async function fetchJson<T>(
   url: string,
-  init: RequestInit & { timeoutMs?: number } = {},
+  init: RequestInit & { timeoutMs?: number; proxyUrl?: string } = {},
 ): Promise<T> {
-  const { timeoutMs = 8000, ...requestInit } = init;
+  const { timeoutMs = 8000, proxyUrl, ...requestInit } = init;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, {
-      ...requestInit,
-      signal: controller.signal,
-      headers: {
-        accept: "application/json, text/plain, */*",
-        ...requestInit.headers,
-      },
-    });
+    const headers = {
+      accept: "application/json, text/plain, */*",
+      ...requestInit.headers,
+    };
+    // Node's built-in fetch rejects dispatchers from the npm undici package,
+    // so proxied requests go through undici's own fetch.
+    const response = proxyUrl
+      ? await proxiedFetch(url, {
+          method: requestInit.method ?? "GET",
+          headers: headers as Record<string, string>,
+          signal: controller.signal,
+          dispatcher: proxyDispatcher(proxyUrl),
+        })
+      : await fetch(url, {
+          ...requestInit,
+          signal: controller.signal,
+          headers,
+        });
 
     if (!response.ok) {
       throw new HttpError(

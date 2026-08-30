@@ -16,6 +16,25 @@ Naver Land blocks non-Korean **and cloud** IPs. Zigbang and Peterpan still work 
 
 Seoul (`icn1` in `vercel.json`) only places the function in AWS Korea. Outbound requests still use Amazon datacenter IPs, which Naver drops (the request hangs, then times out). A Korean home ISP, mobile hotspot, or residential proxy works; Vercel/AWS does not.
 
+### Making Naver work with a proxy
+
+Set `NAVER_PROXY_URL` to an HTTP(S) proxy whose egress IP is a Korean residential or
+mobile address, and the server routes only the Naver API calls through it:
+
+```bash
+NAVER_PROXY_URL="http://user:pass@host:port"
+```
+
+Options that work:
+
+- A Korean residential/mobile proxy provider (any standard HTTP CONNECT proxy).
+- Your own machine on a Korean home ISP running [tinyproxy](https://tinyproxy.github.io/)
+  or squid, port-forwarded so Vercel can reach it. Protect it with credentials.
+
+A Korean **datacenter** VPS usually does not work — Naver drops those ranges too, the
+same way it drops AWS. Without the variable, behavior is unchanged: Naver fails soft
+and the map shows Zigbang and Peterpan.
+
 ## Develop
 
 ```bash

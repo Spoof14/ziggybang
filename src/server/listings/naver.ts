@@ -1,3 +1,4 @@
+import { env } from "~/env";
 import { boundsCenter, containsPoint } from "~/lib/geo/bounds";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
@@ -11,6 +12,19 @@ import { fetchJson } from "./http";
 
 const NAVER_ORIGIN = "https://m.land.naver.com";
 const TILE_TTL_MS = 5 * 60 * 1000;
+
+export function naverProxyUrl(): string | undefined {
+  return env.NAVER_PROXY_URL;
+}
+
+/** Direct requests hang until timeout when blocked; proxied ones need headroom for the extra hop. */
+export function naverRequestTimeoutMs(proxied = Boolean(naverProxyUrl())): number {
+  return proxied ? 3500 : 2500;
+}
+
+export function naverBudgetMs(proxied = Boolean(naverProxyUrl())): number {
+  return proxied ? 8000 : 2500;
+}
 const NAVER_HEADERS = {
   "user-agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -220,7 +234,11 @@ async function fetchClusterList(input: {
     });
     const payload = await fetchJson<NaverClusterResponse>(
       `${NAVER_ORIGIN}/cluster/clusterList?${params.toString()}`,
-      { headers: NAVER_HEADERS, timeoutMs: 2500 },
+      {
+        headers: NAVER_HEADERS,
+        timeoutMs: naverRequestTimeoutMs(),
+        proxyUrl: naverProxyUrl(),
+      },
     );
     return extractClusters(payload)
       .map(clusterToListing)
@@ -266,7 +284,11 @@ async function fetchArticleList(input: {
       });
       const payload = await fetchJson<NaverArticleResponse>(
         `${NAVER_ORIGIN}/cluster/ajax/articleList?${params.toString()}`,
-        { headers: NAVER_HEADERS, timeoutMs: 2500 },
+        {
+          headers: NAVER_HEADERS,
+          timeoutMs: naverRequestTimeoutMs(),
+          proxyUrl: naverProxyUrl(),
+        },
       );
       return (payload.body ?? [])
         .map(articleToListing)
