@@ -129,7 +129,7 @@ export function formatRoomType(value?: string): string | null {
 
 export function friendlySourceError(source: Source, message: string): string {
   if (source === "naver") {
-    return "Naver drops non-Korean traffic, so it is blocked from this server. Set NAVER_PROXY_URL to a Korean proxy to route around it, or turn the Naver chip off. Zigbang and Peterpan still work.";
+    return "Naver drops non-Korean traffic, so it is blocked from this server. Set NAVER_PROXY_URL to a Korean proxy or BRIGHTDATA_API_KEY for Web Unlocker, or turn the Naver chip off. Zigbang and Peterpan still work.";
   }
   return `${sourceLabel[source]}: ${message}`;
 }

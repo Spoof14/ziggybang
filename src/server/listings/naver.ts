@@ -9,21 +9,48 @@ import {
 } from "~/lib/listings/types";
 import { cached } from "./cache";
 import { fetchJson } from "./http";
+import { fetchJsonViaUnlocker, unlockerConfigured } from "./unlocker";
 
 const NAVER_ORIGIN = "https://m.land.naver.com";
 const TILE_TTL_MS = 5 * 60 * 1000;
+
+export type NaverTransport = "direct" | "proxy" | "unlocker";
 
 export function naverProxyUrl(): string | undefined {
   return env.NAVER_PROXY_URL;
 }
 
-/** Direct requests hang until timeout when blocked; proxied ones need headroom for the extra hop. */
-export function naverRequestTimeoutMs(proxied = Boolean(naverProxyUrl())): number {
-  return proxied ? 3500 : 2500;
+export function naverTransport(): NaverTransport {
+  if (naverProxyUrl()) return "proxy";
+  if (unlockerConfigured()) return "unlocker";
+  return "direct";
 }
 
-export function naverBudgetMs(proxied = Boolean(naverProxyUrl())): number {
-  return proxied ? 8000 : 2500;
+/**
+ * Direct requests hang until timeout when blocked. A proxy adds one hop to
+ * Korea; the unlocker adds retries and fingerprinting on Bright Data's side,
+ * so it gets the most headroom.
+ */
+export function naverRequestTimeoutMs(transport: NaverTransport = naverTransport()): number {
+  if (transport === "proxy") return 3500;
+  if (transport === "unlocker") return 6500;
+  return 2500;
+}
+
+export function naverBudgetMs(transport: NaverTransport = naverTransport()): number {
+  return transport === "direct" ? 2500 : 8000;
+}
+
+async function naverJson<T>(url: string): Promise<T> {
+  const transport = naverTransport();
+  if (transport === "unlocker") {
+    return fetchJsonViaUnlocker<T>(url, naverRequestTimeoutMs(transport));
+  }
+  return fetchJson<T>(url, {
+    headers: NAVER_HEADERS,
+    timeoutMs: naverRequestTimeoutMs(transport),
+    proxyUrl: transport === "proxy" ? naverProxyUrl() : undefined,
+  });
 }
 const NAVER_HEADERS = {
   "user-agent":
@@ -232,13 +259,8 @@ async function fetchClusterList(input: {
       addon: "COMPLEX",
       isOnlyIsale: "false",
     });
-    const payload = await fetchJson<NaverClusterResponse>(
+    const payload = await naverJson<NaverClusterResponse>(
       `${NAVER_ORIGIN}/cluster/clusterList?${params.toString()}`,
-      {
-        headers: NAVER_HEADERS,
-        timeoutMs: naverRequestTimeoutMs(),
-        proxyUrl: naverProxyUrl(),
-      },
     );
     return extractClusters(payload)
       .map(clusterToListing)
@@ -282,13 +304,8 @@ async function fetchArticleList(input: {
         rgt: String(input.bounds.east),
         page: String(page),
       });
-      const payload = await fetchJson<NaverArticleResponse>(
+      const payload = await naverJson<NaverArticleResponse>(
         `${NAVER_ORIGIN}/cluster/ajax/articleList?${params.toString()}`,
-        {
-          headers: NAVER_HEADERS,
-          timeoutMs: naverRequestTimeoutMs(),
-          proxyUrl: naverProxyUrl(),
-        },
       );
       return (payload.body ?? [])
         .map(articleToListing)

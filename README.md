@@ -35,6 +35,24 @@ A Korean **datacenter** VPS usually does not work — Naver drops those ranges t
 same way it drops AWS. Without the variable, behavior is unchanged: Naver fails soft
 and the map shows Zigbang and Peterpan.
 
+### Or: Bright Data Web Unlocker
+
+Instead of a raw proxy you can use [Web Unlocker](https://brightdata.com/products/web-unlocker):
+create a Web Unlocker zone in the Bright Data dashboard and set
+
+```bash
+BRIGHTDATA_API_KEY="your-api-key"
+# Only needed if your zone is not named web_unlocker1:
+BRIGHTDATA_UNLOCKER_ZONE="your-zone-name"
+```
+
+Naver API calls are then sent through `https://api.brightdata.com/request` with
+`country=kr`, and Bright Data handles IP selection and retries. Billing is per
+*successful* request, so blocked attempts cost nothing. The REST endpoint is used
+rather than their proxy mode because proxy mode intercepts TLS and requires
+installing Bright Data's CA certificate. If both variables are set,
+`NAVER_PROXY_URL` takes precedence.
+
 ## Develop
 
 ```bash

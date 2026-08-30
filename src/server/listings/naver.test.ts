@@ -6,6 +6,7 @@ import {
   naverBudgetMs,
   naverListingUrl,
   naverRequestTimeoutMs,
+  naverTransport,
   naverZoom,
 } from "./naver";
 
@@ -64,12 +65,16 @@ describe("naver mappers", () => {
     expect(naverListingUrl("9")).toContain("/article/info/9");
   });
 
-  it("gives proxied Naver requests more time than direct ones", () => {
-    expect(naverRequestTimeoutMs(false)).toBe(2500);
-    expect(naverRequestTimeoutMs(true)).toBeGreaterThan(naverRequestTimeoutMs(false));
-    expect(naverBudgetMs(false)).toBe(2500);
-    expect(naverBudgetMs(true)).toBeGreaterThan(naverBudgetMs(false));
-    // Two sequential article pages must fit inside the aggregate budget.
-    expect(naverRequestTimeoutMs(true) * 2).toBeLessThanOrEqual(naverBudgetMs(true));
+  it("gives proxied and unlocked Naver requests more time than direct ones", () => {
+    expect(naverRequestTimeoutMs("direct")).toBe(2500);
+    expect(naverRequestTimeoutMs("proxy")).toBeGreaterThan(naverRequestTimeoutMs("direct"));
+    expect(naverRequestTimeoutMs("unlocker")).toBeGreaterThan(naverRequestTimeoutMs("proxy"));
+    expect(naverBudgetMs("direct")).toBe(2500);
+    expect(naverBudgetMs("proxy")).toBeGreaterThan(naverBudgetMs("direct"));
+    expect(naverBudgetMs("unlocker")).toBeGreaterThanOrEqual(naverRequestTimeoutMs("unlocker"));
+    // Two sequential article pages must fit inside the proxied aggregate budget.
+    expect(naverRequestTimeoutMs("proxy") * 2).toBeLessThanOrEqual(naverBudgetMs("proxy"));
+    // Without proxy or unlocker configured, nothing changes.
+    expect(naverTransport()).toBe("direct");
   });
 });

@@ -15,6 +15,14 @@ export const env = createEnv({
      * this the Naver source fails soft and only Zigbang/Peterpan load.
      */
     NAVER_PROXY_URL: z.string().url().optional(),
+    /**
+     * Alternative to NAVER_PROXY_URL: Bright Data Web Unlocker API key.
+     * Naver requests are sent through https://api.brightdata.com/request with
+     * country=kr. NAVER_PROXY_URL wins when both are set.
+     */
+    BRIGHTDATA_API_KEY: z.string().optional(),
+    /** Web Unlocker zone name; defaults to Bright Data's default "web_unlocker1". */
+    BRIGHTDATA_UNLOCKER_ZONE: z.string().optional(),
   },
 
   /**
@@ -34,6 +42,8 @@ export const env = createEnv({
     NODE_ENV: process.env.NODE_ENV,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     NAVER_PROXY_URL: process.env.NAVER_PROXY_URL,
+    BRIGHTDATA_API_KEY: process.env.BRIGHTDATA_API_KEY,
+    BRIGHTDATA_UNLOCKER_ZONE: process.env.BRIGHTDATA_UNLOCKER_ZONE,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

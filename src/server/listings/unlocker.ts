@@ -1,0 +1,80 @@
+import { env } from "~/env";
+import { HttpError } from "./http";
+
+/**
+ * Bright Data Web Unlocker REST transport. Unlike the raw proxy path this
+ * avoids TLS interception (their native proxy mode requires installing a
+ * Bright Data CA certificate), and Bright Data only bills successful requests.
+ */
+const UNLOCKER_ENDPOINT = "https://api.brightdata.com/request";
+const DEFAULT_ZONE = "web_unlocker1";
+
+export type UnlockerConfig = {
+  apiKey: string;
+  zone?: string;
+  endpoint?: string;
+};
+
+export function unlockerConfigured(): boolean {
+  return Boolean(env.BRIGHTDATA_API_KEY);
+}
+
+export function buildUnlockerRequest(
+  targetUrl: string,
+  config: UnlockerConfig,
+): { url: string; init: RequestInit } {
+  return {
+    url: config.endpoint ?? UNLOCKER_ENDPOINT,
+    init: {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${config.apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        zone: config.zone ?? DEFAULT_ZONE,
+        url: targetUrl,
+        format: "raw",
+        method: "GET",
+        country: "kr",
+      }),
+    },
+  };
+}
+
+export async function fetchJsonViaUnlocker<T>(
+  targetUrl: string,
+  timeoutMs: number,
+  config: UnlockerConfig | undefined = env.BRIGHTDATA_API_KEY
+    ? { apiKey: env.BRIGHTDATA_API_KEY, zone: env.BRIGHTDATA_UNLOCKER_ZONE }
+    : undefined,
+): Promise<T> {
+  if (!config) {
+    throw new HttpError("Web Unlocker is not configured");
+  }
+  const { url, init } = buildUnlockerRequest(targetUrl, config);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    if (!response.ok) {
+      throw new HttpError(
+        `Web Unlocker HTTP ${response.status} for ${targetUrl}`,
+        response.status,
+      );
+    }
+    const text = await response.text();
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new HttpError(`Web Unlocker returned non-JSON for ${targetUrl}`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new HttpError(`Web Unlocker timed out for ${targetUrl}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
