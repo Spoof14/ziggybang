@@ -2,6 +2,9 @@
 
 import "leaflet/dist/leaflet.css";
 import { CircleMarker, MapContainer, TileLayer } from "react-leaflet";
+import { leafletBasemap } from "~/lib/geo/basemap";
+
+const BASEMAP = leafletBasemap();
 
 export function ListingMiniMap({
   lat,
@@ -23,8 +26,10 @@ export function ListingMiniMap({
       scrollWheelZoom={false}
     >
       <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-        subdomains={["a", "b", "c", "d"]}
+        url={BASEMAP.url}
+        attribution={BASEMAP.attribution}
+        subdomains={BASEMAP.subdomains}
+        maxZoom={BASEMAP.maxZoom}
       />
       <CircleMarker
         center={[lat, lng]}
