@@ -67,3 +67,17 @@ export function expandBounds(bounds: Bounds, factor: number): Bounds {
     east: Math.min(180, bounds.east + lngPad),
   };
 }
+
+/** Expand a box by a real-world margin so nearby 동 centres still count. */
+export function padBoundsByMeters(bounds: Bounds, meters: number): Bounds {
+  const center = boundsCenter(bounds);
+  const latPad = meters / 111_320;
+  const lngPad =
+    meters / (111_320 * Math.max(0.2, Math.cos((center.lat * Math.PI) / 180)));
+  return {
+    south: Math.max(-90, bounds.south - latPad),
+    west: Math.max(-180, bounds.west - lngPad),
+    north: Math.min(90, bounds.north + latPad),
+    east: Math.min(180, bounds.east + lngPad),
+  };
+}

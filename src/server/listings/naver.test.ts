@@ -12,6 +12,8 @@ import {
   articlePagesForCortarCount,
   clipNaverListingsToViewport,
   listingInventoryCount,
+  inferNaverSalesType,
+  mergeNaverPins,
   naverArticleListParams,
   naverAreaRange,
   naverBudgetMs,
@@ -146,6 +148,58 @@ describe("naver mappers", () => {
     expect(picked).toEqual(expect.arrayContaining(["seogyo", "yeonnam", "hapjeong"]));
     expect(picked).not.toContain("gangnam");
     expect(picked[0]).toBe("seogyo");
+  });
+
+  it("still picks a dong whose centre sits just outside a Magok radius box", () => {
+    const magok = {
+      south: 37.5576 - 850 / 111_320,
+      west: 126.8276 - 850 / 88_000,
+      north: 37.5576 + 850 / 111_320,
+      east: 126.8276 + 850 / 88_000,
+    };
+    const dongs = [
+      { cortarNo: "gayang", centerLat: 37.5576, centerLon: 126.8276 },
+      { cortarNo: "magok", centerLat: 37.572, centerLon: 126.8276 },
+      { cortarNo: "gangnam", centerLat: 37.498, centerLon: 127.028 },
+    ];
+    const picked = pickRegionsInView(dongs, magok, 4);
+    expect(picked).toEqual(expect.arrayContaining(["gayang", "magok"]));
+    expect(picked).not.toContain("gangnam");
+  });
+
+  it("treats a monthly rent with no trade code as wolse", () => {
+    expect(inferNaverSalesType({ rent: 83, deposit: 1000 })).toBe("wolse");
+    const listing = articleToListing({
+      articleNo: "2643187061",
+      articleName: "힐스테이트에코마곡역 1동",
+      realEstateTypeCode: "APT",
+      latitudeNum: 37.5605,
+      longitudeNum: 126.827645,
+      hanPrc: 1000,
+      rentPrc: 83,
+    });
+    expect(listing?.salesType).toBe("wolse");
+    expect(listing?.lat).toBe(37.5605);
+  });
+
+  it("keeps a cluster pin when articles missed that building", () => {
+    const villa = articleToListing({
+      articleNo: "villa",
+      realEstateTypeCode: "VL",
+      tradeTypeCode: "B2",
+      latitude: 37.557,
+      longitude: 126.827,
+    })!;
+    const cluster = clusterToListing(
+      { latitude: 37.5605, longitude: 126.827645, count: 12, markerId: "magok" },
+      0,
+    )!;
+    const nearby = clusterToListing(
+      { latitude: 37.5571, longitude: 126.827, count: 3, markerId: "same" },
+      1,
+    )!;
+    const merged = mergeNaverPins([villa], [cluster, nearby]);
+    expect(merged.map((item) => item.sourceId)).toEqual(["villa", "magok"]);
   });
 
   it("keeps map pins inside the viewport instead of the whole dong", () => {
