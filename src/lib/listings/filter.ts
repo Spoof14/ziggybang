@@ -43,6 +43,15 @@ export function isAllSalesTypes(selected: SalesType[]): boolean {
   return salesTypes.every((type) => selected.includes(type));
 }
 
+/**
+ * Naver city/gu zoom returns clustered counts, not homes. They are already
+ * scoped by the map query, but they have no sales type / photos / size — so
+ * the usual detail filters would drop every pin and leave "0 of 6,000".
+ */
+export function isNaverClusterListing(listing: MapListing): boolean {
+  return listing.source === "naver" && listing.id.startsWith("naver:cluster:");
+}
+
 /** Product default: jeonse + monthly, sale off. Untyped pins can stay until zoomed in. */
 export function isDefaultRentSales(selected: SalesType[]): boolean {
   return (
@@ -80,6 +89,7 @@ export function filterListings(
 ): MapListing[] {
   const types = input.propertyTypes ?? [];
   return listings.filter((listing) => {
+    if (isNaverClusterListing(listing)) return true;
     if (!isAllPropertyTypes(types) && !types.includes(listing.propertyType)) {
       return false;
     }

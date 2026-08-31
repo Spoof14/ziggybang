@@ -17,12 +17,13 @@ import {
 } from "~/lib/listings/types";
 import {
   filterListings,
+  isNaverClusterListing,
   needsHydratedFilters,
   needsListingDetails,
 } from "~/lib/listings/filter";
 import { parseSearchQuery } from "~/lib/listings/search";
 import { settledError, withTimeout } from "./http";
-import { fetchNaverDetail, fetchNaverListings, naverBudgetMs, type NaverMapFetch, type NaverListingQuery } from "./naver";
+import { fetchNaverDetail, fetchNaverListings, listingInventoryCount, naverBudgetMs, type NaverMapFetch, type NaverListingQuery } from "./naver";
 import { fetchPeterpanDetail, fetchPeterpanListings } from "./peterpan";
 import {
   fetchZigbangDetail,
@@ -196,7 +197,8 @@ export async function getMapData(
     unique = unique.filter((item) => pointInPolygon(item, polygon));
   }
   const zigbang = unique.filter((item) => item.source === "zigbang").length;
-  const naver = unique.filter((item) => item.source === "naver").length;
+  const naverHomes = unique.filter((item) => item.source === "naver");
+  const naver = listingInventoryCount(naverHomes);
   const peterpan = unique.filter((item) => item.source === "peterpan").length;
   const naverTotal =
     naverAvailable != null && naverAvailable > naver ? naverAvailable : undefined;
@@ -211,9 +213,10 @@ export async function getMapData(
           Math.max(MIN_LIST_ITEMS, query.listingLimit ?? MIN_LIST_ITEMS),
         )
       : MAX_MARKERS;
+  const homes = unique.filter((item) => !isNaverClusterListing(item));
   let listings: MapListing[] =
     query.includeListings === true || !clustered
-      ? unique.slice(0, listingCap)
+      ? homes.slice(0, listingCap)
       : [];
 
   if (
@@ -255,7 +258,7 @@ export async function getMapData(
     };
   }
 
-  const truncated = unique.length > listings.length || Boolean(naverTotal);
+  const truncated = homes.length > listings.length || Boolean(naverTotal);
   return {
     mode: clustered ? "clusters" : "markers",
     clusters,

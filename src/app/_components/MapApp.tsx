@@ -1496,6 +1496,8 @@ export default function MapApp() {
                   ? "No saved homes yet. Tap the heart on a listing to keep it here."
                   : viewMode === "best" && zoom < 14 && !circle && !polygon
                     ? "Search Hongdae, Dangsan station, or zoom in so Best has homes to rank."
+                    : zoom < 15 && listListings.length === 0
+                      ? "Zoom in to load individual homes. The map shows how many listings are in each area."
                     : hasPhotos
                       ? "Every remaining home has no photos. Turn that chip off to see them."
                       : foreignerOk

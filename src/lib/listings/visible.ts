@@ -103,6 +103,13 @@ export function mapLayersForFilters(
     };
   }
 
+  // City/gu zoom: the server sends clustered counts and an empty home list.
+  // Those clusters already match the current query — dropping them is what
+  // produced a blank map next to "Naver 0 of 6,000".
+  if (shouldCluster(input.zoom) && matched.length === 0 && serverClusters.length) {
+    return { clusters: serverClusters, listings: [] };
+  }
+
   return { clusters: [], listings: matched };
 }
 

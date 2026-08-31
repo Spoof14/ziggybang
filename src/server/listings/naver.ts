@@ -378,6 +378,8 @@ export function clusterToListing(cluster: NaverCluster, index: number): MapListi
   if (lat == null || lng == null) return null;
 
   const sourceId = cluster.markerId ?? cluster.lgeo ?? `cluster-${index}`;
+  // propertyType is a stub: new.land clusters are already scoped by the
+  // request. filterListings keeps naver:cluster: rows so they are not dropped.
   return {
     id: `naver:cluster:${sourceId}`,
     source: "naver",
