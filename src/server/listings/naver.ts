@@ -395,6 +395,35 @@ function asCoord(value: number | string | undefined): number | undefined {
   return undefined;
 }
 
+function coordsFrom(obj?: {
+  latitudeNum?: number | string;
+  longitudeNum?: number | string;
+  latitude?: number | string;
+  longitude?: number | string;
+  lat?: number | string;
+  lng?: number | string;
+  lon?: number | string;
+}): { lat: number; lng: number } | null {
+  if (!obj) return null;
+  const lat = asCoord(obj.latitudeNum) ?? asCoord(obj.latitude) ?? asCoord(obj.lat);
+  const lng =
+    asCoord(obj.longitudeNum) ?? asCoord(obj.longitude) ?? asCoord(obj.lng) ?? asCoord(obj.lon);
+  if (lat == null || lng == null) return null;
+  if (Math.abs(lat) < 0.1 || Math.abs(lng) < 0.1) return null;
+  return { lat, lng };
+}
+
+function naverDetailCoords(
+  payload: NaverArticleDetailPayload,
+): { lat: number; lng: number } | null {
+  return (
+    coordsFrom(payload) ??
+    coordsFrom(payload.latlng) ??
+    coordsFrom(payload.articleDetail) ??
+    coordsFrom(payload as NaverArticle)
+  );
+}
+
 function articleCoord(article: NaverArticle): { lat: number; lng: number } | null {
   const lat = asCoord(article.latitude) ?? asCoord(article.lat);
   const lng = asCoord(article.longitude) ?? asCoord(article.lng);
@@ -828,6 +857,17 @@ type NaverArticleDetailPayload = {
     moveInTypeName?: string;
     aptUseApproveYmd?: string;
     directTrade?: boolean;
+    latitude?: number | string;
+    longitude?: number | string;
+    lat?: number | string;
+    lng?: number | string;
+  };
+  latlng?: {
+    lat?: number | string;
+    lng?: number | string;
+    lon?: number | string;
+    latitude?: number | string;
+    longitude?: number | string;
   };
   articlePrice?: {
     dealPrice?: number;
@@ -853,14 +893,9 @@ export function mapNaverArticleDetail(
   if (!sourceId || sourceId === "undefined") return null;
 
   const photos = extractNaverPhotos(payload);
-  const lat =
-    asCoord(payload.latitudeNum) ??
-    asCoord(payload.latitude) ??
-    asCoord((payload as NaverArticle).lat);
-  const lng =
-    asCoord(payload.longitudeNum) ??
-    asCoord(payload.longitude) ??
-    asCoord((payload as NaverArticle).lng);
+  const coord = naverDetailCoords(payload);
+  const lat = coord?.lat;
+  const lng = coord?.lng;
   const propertyType = mapNaverPropertyType(
     payload.realEstateTypeCode ?? payload.realEstateTypeName,
   );

@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "~/trpc/react";
 import {
@@ -36,7 +35,6 @@ import {
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import { listingGalleryUrls } from "~/lib/listings/photo";
 import {
-  hasListingCoords,
   listingMapHref,
   mergeListingDetail,
   readStashedListing,
@@ -54,12 +52,8 @@ import { ForeignerBadge } from "./ForeignerBadge";
 import { LandlordNotes } from "./LandlordNotes";
 import { ListingAgeLine } from "./ListingAgeLine";
 import { ListingGallery } from "./ListingGallery";
+import { ListingLocationCard } from "./ListingLocationCard";
 import { ListingPrice } from "./ListingPrice";
-
-const MiniMap = dynamic(
-  () => import("./ListingMiniMap").then((mod) => mod.ListingMiniMap),
-  { ssr: false },
-);
 
 async function copyText(value: string) {
   try {
@@ -153,19 +147,6 @@ export function ListingDetailView({
   const saved = isSavedHome(savedHomes, listing.id);
   const officePhone = formatKoreanPhone(listing.agent?.phone);
   const mobilePhone = formatKoreanPhone(listing.agent?.mobile);
-  const googleMaps = hasListingCoords(listing)
-    ? `https://www.google.com/maps/search/?api=1&query=${listing.lat},${listing.lng}`
-    : taxiAddress
-      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(taxiAddress)}`
-      : null;
-  const kakaoMaps = hasListingCoords(listing)
-    ? `https://map.kakao.com/link/map/${encodeURIComponent(englishTitle.trim() ? englishTitle : "Home")},${listing.lat},${listing.lng}`
-    : null;
-  const naverMaps = hasListingCoords(listing)
-    ? `https://map.naver.com/p/search/${listing.lat},${listing.lng}`
-    : taxiAddress
-      ? `https://map.naver.com/p/search/${encodeURIComponent(taxiAddress)}`
-      : null;
   const foreignerOk =
     listing.foreignerOk ?? detectForeignerOk(listing.title, listing.description);
   const agencyFee = agencyFeeCopy(listing);
@@ -403,43 +384,10 @@ export function ListingDetailView({
             </section>
           ) : null}
 
-          {hasListingCoords(listing) ? (
-            <section className="overflow-hidden rounded-2xl border border-white/10">
-              <MiniMap lat={listing.lat} lng={listing.lng} />
-              <div className="flex flex-wrap gap-2 p-3 text-[11px]">
-                {googleMaps ? (
-                  <a
-                    href={googleMaps}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-full bg-white/10 px-2.5 py-1 text-slate-200 hover:bg-white/20"
-                  >
-                    Google Maps
-                  </a>
-                ) : null}
-                {kakaoMaps ? (
-                  <a
-                    href={kakaoMaps}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-full bg-white/10 px-2.5 py-1 text-slate-200 hover:bg-white/20"
-                  >
-                    Kakao Map
-                  </a>
-                ) : null}
-                {naverMaps ? (
-                  <a
-                    href={naverMaps}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-full bg-white/10 px-2.5 py-1 text-slate-200 hover:bg-white/20"
-                  >
-                    Naver Map
-                  </a>
-                ) : null}
-              </div>
-            </section>
-          ) : null}
+          <ListingLocationCard
+            listing={listing}
+            title={englishTitle.trim() ? englishTitle : "Home"}
+          />
 
           {listing.subways?.length ? (
             <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">

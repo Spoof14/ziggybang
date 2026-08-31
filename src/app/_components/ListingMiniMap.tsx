@@ -9,17 +9,20 @@ const BASEMAP = leafletBasemap();
 export function ListingMiniMap({
   lat,
   lng,
+  className = "h-56 w-full",
 }: {
   lat: number;
   lng: number;
+  className?: string;
 }) {
   return (
     <MapContainer
+      key={`${lat},${lng}`}
       center={[lat, lng]}
       zoom={16}
       minZoom={12}
       maxZoom={18}
-      className="h-56 w-full rounded-xl"
+      className={className}
       zoomControl={false}
       attributionControl={false}
       dragging

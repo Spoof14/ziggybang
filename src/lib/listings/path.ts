@@ -103,6 +103,39 @@ export function hasListingCoords(listing: Pick<MapListing, "lat" | "lng">): bool
   );
 }
 
+export type ListingMapLinks = {
+  google: string | null;
+  kakao: string | null;
+  naver: string | null;
+};
+
+export function listingMapLinks(
+  listing: Pick<MapListing, "lat" | "lng" | "address">,
+  title?: string,
+): ListingMapLinks {
+  const taxi = listing.address?.trim() ?? null;
+  const query = hasListingCoords(listing)
+    ? `${listing.lat},${listing.lng}`
+    : taxi;
+  if (!query) {
+    return { google: null, kakao: null, naver: null };
+  }
+  const encoded = encodeURIComponent(query);
+  const label = encodeURIComponent((title ?? "Home").trim() || "Home");
+  if (hasListingCoords(listing)) {
+    return {
+      google: `https://www.google.com/maps/search/?api=1&query=${query}`,
+      kakao: `https://map.kakao.com/link/map/${label},${listing.lat},${listing.lng}`,
+      naver: `https://map.naver.com/p/search/${query}`,
+    };
+  }
+  return {
+    google: `https://www.google.com/maps/search/?api=1&query=${encoded}`,
+    kakao: `https://map.kakao.com/?q=${encoded}`,
+    naver: `https://map.naver.com/p/search/${encoded}`,
+  };
+}
+
 export function mergeListingDetail(
   primary: ListingDetail | MapListing | null | undefined,
   fallback: MapListing | null | undefined,
