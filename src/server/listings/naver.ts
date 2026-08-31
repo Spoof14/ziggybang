@@ -154,24 +154,29 @@ export function naverAreaRange(
   };
 }
 
-export function naverFilterParams(input: {
-  minDeposit?: number;
-  maxDeposit?: number;
-  minRent?: number;
-  maxRent?: number;
-  areaBucketIds?: AreaBucketId[];
-  maxBuildingAge?: number;
-}): Record<string, string> {
-  const params: Record<string, string> = {
-    priceType: "RETAIL",
-    priceMin: "0",
-    priceMax: "900000000",
-    rentPriceMin: "0",
-    rentPriceMax: "900000000",
-    areaMin: "0",
-    areaMax: "900000000",
-    sameAddressGroup: "false",
-  };
+export function naverFilterParams(
+  input: {
+    minDeposit?: number;
+    maxDeposit?: number;
+    minRent?: number;
+    maxRent?: number;
+    areaBucketIds?: AreaBucketId[];
+    maxBuildingAge?: number;
+  },
+  options?: { defaults?: boolean },
+): Record<string, string> {
+  const params: Record<string, string> = options?.defaults
+    ? {
+        priceType: "RETAIL",
+        priceMin: "0",
+        priceMax: "900000000",
+        rentPriceMin: "0",
+        rentPriceMax: "900000000",
+        areaMin: "0",
+        areaMax: "900000000",
+        sameAddressGroup: "false",
+      }
+    : { priceType: "RETAIL" };
   if (input.minDeposit != null) params.priceMin = String(Math.round(input.minDeposit));
   if (input.maxDeposit != null) params.priceMax = String(Math.round(input.maxDeposit));
   if (input.minRent != null) params.rentPriceMin = String(Math.round(input.minRent));
@@ -185,6 +190,28 @@ export function naverFilterParams(input: {
     params.recentlyBuildYears = String(Math.round(input.maxBuildingAge));
   }
   return params;
+}
+
+export function naverArticleListParams(input: {
+  cortarNo: string;
+  page: number;
+  propertyTypes: PropertyType[];
+  salesTypes?: SalesType[];
+  minDeposit?: number;
+  maxDeposit?: number;
+  minRent?: number;
+  maxRent?: number;
+  areaBucketIds?: AreaBucketId[];
+  maxBuildingAge?: number;
+}): Record<string, string> {
+  return {
+    cortarNo: input.cortarNo,
+    order: "rank",
+    realEstateType: propertyQuery(input.propertyTypes),
+    tradeType: salesQuery(input.salesTypes),
+    page: String(input.page),
+    ...naverFilterParams(input),
+  };
 }
 
 export function naverFilterCacheKey(input: {
@@ -578,7 +605,7 @@ async function fetchClusterList(input: {
   maxBuildingAge?: number;
 }): Promise<MapListing[]> {
   const z = naverClusterZoom(input.zoom);
-  const filters = naverFilterParams(input);
+  const filters = naverFilterParams(input, { defaults: true });
   const key = [
     "nv:cluster",
     input.cortarNo,
@@ -631,30 +658,18 @@ async function fetchArticlePage(input: {
   areaBucketIds?: AreaBucketId[];
   maxBuildingAge?: number;
 }): Promise<{ items: MapListing[]; isMore: boolean; total?: number }> {
-  const z = naverClusterZoom(input.zoom);
-  const filters = naverFilterParams(input);
+  const query = naverArticleListParams(input);
   const key = [
     "nv:articles",
     input.cortarNo,
-    z,
     input.page,
-    input.bounds.south.toFixed(3),
-    input.bounds.west.toFixed(3),
-    propertyQuery(input.propertyTypes),
-    salesQuery(input.salesTypes),
+    query.realEstateType,
+    query.tradeType,
     naverFilterCacheKey(input),
   ].join(":");
 
   return cached(key, TILE_TTL_MS, async () => {
-    const params = new URLSearchParams({
-      cortarNo: input.cortarNo,
-      order: "rank",
-      realEstateType: propertyQuery(input.propertyTypes),
-      tradeType: salesQuery(input.salesTypes),
-      page: String(input.page),
-      ...filters,
-      ...naverMapParams(input.bounds, input.zoom),
-    });
+    const params = new URLSearchParams(query);
     const payload = await naverAuthorizedJson<NaverArticleResponse>(
       `${NEW_LAND_ORIGIN}/api/articles?${params.toString()}`,
       naverRequestTimeoutMs(),
@@ -709,8 +724,10 @@ export async function fetchNaverListings(input: NaverListingQuery): Promise<Nave
   const cortarNos = await cortarNosForViewport(input.bounds, input.zoom);
   if (!cortarNos.length) return { listings: [] };
 
-  const inView = (listings: MapListing[]) =>
-    listings.filter((listing) => containsPoint(input.bounds, listing.lat, listing.lng));
+  const inView = (listings: MapListing[]) => {
+    const area = expandBounds(input.bounds, 0.5);
+    return listings.filter((listing) => containsPoint(area, listing.lat, listing.lng));
+  };
 
   const loadClusters = (nos: string[]) =>
     Promise.all(nos.map((cortarNo) => fetchClusterList({ ...input, cortarNo }))).then((groups) =>
@@ -727,17 +744,24 @@ export async function fetchNaverListings(input: NaverListingQuery): Promise<Nave
         }),
       ),
     ).then((groups) => {
-      const listings = inView(dedupeNaverListings(groups.flatMap((group) => group.listings)));
+      const fetched = dedupeNaverListings(groups.flatMap((group) => group.listings));
+      const nearby = inView(fetched);
       const reported = groups.reduce((sum, group) => sum + (group.total ?? 0), 0);
-      return { listings, reported: reported > 0 ? reported : undefined };
+      return {
+        // /api/articles is cortar-scoped, not bbox-scoped. If the map box clips
+        // every pin, still keep the dong's geocoded rows so "0 of 88" cannot happen.
+        listings: nearby.length ? nearby : fetched,
+        reported: reported > 0 ? reported : undefined,
+      };
     });
 
   if (input.zoom >= 15) {
     const [clusters, articles] = await Promise.all([loadClusters(cortarNos), loadArticles(cortarNos)]);
     const listings = articles.listings.length ? articles.listings : clusters;
     const available = Math.max(
-      listingInventoryCount(clusters),
+      listingInventoryCount(articles.listings),
       articles.reported ?? 0,
+      listingInventoryCount(clusters),
       listings.length,
     );
     return {
