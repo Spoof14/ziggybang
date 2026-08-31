@@ -64,6 +64,12 @@ describe("conversational listing search", () => {
     expect(result.reply.toLowerCase()).toContain("foreigners");
   });
 
+  it("turns a with-photos ask into that chip", () => {
+    const result = interpretSearch("studio near Hongdae with photos", current);
+    expect(result.snapshot.hasPhotos).toBe(true);
+    expect(result.reply.toLowerCase()).toContain("photos");
+  });
+
   it("moves to Guro Digital without filtering titles for digital", () => {
     const result = interpretSearch("guro digital", current);
     expect(result.snapshot.searchInput.toLowerCase()).toBe("guro digital");

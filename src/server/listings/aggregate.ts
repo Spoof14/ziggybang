@@ -87,6 +87,7 @@ export async function getMapData(
     floorFilter: query.floorFilter,
     ageFilter: query.ageFilter,
     maxBuildingAge: query.maxBuildingAge,
+    hasPhotos: query.hasPhotos,
   };
   const requireDetails =
     (query.zoom >= 15 && needsListingDetails(detailFilters)) ||

@@ -27,6 +27,7 @@ export type AppUrlState = {
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
   maxBuildingAge?: number;
+  hasPhotos?: boolean;
 } & PriceFilter;
 
 const VIEW_MODES: ViewMode[] = ["map", "list", "best", "saved"];
@@ -77,6 +78,7 @@ export function parseAppUrl(search: string): AppUrlState {
     next.listSort = sort as ListSort;
   }
   if (params.get("ok") === "1") next.foreignerOk = true;
+  if (params.get("pics") === "1") next.hasPhotos = true;
   const floor = params.get("floor");
   if (floor === "nb") next.floorFilter = "no-basement";
   if (floor === "2") next.floorFilter = "min-2";
@@ -120,6 +122,7 @@ export function buildAppSearch(state: {
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
   maxBuildingAge?: number;
+  hasPhotos?: boolean;
 } & PriceFilter): string {
   const params = new URLSearchParams();
   if (state.searchInput.trim()) params.set("q", state.searchInput.trim());
@@ -140,6 +143,7 @@ export function buildAppSearch(state: {
   params.set("z", String(Math.round(state.view.zoom)));
   if (state.listSort !== "featured") params.set("sort", state.listSort);
   if (state.foreignerOk) params.set("ok", "1");
+  if (state.hasPhotos) params.set("pics", "1");
   if (state.floorFilter === "no-basement") params.set("floor", "nb");
   if (state.floorFilter === "min-2") params.set("floor", "2");
   if (state.floorFilter === "min-5") params.set("floor", "5");
@@ -157,7 +161,7 @@ export function buildAppSearch(state: {
 
 export function hasAppUrlState(search: string): boolean {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort", "ok", "floor", "age", "maxage", "dmin", "dmax", "rmin", "rmax"].some(
+  return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort", "ok", "pics", "floor", "age", "maxage", "dmin", "dmax", "rmin", "rmax"].some(
     (key) => params.has(key),
   );
 }

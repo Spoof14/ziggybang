@@ -113,8 +113,8 @@ export function ListingGallery({
           draggable={false}
           className={
             layout === "page"
-              ? "h-72 w-full select-none object-cover sm:h-[28rem]"
-              : "h-52 w-full select-none object-cover"
+              ? "h-72 w-full select-none bg-slate-950 object-contain sm:h-[28rem]"
+              : "h-52 w-full select-none bg-slate-950 object-contain"
           }
           onError={() => {
             setFailed((currentFailed) => new Set(currentFailed).add(current));

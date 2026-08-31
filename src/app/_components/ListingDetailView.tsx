@@ -34,6 +34,7 @@ import {
   koreanAddressForTaxi,
 } from "~/lib/listings/english";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
+import { listingGalleryUrls } from "~/lib/listings/photo";
 import {
   hasListingCoords,
   listingMapHref,
@@ -125,13 +126,7 @@ export function ListingDetailView({
     );
   }
 
-  const photos = [
-    ...new Set(
-      [listing.thumbnail, ...(listing.photos ?? [])].filter(
-        (url): url is string => Boolean(url),
-      ),
-    ),
-  ];
+  const photos = listingGalleryUrls(listing);
   const deposit = formatKrwFromManwon(listing.deposit);
   const rent = formatKrwFromManwon(listing.rent);
   const salePrice = formatKrwFromManwon(listing.price);

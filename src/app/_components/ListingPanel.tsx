@@ -21,6 +21,7 @@ import {
 import { agencyFeeCopy } from "~/lib/listings/agency-fee";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import { listingPagePath } from "~/lib/listings/path";
+import { listingGalleryUrls } from "~/lib/listings/photo";
 import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { ListingAgeLine } from "./ListingAgeLine";
@@ -56,17 +57,14 @@ export function ListingPanel({
       sourceId: listing.sourceId,
       propertyType: listing.propertyType,
     },
-    { enabled: listing.source === "zigbang" && listing.propertyType !== "apartment" },
+    { enabled: listing.source === "zigbang" && listing.propertyType !== "apartment" || listing.source === "naver" },
   );
 
   const detail = detailQuery.data ?? listing;
-  const photos = [
-    ...new Set(
-      [detail.thumbnail, ...(detail.photos ?? listing.photos ?? [])].filter(
-        (url): url is string => Boolean(url),
-      ),
-    ),
-  ];
+  const photos = listingGalleryUrls({
+    thumbnail: detail.thumbnail ?? listing.thumbnail,
+    photos: detail.photos ?? listing.photos,
+  });
   const priceLines = formatPriceLines(detail);
   const area = formatArea(detail.areaM2);
   const floor = formatFloor(detail.floor);

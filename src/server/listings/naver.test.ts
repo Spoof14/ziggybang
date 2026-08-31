@@ -3,6 +3,9 @@ import {
   articleToListing,
   clusterToListing,
   extractClusters,
+  extractNaverPhotos,
+  isNaverFloorplan,
+  mapNaverArticleDetail,
   mapNaverPropertyType,
   mapNaverSalesType,
   NAVER_ARTICLE_PAGES,
@@ -124,5 +127,81 @@ describe("naver mappers", () => {
     ).toBeLessThanOrEqual(naverBudgetMs("proxy"));
     // Without proxy or unlocker configured, nothing changes.
     expect(naverTransport()).toBe("direct");
+  });
+
+  it("puts Naver floor plans (imageType 10) first in the gallery", () => {
+    expect(isNaverFloorplan(10)).toBe(true);
+    expect(isNaverFloorplan("20")).toBe(false);
+    const urls = extractNaverPhotos({
+      repImgUrl: "/thumb.jpg",
+      articlePhotos: [
+        { imageSrc: "/room.jpg", imageType: "20", imageOrder: 1 },
+        { imageSrc: "/plan.jpg", imageType: "10", imageOrder: 2 },
+        { imageSrc: "/kitchen.jpg", imageType: "20", imageOrder: 3 },
+      ],
+    });
+    expect(urls[0]).toContain("/plan.jpg");
+    expect(urls).toEqual([
+      "https://landthumb-phinf.pstatic.net/plan.jpg",
+      "https://landthumb-phinf.pstatic.net/room.jpg",
+      "https://landthumb-phinf.pstatic.net/kitchen.jpg",
+      "https://landthumb-phinf.pstatic.net/thumb.jpg",
+    ]);
+  });
+
+  it("maps article-list photos onto the listing", () => {
+    const listing = articleToListing({
+      articleNo: "9",
+      realEstateTypeCode: "OR",
+      tradeTypeCode: "B2",
+      latitude: 37.55,
+      longitude: 126.91,
+      repImgUrl: "/only.jpg",
+      articlePhotos: [
+        { imageSrc: "/plan.jpg", imageType: 10, imageOrder: 1 },
+        { imageSrc: "/room.jpg", imageType: 20, imageOrder: 2 },
+      ],
+    });
+    expect(listing?.photos?.[0]).toContain("/plan.jpg");
+    expect(listing?.photos).toHaveLength(3);
+    expect(listing?.thumbnail).toContain("/plan.jpg");
+  });
+
+  it("maps a new.land article detail payload including floor plans", () => {
+    const listing = mapNaverArticleDetail(
+      {
+        articleNo: "2645147927",
+        articleName: "대치푸르지오써밋",
+        latitudeNum: 37.5,
+        longitudeNum: 127.06,
+        realEstateTypeCode: "APT",
+        tradeTypeCode: "B1",
+        articlePhotos: [
+          { imageSrc: "/room.jpg", imageType: "20", imageOrder: 1 },
+          { imageSrc: "/plan.jpg", imageType: "10", imageOrder: 2 },
+        ],
+        articleDetail: {
+          articleNo: "2645147927",
+          detailDescription: "남향 C타입",
+          roomCount: "3",
+          bathroomCount: "2",
+          exposureAddress: "서울시 강남구 대치동",
+        },
+        articleSpace: { exclusiveSpace: 84, supplySpace: 110 },
+        articleFloor: { correspondingFloorCount: "3", totalFloorCount: "17" },
+        articlePrice: { warrantPrice: 120000, rentPrice: 0, dealPrice: 0 },
+      },
+      "2645147927",
+    );
+    expect(listing).toMatchObject({
+      source: "naver",
+      sourceId: "2645147927",
+      salesType: "jeonse",
+      areaM2: 84,
+      floor: "3/17",
+      bathrooms: 2,
+    });
+    expect(listing?.photos?.[0]).toContain("/plan.jpg");
+    expect(listing?.photos?.length).toBe(2);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listingPhotoUrl, uniquePhotoUrls } from "./photo";
+import { listingGalleryUrls, listingHasPhotos, listingPhotoUrl, uniquePhotoUrls } from "./photo";
 
 describe("listing photos", () => {
   it("adds the required Zigbang width query and proxies the image", () => {
@@ -21,5 +21,15 @@ describe("listing photos", () => {
     ]);
     expect(urls).toHaveLength(2);
     expect(urls.every((src) => src.startsWith("/api/media?u="))).toBe(true);
+  });
+
+  it("treats a thumbnail or gallery as having photos", () => {
+    expect(listingHasPhotos({ thumbnail: "https://x/a.jpg" })).toBe(true);
+    expect(listingHasPhotos({ photos: ["https://x/a.jpg"] })).toBe(true);
+    expect(listingHasPhotos({})).toBe(false);
+    expect(listingGalleryUrls({
+      thumbnail: "https://x/thumb.jpg",
+      photos: ["https://x/plan.jpg", "https://x/thumb.jpg"],
+    })).toEqual(["https://x/plan.jpg", "https://x/thumb.jpg"]);
   });
 });

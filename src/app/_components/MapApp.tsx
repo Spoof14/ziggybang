@@ -132,6 +132,7 @@ export default function MapApp() {
   const [minRent, setMinRent] = useState<number | undefined>();
   const [maxRent, setMaxRent] = useState<number | undefined>();
   const [foreignerOk, setForeignerOk] = useState(false);
+  const [hasPhotos, setHasPhotos] = useState(false);
   const [floorFilter, setFloorFilter] = useState<FloorFilter | undefined>();
   const [ageFilter, setAgeFilter] = useState<AgeFilter | undefined>();
   const [maxBuildingAge, setMaxBuildingAge] = useState<number | undefined>();
@@ -228,6 +229,7 @@ export default function MapApp() {
     setMinRent(url.minRent ?? base?.minRent);
     setMaxRent(url.maxRent ?? base?.maxRent);
     setForeignerOk(url.foreignerOk ?? base?.foreignerOk ?? false);
+    setHasPhotos(url.hasPhotos ?? base?.hasPhotos ?? false);
     setFloorFilter(url.floorFilter ?? base?.floorFilter);
     setAgeFilter(url.ageFilter ?? base?.ageFilter);
     setMaxBuildingAge(url.maxBuildingAge ?? base?.maxBuildingAge);
@@ -290,6 +292,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      hasPhotos,
       floorFilter,
       ageFilter,
       maxBuildingAge,
@@ -314,6 +317,7 @@ export default function MapApp() {
     zoom,
     listSort,
     foreignerOk,
+    hasPhotos,
     floorFilter,
     ageFilter,
     maxBuildingAge,
@@ -336,6 +340,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      hasPhotos,
       floorFilter,
       ageFilter,
       maxBuildingAge,
@@ -360,6 +365,7 @@ export default function MapApp() {
     urlView,
     viewMode,
     foreignerOk,
+    hasPhotos,
     floorFilter,
     ageFilter,
     maxBuildingAge,
@@ -427,6 +433,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      hasPhotos,
       floorFilter,
       ageFilter,
       maxBuildingAge,
@@ -442,6 +449,7 @@ export default function MapApp() {
     minRent,
     maxRent,
     foreignerOk,
+    hasPhotos,
     floorFilter,
     ageFilter,
     maxBuildingAge,
@@ -475,6 +483,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk: foreignerOk || undefined,
+      hasPhotos: hasPhotos || undefined,
       floorFilter,
       ageFilter,
       maxBuildingAge,
@@ -488,6 +497,7 @@ export default function MapApp() {
       ageFilter,
       maxBuildingAge,
       foreignerOk,
+      hasPhotos,
       listingLimit,
       listingQuery,
       maxDeposit,
@@ -562,6 +572,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      hasPhotos,
       floorFilter,
       ageFilter,
       maxBuildingAge,
@@ -589,6 +600,7 @@ export default function MapApp() {
     salesTypes,
     zoom,
     foreignerOk,
+    hasPhotos,
   ]);
 
   const waitingForFirst =
@@ -706,6 +718,7 @@ export default function MapApp() {
     setMinRent(undefined);
     setMaxRent(undefined);
     setForeignerOk(false);
+    setHasPhotos(false);
     setFloorFilter(undefined);
     setAgeFilter(undefined);
     setMaxBuildingAge(undefined);
@@ -713,7 +726,7 @@ export default function MapApp() {
 
   useEffect(() => {
     setListingLimit(viewMode === "best" ? 120 : 60);
-  }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent, foreignerOk, floorFilter, ageFilter, maxBuildingAge]);
+  }, [bounds, debouncedQuery, viewMode, minDeposit, maxDeposit, minRent, maxRent, foreignerOk, hasPhotos, floorFilter, ageFilter, maxBuildingAge]);
 
   const onToggleSave = useCallback((listing: MapListing) => {
     setSavedHomes((currentHomes) => {
@@ -743,6 +756,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      hasPhotos,
       floorFilter,
       ageFilter,
       maxBuildingAge,
@@ -774,6 +788,7 @@ export default function MapApp() {
     viewMode,
     zoom,
     foreignerOk,
+    hasPhotos,
   ]);
 
   const hideNaverError = useCallback((turnOff = false) => {
@@ -805,6 +820,7 @@ export default function MapApp() {
     setMinRent(snapshot.minRent);
     setMaxRent(snapshot.maxRent);
     setForeignerOk(Boolean(snapshot.foreignerOk));
+    setHasPhotos(Boolean(snapshot.hasPhotos));
     setFloorFilter(snapshot.floorFilter);
     setAgeFilter(snapshot.ageFilter);
     setMaxBuildingAge(snapshot.maxBuildingAge);
@@ -825,6 +841,7 @@ export default function MapApp() {
       minRent,
       maxRent,
       foreignerOk,
+      hasPhotos,
       floorFilter,
       ageFilter,
       maxBuildingAge,
@@ -846,6 +863,7 @@ export default function MapApp() {
       searchInput,
       viewMode,
       foreignerOk,
+      hasPhotos,
     ],
   );
 
@@ -862,6 +880,7 @@ export default function MapApp() {
     minRent,
     maxRent,
     foreignerOk,
+    hasPhotos,
     floorFilter,
     ageFilter,
     maxBuildingAge,
@@ -1114,6 +1133,18 @@ export default function MapApp() {
               }`}
             >
               Foreigners welcome
+            </button>
+            <button
+              type="button"
+              onClick={() => setHasPhotos((current) => !current)}
+              title="Hide listings that have no photos."
+              className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+                hasPhotos
+                  ? "bg-sky-400 text-slate-950"
+                  : "bg-white/10 text-slate-300"
+              }`}
+            >
+              Has photos
             </button>
             {floorFilters.map((filter) => (
               <button
@@ -1460,9 +1491,11 @@ export default function MapApp() {
                   ? "No saved homes yet. Tap the heart on a listing to keep it here."
                   : viewMode === "best" && zoom < 14 && !circle && !polygon
                     ? "Search Hongdae, Dangsan station, or zoom in so Best has homes to rank."
-                    : foreignerOk
-                      ? "Few ads say foreigners are welcome in the title. Widen the area, or turn that chip off."
-                      : undefined
+                    : hasPhotos
+                      ? "Every remaining home has no photos. Turn that chip off to see them."
+                      : foreignerOk
+                        ? "Few ads say foreigners are welcome in the title. Widen the area, or turn that chip off."
+                        : undefined
               }
               onSort={setListSort}
               onSelect={setSelected}

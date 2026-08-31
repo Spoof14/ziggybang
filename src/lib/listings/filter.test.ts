@@ -138,6 +138,23 @@ describe("sales type filters", () => {
     ).toEqual(["second"]);
   });
 
+  it("keeps only listings that have photos when that chip is on", () => {
+    const listings = [
+      { ...listing("shot", "wolse"), thumbnail: "https://x/a.jpg" },
+      { ...listing("gallery", "wolse"), photos: ["https://x/b.jpg"] },
+      listing("blank", "wolse"),
+    ];
+    expect(
+      filterListings(listings, {
+        salesTypes: ["wolse"],
+        areaBucketIds: [],
+        query: "",
+        requireDetails: true,
+        hasPhotos: true,
+      }).map((item) => item.id),
+    ).toEqual(["shot", "gallery"]);
+  });
+
   it("drops older buildings when the max-age slider is set", () => {
     const listings = [
       { ...listing("new", "wolse"), approveDate: "2020.03.15" },
@@ -224,6 +241,14 @@ describe("hydrated vs default rent filters", () => {
         areaBucketIds: [],
         query: "",
         floorFilter: "no-basement",
+      }),
+    ).toBe(true);
+    expect(
+      needsHydratedFilters({
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        query: "",
+        hasPhotos: true,
       }),
     ).toBe(true);
     expect(
