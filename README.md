@@ -16,6 +16,8 @@ Naver Land blocks non-Korean **and cloud** IPs. Zigbang and Peterpan still work 
 
 Seoul (`icn1` in `vercel.json`) only places the function in AWS Korea. Outbound requests still use Amazon datacenter IPs, which Naver drops (the request hangs, then times out). A Korean home ISP, mobile hotspot, or residential proxy works; Vercel/AWS does not.
 
+The mobile AJAX endpoints (`m.land.naver.com/cluster/...`) return a literal `null` even from a Korean Telecom home IP. Ziggybang therefore loads a short-lived JWT from `new.land.naver.com` and calls the desktop JSON APIs (`/api/articles`, `/api/articles/clusters`) with `Authorization: Bearer`. That bootstrap happens automatically when a Korean proxy is configured.
+
 ### Making Naver work with a proxy
 
 Set `NAVER_PROXY_URL` to an HTTP(S) proxy whose egress IP is a Korean residential or
@@ -29,7 +31,9 @@ Options that work:
 
 - A Korean residential/mobile proxy provider (any standard HTTP CONNECT proxy).
 - Your own machine on a Korean home ISP running [tinyproxy](https://tinyproxy.github.io/)
-  or squid, port-forwarded so Vercel can reach it. Protect it with credentials.
+  or squid, port-forwarded so Vercel can reach it. **Protect it with credentials**
+  (tinyproxy 1.11+ `BasicAuth`, or squid). An open proxy on a home IP will get
+  hijacked.
 
 A Korean **datacenter** VPS usually does not work — Naver drops those ranges too, the
 same way it drops AWS. Without the variable, behavior is unchanged: Naver fails soft
@@ -52,12 +56,13 @@ is used rather than their proxy mode because proxy mode intercepts TLS and
 requires installing Bright Data's CA certificate. If both variables are set,
 `NAVER_PROXY_URL` takes precedence.
 
-**Required zone setting:** Naver's AJAX endpoints return `null` unless the
-request carries a `Referer`, and by default Web Unlocker ignores caller headers.
-In the Bright Data control panel open your zone → Configuration → Advanced
-Settings and enable **Custom headers & cookies**, then the app's referer goes
-through. Note that with this setting Bright Data bills all requests, not only
-successful ones.
+Unlocker egress is typically a Korean datacenter IP. That is enough to load Naver
+HTML (and therefore the JWT), but the listing APIs may still reject the request.
+A home-ISP proxy is the reliable path.
+
+**Required zone setting:** enable **Custom headers & cookies** on the zone so the
+app can send `Referer` and `Authorization`. Note that with this setting Bright Data
+bills all requests, not only successful ones.
 
 ## Develop
 

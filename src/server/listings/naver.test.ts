@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   articleToListing,
+  clusterToListing,
+  extractClusters,
   mapNaverPropertyType,
   mapNaverSalesType,
   naverBudgetMs,
@@ -8,6 +10,7 @@ import {
   naverRequestTimeoutMs,
   naverTransport,
   naverZoom,
+  parseNaverManwon,
 } from "./naver";
 
 describe("naver mappers", () => {
@@ -57,6 +60,45 @@ describe("naver mappers", () => {
     expect(articleToListing({ atclNo: "1" })).toBeNull();
   });
 
+  it("maps new.land article fields, including 억 deposits", () => {
+    expect(parseNaverManwon("1억 2,000")).toBe(12000);
+    expect(parseNaverManwon("1,000")).toBe(1000);
+    const listing = articleToListing({
+      articleNo: "2645881772",
+      articleName: "일반원룸",
+      realEstateTypeCode: "OR",
+      tradeTypeCode: "B2",
+      latitude: 37.556,
+      longitude: 126.923,
+      dealOrWarrantPrc: "1,000",
+      rentPrc: 70,
+      area2: 19.8,
+      floorInfo: "3/5",
+      articleConfirmYmd: "20260831",
+    });
+    expect(listing).toMatchObject({
+      id: "naver:oneroom:2645881772",
+      source: "naver",
+      salesType: "wolse",
+      deposit: 1000,
+      rent: 70,
+      areaM2: 19.8,
+      floor: "3/5",
+    });
+  });
+
+  it("maps new.land cluster markers from an array payload", () => {
+    const clusters = extractClusters([
+      { latitude: 37.55, longitude: 126.91, count: 4, markerId: "abc" },
+    ]);
+    expect(clusterToListing(clusters[0]!, 0)).toMatchObject({
+      id: "naver:cluster:abc",
+      lat: 37.55,
+      lng: 126.91,
+      count: 4,
+    });
+  });
+
   it("clamps Naver zoom and maps codes", () => {
     expect(naverZoom(3)).toBe(8);
     expect(naverZoom(21)).toBe(19);
@@ -72,8 +114,9 @@ describe("naver mappers", () => {
     expect(naverBudgetMs("direct")).toBe(2500);
     expect(naverBudgetMs("proxy")).toBeGreaterThan(naverBudgetMs("direct"));
     expect(naverBudgetMs("unlocker")).toBeGreaterThanOrEqual(naverRequestTimeoutMs("unlocker"));
-    // Two sequential article pages must fit inside the proxied aggregate budget.
+    // Session + region lookups + two article pages must fit in the proxied budget.
     expect(naverRequestTimeoutMs("proxy") * 2).toBeLessThanOrEqual(naverBudgetMs("proxy"));
+    expect(naverRequestTimeoutMs("proxy") * 3).toBeLessThanOrEqual(naverBudgetMs("proxy"));
     // Without proxy or unlocker configured, nothing changes.
     expect(naverTransport()).toBe("direct");
   });

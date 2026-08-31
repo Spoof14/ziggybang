@@ -1,7 +1,7 @@
 import http from "node:http";
 import net from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { fetchJson, proxyDispatcher } from "./http";
+import { fetchJson, fetchText, proxyDispatcher } from "./http";
 
 type TestProxy = {
   url: string;
@@ -82,6 +82,15 @@ describe("proxied fetchJson", () => {
     );
     expect(result.ok).toBe(true);
     expect(proxy.tunneled.length).toBe(before);
+  });
+
+  it("fetchText returns the raw body through the same proxy path", async () => {
+    const result = await fetchText(`http://127.0.0.1:${targetPort}/plain`, {
+      proxyUrl: proxy.url,
+      timeoutMs: 3000,
+    });
+    expect(result.text).toContain("\"ok\":true");
+    expect(proxy.tunneled).toContain(`127.0.0.1:${targetPort}`);
   });
 
   it("reuses one dispatcher per proxy URL", () => {

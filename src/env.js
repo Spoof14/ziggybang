@@ -10,9 +10,10 @@ export const env = createEnv({
     NODE_ENV: z.enum(["development", "test", "production"]),
     OPENAI_API_KEY: z.string().optional(),
     /**
-     * HTTP(S) proxy with a Korean egress IP, e.g. http://user:pass@host:port.
-     * Naver Land drops packets from non-Korean and datacenter IPs, so without
-     * this the Naver source fails soft and only Zigbang/Peterpan load.
+     * HTTP(S) proxy with a Korean home/residential egress IP, e.g.
+     * http://user:pass@host:port. Naver Land drops packets from non-Korean and
+     * datacenter IPs, and m.land AJAX returns null even from Korea; the app
+     * uses this proxy to bootstrap a new.land JWT and call the desktop APIs.
      */
     NAVER_PROXY_URL: z.string().url().optional(),
     /**

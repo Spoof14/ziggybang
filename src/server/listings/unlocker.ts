@@ -47,14 +47,14 @@ export function buildUnlockerRequest(
   };
 }
 
-export async function fetchJsonViaUnlocker<T>(
+export async function fetchTextViaUnlocker(
   targetUrl: string,
   timeoutMs: number,
   config: UnlockerConfig | undefined = env.BRIGHTDATA_API_KEY
     ? { apiKey: env.BRIGHTDATA_API_KEY, zone: env.BRIGHTDATA_UNLOCKER_ZONE }
     : undefined,
   targetHeaders?: Record<string, string>,
-): Promise<T> {
+): Promise<string> {
   if (!config) {
     throw new HttpError("Web Unlocker is not configured");
   }
@@ -69,12 +69,7 @@ export async function fetchJsonViaUnlocker<T>(
         response.status,
       );
     }
-    const text = await response.text();
-    try {
-      return JSON.parse(text) as T;
-    } catch {
-      throw new HttpError(`Web Unlocker returned non-JSON for ${targetUrl}`);
-    }
+    return await response.text();
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new HttpError(`Web Unlocker timed out for ${targetUrl}`);
@@ -82,5 +77,21 @@ export async function fetchJsonViaUnlocker<T>(
     throw error;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+export async function fetchJsonViaUnlocker<T>(
+  targetUrl: string,
+  timeoutMs: number,
+  config: UnlockerConfig | undefined = env.BRIGHTDATA_API_KEY
+    ? { apiKey: env.BRIGHTDATA_API_KEY, zone: env.BRIGHTDATA_UNLOCKER_ZONE }
+    : undefined,
+  targetHeaders?: Record<string, string>,
+): Promise<T> {
+  const text = await fetchTextViaUnlocker(targetUrl, timeoutMs, config, targetHeaders);
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new HttpError(`Web Unlocker returned non-JSON for ${targetUrl}`);
   }
 }

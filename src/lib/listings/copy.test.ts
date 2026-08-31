@@ -49,5 +49,6 @@ describe("English listing copy", () => {
     expect(friendlySourceError("naver", "fetch failed")).toContain(
       "blocked from this server",
     );
+    expect(friendlySourceError("naver", "fetch failed")).toContain("NAVER_PROXY_URL");
   });
 });
