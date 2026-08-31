@@ -10,9 +10,12 @@ import {
   mapNaverSalesType,
   NAVER_ARTICLE_PAGES,
   articlePagesForCortarCount,
+  listingInventoryCount,
+  naverAreaRange,
   naverBudgetMs,
   naverClusterZoom,
   naverCortarLevel,
+  naverFilterParams,
   naverListingUrl,
   naverRequestTimeoutMs,
   naverTransport,
@@ -118,7 +121,7 @@ describe("naver mappers", () => {
     expect(naverClusterZoom(12)).toBe(15);
     expect(naverClusterZoom(17)).toBe(17);
     expect(articlePagesForCortarCount(1)).toBe(NAVER_ARTICLE_PAGES);
-    expect(articlePagesForCortarCount(3)).toBe(2);
+    expect(articlePagesForCortarCount(3)).toBe(4);
     expect(mapNaverSalesType("B1")).toBe("jeonse");
     expect(mapNaverPropertyType("VL")).toBe("villa");
     expect(naverListingUrl("9")).toContain("/article/info/9");
@@ -143,6 +146,24 @@ describe("naver mappers", () => {
     expect(picked[0]).toBe("seogyo");
   });
 
+  it("sends budget, size, and building-age filters to Naver", () => {
+    expect(naverAreaRange(["s"])).toEqual({ min: 20, max: 33 });
+    expect(naverAreaRange(["s", "m"])).toEqual({ min: 20, max: 50 });
+    expect(naverAreaRange(["xs", "s", "m", "l"])).toBeNull();
+    const params = naverFilterParams({
+      maxDeposit: 2000,
+      maxRent: 70,
+      areaBucketIds: ["s"],
+      maxBuildingAge: 10,
+    });
+    expect(params.priceMax).toBe("2000");
+    expect(params.rentPriceMax).toBe("70");
+    expect(params.areaMin).toBe("20");
+    expect(params.areaMax).toBe("33");
+    expect(params.recentlyBuildYears).toBe("10");
+    expect(listingInventoryCount([{ count: 12 }, { count: 1 }, {}])).toBe(14);
+  });
+
   it("gives proxied and unlocked Naver requests more time than direct ones", () => {
     expect(naverRequestTimeoutMs("direct")).toBe(2500);
     expect(naverRequestTimeoutMs("proxy")).toBeGreaterThan(naverRequestTimeoutMs("direct"));
@@ -150,11 +171,8 @@ describe("naver mappers", () => {
     expect(naverBudgetMs("direct")).toBe(2500);
     expect(naverBudgetMs("proxy")).toBeGreaterThan(naverBudgetMs("direct"));
     expect(naverBudgetMs("unlocker")).toBeGreaterThanOrEqual(naverRequestTimeoutMs("unlocker"));
-    // Session + region lookups + article pages must fit in the proxied budget.
+    // First article page, then extra pages in parallel, must fit the proxied budget.
     expect(naverRequestTimeoutMs("proxy") * 2).toBeLessThanOrEqual(naverBudgetMs("proxy"));
-    expect(
-      naverRequestTimeoutMs("proxy") * NAVER_ARTICLE_PAGES,
-    ).toBeLessThanOrEqual(naverBudgetMs("proxy"));
     // Without proxy or unlocker configured, nothing changes.
     expect(naverTransport()).toBe("direct");
   });

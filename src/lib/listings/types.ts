@@ -97,6 +97,7 @@ export type MapData = {
     zigbang: number;
     naver: number;
     peterpan: number;
+    naverAvailable?: number;
     returned: number;
     truncated: boolean;
   };
