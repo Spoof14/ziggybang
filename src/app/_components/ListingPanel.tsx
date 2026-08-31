@@ -20,12 +20,13 @@ import {
 } from "~/lib/listings/english";
 import { agencyFeeCopy } from "~/lib/listings/agency-fee";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
-import { listingPagePath } from "~/lib/listings/path";
+import { listingPagePath, mergeListingDetail } from "~/lib/listings/path";
 import { listingGalleryUrls } from "~/lib/listings/photo";
 import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { ListingAgeLine } from "./ListingAgeLine";
 import { ListingGallery } from "./ListingGallery";
+import { ListingLocationCard } from "./ListingLocationCard";
 import { ListingPageLink } from "./ListingPageLink";
 import { ListingPrice } from "./ListingPrice";
 
@@ -60,7 +61,7 @@ export function ListingPanel({
     { enabled: listing.source === "zigbang" && listing.propertyType !== "apartment" || listing.source === "naver" },
   );
 
-  const detail = detailQuery.data ?? listing;
+  const detail = mergeListingDetail(detailQuery.data, listing) ?? listing;
   const photos = listingGalleryUrls({
     thumbnail: detail.thumbnail ?? listing.thumbnail,
     photos: detail.photos ?? listing.photos,
@@ -215,6 +216,8 @@ export function ListingPanel({
       {description ? (
         <p className="px-4 pb-2 text-sm leading-relaxed text-slate-300">{description}</p>
       ) : null}
+
+      <ListingLocationCard listing={detail} title={englishTitle} compact />
 
       {detailQuery.isLoading ? (
         <p className="px-4 text-sm text-slate-400">Loading listing details…</p>

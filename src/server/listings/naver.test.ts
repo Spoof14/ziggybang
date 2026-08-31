@@ -266,4 +266,23 @@ describe("naver mappers", () => {
     expect(listing?.photos?.[0]).toContain("/plan.jpg");
     expect(listing?.photos?.length).toBe(2);
   });
+
+  it("reads nested article-detail coordinates when the top-level pin is missing", () => {
+    const listing = mapNaverArticleDetail(
+      {
+        articleNo: "1",
+        articleName: "연남 원룸",
+        realEstateTypeCode: "OR",
+        tradeTypeCode: "B2",
+        articleDetail: {
+          articleNo: "1",
+          latitude: "37.56",
+          longitude: "126.92",
+          exposureAddress: "서울시 마포구 연남동",
+        },
+      },
+      "1",
+    );
+    expect(listing).toMatchObject({ lat: 37.56, lng: 126.92 });
+  });
 });
