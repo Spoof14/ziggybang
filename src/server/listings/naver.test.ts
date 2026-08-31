@@ -9,12 +9,16 @@ import {
   mapNaverPropertyType,
   mapNaverSalesType,
   NAVER_ARTICLE_PAGES,
+  articlePagesForCortarCount,
   naverBudgetMs,
+  naverClusterZoom,
+  naverCortarLevel,
   naverListingUrl,
   naverRequestTimeoutMs,
   naverTransport,
   naverZoom,
   parseNaverManwon,
+  pickRegionsInView,
 } from "./naver";
 
 describe("naver mappers", () => {
@@ -108,9 +112,35 @@ describe("naver mappers", () => {
   it("clamps Naver zoom and maps codes", () => {
     expect(naverZoom(3)).toBe(8);
     expect(naverZoom(21)).toBe(19);
+    expect(naverCortarLevel(11)).toBe("sido");
+    expect(naverCortarLevel(13)).toBe("gu");
+    expect(naverCortarLevel(16)).toBe("dong");
+    expect(naverClusterZoom(12)).toBe(15);
+    expect(naverClusterZoom(17)).toBe(17);
+    expect(articlePagesForCortarCount(1)).toBe(NAVER_ARTICLE_PAGES);
+    expect(articlePagesForCortarCount(3)).toBe(2);
     expect(mapNaverSalesType("B1")).toBe("jeonse");
     expect(mapNaverPropertyType("VL")).toBe("villa");
     expect(naverListingUrl("9")).toContain("/article/info/9");
+  });
+
+  it("picks every dong in the map view, not only the nearest centre", () => {
+    const hongdae = {
+      south: 37.548,
+      west: 126.91,
+      north: 37.562,
+      east: 126.93,
+    };
+    const dongs = [
+      { cortarNo: "seogyo", centerLat: 37.555, centerLon: 126.922 },
+      { cortarNo: "yeonnam", centerLat: 37.56, centerLon: 126.925 },
+      { cortarNo: "hapjeong", centerLat: 37.549, centerLon: 126.914 },
+      { cortarNo: "gangnam", centerLat: 37.498, centerLon: 127.028 },
+    ];
+    const picked = pickRegionsInView(dongs, hongdae, 3);
+    expect(picked).toEqual(expect.arrayContaining(["seogyo", "yeonnam", "hapjeong"]));
+    expect(picked).not.toContain("gangnam");
+    expect(picked[0]).toBe("seogyo");
   });
 
   it("gives proxied and unlocked Naver requests more time than direct ones", () => {

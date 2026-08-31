@@ -1,4 +1,4 @@
-import { boundsCenter, containsPoint } from "~/lib/geo/bounds";
+import { boundsCenter, containsPoint, expandBounds } from "~/lib/geo/bounds";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
   type Bounds,
@@ -61,6 +61,62 @@ const codeToPropertyType: Record<string, PropertyType> = {
 
 export function naverZoom(webZoom: number): number {
   return Math.max(8, Math.min(19, Math.round(webZoom)));
+}
+
+/** Administrative region the map should query at this Leaflet zoom. */
+export function naverCortarLevel(zoom: number): "sido" | "gu" | "dong" {
+  const z = naverZoom(zoom);
+  if (z <= 11) return "sido";
+  if (z <= 14) return "gu";
+  return "dong";
+}
+
+/**
+ * new.land /api/articles/clusters returns [] below zoom 15. Keep sending at
+ * least 15 so a city-wide view still gets pins, while cortarNo follows the
+ * real map zoom (gu/sido vs dong).
+ */
+export function naverClusterZoom(webZoom: number): number {
+  return Math.max(15, naverZoom(webZoom));
+}
+
+export function articlePagesForCortarCount(count: number): number {
+  return count > 1 ? 2 : NAVER_ARTICLE_PAGES;
+}
+
+const MAX_NAVER_CORTARS = 3;
+
+export function pickRegionsInView(
+  regions: Array<{ cortarNo: string; centerLat?: number; centerLon?: number }>,
+  bounds: Bounds,
+  limit = MAX_NAVER_CORTARS,
+): string[] {
+  const usable = regions.filter(
+    (region): region is { cortarNo: string; centerLat: number; centerLon: number } =>
+      typeof region.centerLat === "number" &&
+      Number.isFinite(region.centerLat) &&
+      typeof region.centerLon === "number" &&
+      Number.isFinite(region.centerLon),
+  );
+  if (!usable.length) return [];
+  const expanded = expandBounds(bounds, 0.45);
+  const center = boundsCenter(bounds);
+  const inView = usable.filter((region) =>
+    containsPoint(expanded, region.centerLat, region.centerLon),
+  );
+  const pool = inView.length ? inView : usable;
+  return [...pool]
+    .sort((a, b) => {
+      const da =
+        (a.centerLat - center.lat) * (a.centerLat - center.lat) +
+        (a.centerLon - center.lng) * (a.centerLon - center.lng);
+      const db =
+        (b.centerLat - center.lat) * (b.centerLat - center.lat) +
+        (b.centerLon - center.lng) * (b.centerLon - center.lng);
+      return da - db;
+    })
+    .slice(0, Math.max(1, limit))
+    .map((region) => region.cortarNo);
 }
 
 export function naverListingUrl(articleNo: string): string {
@@ -342,22 +398,6 @@ function salesQuery(types?: SalesType[]): string {
   return selected.map((type) => naverSalesCodes[type]).join(":");
 }
 
-function nearestRegion(regions: NaverRegion[], lat: number, lng: number): NaverRegion | undefined {
-  let best: NaverRegion | undefined;
-  let bestDist = Number.POSITIVE_INFINITY;
-  for (const region of regions) {
-    if (typeof region.centerLat !== "number" || typeof region.centerLon !== "number") continue;
-    const dlat = region.centerLat - lat;
-    const dlng = region.centerLon - lng;
-    const dist = dlat * dlat + dlng * dlng;
-    if (dist < bestDist) {
-      best = region;
-      bestDist = dist;
-    }
-  }
-  return best;
-}
-
 async function listRegions(cortarNo: string): Promise<NaverRegion[]> {
   return cached(`nv:regions:${cortarNo}`, REGION_TTL_MS, async () => {
     const payload = await naverAuthorizedJson<NaverRegionResponse>(
@@ -370,42 +410,78 @@ async function listRegions(cortarNo: string): Promise<NaverRegion[]> {
 
 /**
  * new.land article/cluster APIs are keyed by 법정동 cortarNo, not only a
- * bounding box. Walk 시도 → 구 → 동 using cached region lists and pick the
- * nearest centre to the viewport.
+ * bounding box. Walk 시도 → 구 → 동 using cached region lists and pick every
+ * centre that sits in the viewport (not just the nearest one).
  */
 export async function cortarNoForPoint(
   lat: number,
   lng: number,
   zoom: number,
 ): Promise<string | undefined> {
-  const z = naverZoom(zoom);
+  const nos = await cortarNosForViewport(
+    {
+      south: lat - 0.002,
+      north: lat + 0.002,
+      west: lng - 0.002,
+      east: lng + 0.002,
+    },
+    zoom,
+  );
+  return nos[0];
+}
+
+export async function cortarNosForViewport(bounds: Bounds, zoom: number): Promise<string[]> {
+  const level = naverCortarLevel(zoom);
   const sidos = await listRegions(ROOT_CORTAR);
-  const sido = nearestRegion(sidos, lat, lng);
-  if (!sido) return undefined;
-  if (z <= 11) return sido.cortarNo;
+  if (level === "sido") return pickRegionsInView(sidos, bounds, 1);
 
-  const gus = await listRegions(sido.cortarNo);
-  const gu = nearestRegion(gus, lat, lng) ?? sido;
-  if (z <= 14) return gu.cortarNo;
+  const sidoNos = pickRegionsInView(sidos, bounds, 2);
+  const gus: NaverRegion[] = [];
+  for (const cortarNo of sidoNos) {
+    gus.push(...(await listRegions(cortarNo)));
+  }
+  if (level === "gu") return pickRegionsInView(gus, bounds, MAX_NAVER_CORTARS);
 
-  const dongs = await listRegions(gu.cortarNo);
-  return nearestRegion(dongs, lat, lng)?.cortarNo ?? gu.cortarNo;
+  const guNos = pickRegionsInView(gus, bounds, 2);
+  const dongs: NaverRegion[] = [];
+  for (const cortarNo of guNos) {
+    dongs.push(...(await listRegions(cortarNo)));
+  }
+  return pickRegionsInView(dongs, bounds, MAX_NAVER_CORTARS);
+}
+
+function naverMapParams(bounds: Bounds, zoom: number): Record<string, string> {
+  const center = boundsCenter(bounds);
+  return {
+    zoom: String(naverClusterZoom(zoom)),
+    leftLon: String(bounds.west),
+    rightLon: String(bounds.east),
+    topLat: String(bounds.north),
+    bottomLat: String(bounds.south),
+    centerLat: String(center.lat),
+    centerLon: String(center.lng),
+  };
+}
+
+function dedupeNaverListings(listings: MapListing[]): MapListing[] {
+  const seen = new Map<string, MapListing>();
+  for (const listing of listings) {
+    seen.set(listing.id, listing);
+  }
+  return [...seen.values()];
 }
 
 async function fetchClusterList(input: {
   bounds: Bounds;
   zoom: number;
+  cortarNo: string;
   propertyTypes: PropertyType[];
   salesTypes?: SalesType[];
 }): Promise<MapListing[]> {
-  const center = boundsCenter(input.bounds);
-  const z = naverZoom(input.zoom);
-  const cortarNo = await cortarNoForPoint(center.lat, center.lng, input.zoom);
-  if (!cortarNo) return [];
-
+  const z = naverClusterZoom(input.zoom);
   const key = [
     "nv:cluster",
-    cortarNo,
+    input.cortarNo,
     z,
     input.bounds.south.toFixed(3),
     input.bounds.west.toFixed(3),
@@ -417,15 +493,11 @@ async function fetchClusterList(input: {
 
   return cached(key, TILE_TTL_MS, async () => {
     const params = new URLSearchParams({
-      cortarNo,
-      zoom: String(z),
+      cortarNo: input.cortarNo,
       priceType: "RETAIL",
       realEstateType: propertyQuery(input.propertyTypes),
       tradeType: salesQuery(input.salesTypes),
-      leftLon: String(input.bounds.west),
-      rightLon: String(input.bounds.east),
-      topLat: String(input.bounds.north),
-      bottomLat: String(input.bounds.south),
+      ...naverMapParams(input.bounds, input.zoom),
     });
     const payload = await naverAuthorizedJson<NaverClusterResponse | NaverCluster[]>(
       `${NEW_LAND_ORIGIN}/api/articles/clusters?${params.toString()}`,
@@ -440,33 +512,35 @@ async function fetchClusterList(input: {
 async function fetchArticleList(input: {
   bounds: Bounds;
   zoom: number;
+  cortarNo: string;
+  pages?: number;
   propertyTypes: PropertyType[];
   salesTypes?: SalesType[];
 }): Promise<MapListing[]> {
-  const center = boundsCenter(input.bounds);
-  const z = naverZoom(input.zoom);
-  const cortarNo = await cortarNoForPoint(center.lat, center.lng, input.zoom);
-  if (!cortarNo) return [];
-
+  const z = naverClusterZoom(input.zoom);
+  const pages = input.pages ?? NAVER_ARTICLE_PAGES;
   const listings: MapListing[] = [];
 
-  for (let page = 1; page <= NAVER_ARTICLE_PAGES; page += 1) {
+  for (let page = 1; page <= pages; page += 1) {
     const key = [
       "nv:articles",
-      cortarNo,
+      input.cortarNo,
       z,
       page,
+      input.bounds.south.toFixed(3),
+      input.bounds.west.toFixed(3),
       propertyQuery(input.propertyTypes),
       salesQuery(input.salesTypes),
     ].join(":");
 
     const pageItems = await cached(key, TILE_TTL_MS, async () => {
       const params = new URLSearchParams({
-        cortarNo,
+        cortarNo: input.cortarNo,
         order: "rank",
         realEstateType: propertyQuery(input.propertyTypes),
         tradeType: salesQuery(input.salesTypes),
         page: String(page),
+        ...naverMapParams(input.bounds, input.zoom),
       });
       const payload = await naverAuthorizedJson<NaverArticleResponse>(
         `${NEW_LAND_ORIGIN}/api/articles?${params.toString()}`,
@@ -494,22 +568,45 @@ export async function fetchNaverListings(input: {
   propertyTypes: PropertyType[];
   salesTypes?: SalesType[];
 }): Promise<MapListing[]> {
-  // new.land /api/articles/clusters returns [] below zoom 15, so a city-wide
-  // default view showed zero Naver pins with no error. Always load dong-level
-  // article rows; the map aggregator still clusters them when zoomed out.
-  const listings = await fetchArticleList({
-    ...input,
-    zoom: Math.max(input.zoom, 15),
-  });
-  if (listings.length > 0 || input.zoom >= 15) {
-    return listings.filter((listing) =>
-      containsPoint(input.bounds, listing.lat, listing.lng),
+  const cortarNos = await cortarNosForViewport(input.bounds, input.zoom);
+  if (!cortarNos.length) return [];
+
+  const inView = (listings: MapListing[]) =>
+    listings.filter((listing) => containsPoint(input.bounds, listing.lat, listing.lng));
+
+  if (input.zoom >= 15) {
+    const pages = articlePagesForCortarCount(cortarNos.length);
+    const groups = await Promise.all(
+      cortarNos.map((cortarNo) =>
+        fetchArticleList({
+          ...input,
+          cortarNo,
+          pages,
+        }),
+      ),
     );
+    return inView(dedupeNaverListings(groups.flat()));
   }
-  const clusters = await fetchClusterList(input);
-  return clusters.filter((listing) =>
-    containsPoint(input.bounds, listing.lat, listing.lng),
+
+  const clusters = await Promise.all(
+    cortarNos.map((cortarNo) => fetchClusterList({ ...input, cortarNo })),
   );
+  const clustered = inView(dedupeNaverListings(clusters.flat()));
+  if (clustered.length) return clustered;
+
+  // Cluster endpoint is empty below zoom 15; fall back to dong-level articles
+  // for the same viewport so the Naver chip is not a blank city.
+  const dongNos = await cortarNosForViewport(input.bounds, 15);
+  const groups = await Promise.all(
+    dongNos.map((cortarNo) =>
+      fetchArticleList({
+        ...input,
+        cortarNo,
+        pages: articlePagesForCortarCount(dongNos.length),
+      }),
+    ),
+  );
+  return inView(dedupeNaverListings(groups.flat()));
 }
 
 export async function fetchNaverDetail(sourceId: string): Promise<ListingDetail> {
