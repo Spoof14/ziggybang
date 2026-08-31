@@ -129,7 +129,7 @@ export function formatRoomType(value?: string): string | null {
 
 export function friendlySourceError(source: Source, message: string): string {
   if (source === "naver") {
-    return "Naver is blocked from this server. Turn the Naver chip off, or retry later from a Korean home network. Zigbang and Peterpan still work.";
+    return "Naver is blocked from this server without a Korean home/residential proxy. Set NAVER_PROXY_URL (or BRIGHTDATA_API_KEY) and the app will fetch a session token automatically. Or turn the Naver chip off — Zigbang and Peterpan still work.";
   }
   return `${sourceLabel[source]}: ${message}`;
 }

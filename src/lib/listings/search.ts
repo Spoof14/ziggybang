@@ -265,9 +265,10 @@ export function matchPlace(query: string): Place | undefined {
 }
 
 function nameSpecificity(name: string): number {
-  if (/입구$/.test(name)) return 1;
-  if (/구$/.test(name) || /-gu$/i.test(name)) return 0;
-  if (/동$/.test(name) || /-dong$/i.test(name)) return 2;
+  const lower = name.toLowerCase();
+  if (lower.endsWith("입구")) return 1;
+  if (lower.endsWith("구") || lower.endsWith("-gu")) return 0;
+  if (lower.endsWith("동") || lower.endsWith("-dong")) return 2;
   return 1;
 }
 

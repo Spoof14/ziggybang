@@ -7,16 +7,36 @@ import {
   type SalesType,
 } from "~/lib/listings/types";
 import { cached } from "./cache";
-import { fetchJson } from "./http";
+import {
+  NEW_LAND_ORIGIN,
+  naverAuthorizedJson,
+  naverProxyUrl,
+  naverTransport,
+  type NaverTransport,
+} from "./naver-session";
 
-const NAVER_ORIGIN = "https://m.land.naver.com";
+export { naverProxyUrl, naverTransport, type NaverTransport };
+
 const TILE_TTL_MS = 5 * 60 * 1000;
-const NAVER_HEADERS = {
-  "user-agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-  referer: "https://m.land.naver.com/",
-  accept: "application/json, text/plain, */*",
-};
+const REGION_TTL_MS = 24 * 60 * 60 * 1000;
+const ROOT_CORTAR = "0000000000";
+
+/**
+ * Direct requests hang until timeout when blocked. A proxy adds one hop to
+ * Korea plus a session bootstrap; the unlocker adds retries on Bright Data's
+ * side, so it gets the most headroom.
+ */
+export function naverRequestTimeoutMs(transport: NaverTransport = naverTransport()): number {
+  if (transport === "proxy") return 4000;
+  if (transport === "unlocker") return 6500;
+  return 2500;
+}
+
+export function naverBudgetMs(transport: NaverTransport = naverTransport()): number {
+  if (transport === "direct") return 2500;
+  if (transport === "proxy") return 12000;
+  return 8000;
+}
 
 const naverPropertyCodes: Record<PropertyType, string> = {
   apartment: "APT",
@@ -56,16 +76,19 @@ export function mapNaverPropertyType(value?: string): PropertyType {
   return codeToPropertyType[value] ?? "apartment";
 }
 
-type NaverCluster = {
-  lat?: number;
-  lon?: number;
-  lng?: number;
+export type NaverCluster = {
+  lat?: number | string;
+  lon?: number | string;
+  lng?: number | string;
+  latitude?: number | string;
+  longitude?: number | string;
   count?: number;
   cnt?: number;
   lgeo?: string;
+  markerId?: string;
 };
 
-type NaverClusterResponse = {
+export type NaverClusterResponse = {
   data?: {
     ARTICLE?: NaverCluster[] | Record<string, NaverCluster[]>;
     article?: NaverCluster[];
@@ -73,38 +96,78 @@ type NaverClusterResponse = {
   ARTICLE?: NaverCluster[];
 };
 
-type NaverArticle = {
+export type NaverArticle = {
   atclNo?: string | number;
+  articleNo?: string | number;
   atclNm?: string;
+  articleName?: string;
+  buildingName?: string;
   rletTpCd?: string;
   rletTpNm?: string;
+  realEstateTypeCode?: string;
+  realEstateTypeName?: string;
   tradTpCd?: string;
   tradTpNm?: string;
-  lat?: number;
-  lng?: number;
+  tradeTypeCode?: string;
+  tradeTypeName?: string;
+  lat?: number | string;
+  lng?: number | string;
+  latitude?: number | string;
+  longitude?: number | string;
   prc?: number;
-  rentPrc?: number;
+  rentPrc?: number | string;
   hanPrc?: number | string;
+  dealOrWarrantPrc?: number | string;
   spc1?: number | string;
   spc2?: number | string;
+  area1?: number | string;
+  area2?: number | string;
   flrInfo?: string;
+  floorInfo?: string;
   repImgUrl?: string;
+  representativeImgUrl?: string;
   atclCfmYmd?: string;
+  articleConfirmYmd?: string;
 };
 
 type NaverArticleResponse = {
   body?: NaverArticle[];
+  articleList?: NaverArticle[];
 };
 
-function parseDeposit(value: number | string | undefined): number | undefined {
-  if (typeof value === "number") return value;
+type NaverRegion = {
+  cortarNo: string;
+  centerLat: number;
+  centerLon: number;
+  cortarName?: string;
+  cortarType?: string;
+};
+
+type NaverRegionResponse = {
+  regionList?: NaverRegion[];
+};
+
+/** Parse a Naver 만원 amount, including "1억 2,000" strings. */
+export function parseNaverManwon(value: number | string | undefined): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
   if (typeof value !== "string") return undefined;
-  const normalized = value.replace(/,/g, "").replace("억", "0000");
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  const cleaned = value.replace(/,/g, "").trim();
+  if (!cleaned) return undefined;
+  const eok = cleaned.match(/(\d+(?:\.\d+)?)\s*억/);
+  const rest = cleaned.replace(/(\d+(?:\.\d+)?)\s*억/, "").trim();
+  let manwon = 0;
+  if (eok?.[1]) manwon += Number(eok[1]) * 10000;
+  if (rest) {
+    const parsed = Number(rest);
+    if (Number.isFinite(parsed)) manwon += parsed;
+  }
+  return Number.isFinite(manwon) && manwon !== 0 ? manwon : undefined;
 }
 
-function extractClusters(payload: NaverClusterResponse): NaverCluster[] {
+export function extractClusters(
+  payload: NaverClusterResponse | NaverCluster[],
+): NaverCluster[] {
+  if (Array.isArray(payload)) return payload;
   const article = payload.data?.ARTICLE ?? payload.data?.article ?? payload.ARTICLE;
   if (Array.isArray(article)) return article;
   if (article && typeof article === "object") {
@@ -113,13 +176,13 @@ function extractClusters(payload: NaverClusterResponse): NaverCluster[] {
   return [];
 }
 
-function clusterToListing(cluster: NaverCluster, index: number): MapListing | null {
-  const lat = cluster.lat;
-  const lng = cluster.lon ?? cluster.lng;
+export function clusterToListing(cluster: NaverCluster, index: number): MapListing | null {
+  const lat = asCoord(cluster.latitude) ?? asCoord(cluster.lat);
+  const lng = asCoord(cluster.longitude) ?? asCoord(cluster.lon) ?? asCoord(cluster.lng);
   const count = cluster.count ?? cluster.cnt ?? 1;
-  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  if (lat == null || lng == null) return null;
 
-  const sourceId = cluster.lgeo ?? `cluster-${index}`;
+  const sourceId = cluster.markerId ?? cluster.lgeo ?? `cluster-${index}`;
   return {
     id: `naver:cluster:${sourceId}`,
     source: "naver",
@@ -132,40 +195,72 @@ function clusterToListing(cluster: NaverCluster, index: number): MapListing | nu
   };
 }
 
-export function articleToListing(article: NaverArticle): MapListing | null {
-  if (
-    article.atclNo == null ||
-    typeof article.lat !== "number" ||
-    typeof article.lng !== "number"
-  ) {
-    return null;
+function asCoord(value: number | string | undefined): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
   }
+  return undefined;
+}
 
-  const sourceId = String(article.atclNo);
-  const propertyType = mapNaverPropertyType(article.rletTpCd ?? article.rletTpNm);
-  const salesType = mapNaverSalesType(article.tradTpCd ?? article.tradTpNm);
-  const area = Number(article.spc2 ?? article.spc1);
+function articleCoord(article: NaverArticle): { lat: number; lng: number } | null {
+  const lat = asCoord(article.latitude) ?? asCoord(article.lat);
+  const lng = asCoord(article.longitude) ?? asCoord(article.lng);
+  if (lat == null || lng == null) return null;
+  return { lat, lng };
+}
+
+function thumbnailUrl(path?: string): string | undefined {
+  if (!path) return undefined;
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  return `https://landthumb-phinf.pstatic.net${path}`;
+}
+
+export function articleToListing(article: NaverArticle): MapListing | null {
+  const sourceId = article.articleNo ?? article.atclNo;
+  const coord = articleCoord(article);
+  if (sourceId == null || !coord) return null;
+
+  const id = String(sourceId);
+  const propertyType = mapNaverPropertyType(
+    article.realEstateTypeCode ??
+      article.rletTpCd ??
+      article.realEstateTypeName ??
+      article.rletTpNm,
+  );
+  const salesType = mapNaverSalesType(
+    article.tradeTypeCode ?? article.tradTpCd ?? article.tradeTypeName ?? article.tradTpNm,
+  );
+  const area = Number(article.area2 ?? article.spc2 ?? article.area1 ?? article.spc1);
+  const warrant =
+    parseNaverManwon(article.hanPrc) ?? parseNaverManwon(article.dealOrWarrantPrc);
+  const rent = parseNaverManwon(article.rentPrc);
+  const price =
+    salesType === "sale"
+      ? (parseNaverManwon(article.prc) ?? parseNaverManwon(article.dealOrWarrantPrc))
+      : undefined;
+  const deposit = warrant ?? (salesType === "sale" ? undefined : parseNaverManwon(article.prc));
+  const title = article.articleName ?? article.atclNm ?? article.buildingName;
 
   return {
-    id: `naver:${propertyType}:${sourceId}`,
+    id: `naver:${propertyType}:${id}`,
     source: "naver",
-    sourceId,
-    lat: article.lat,
-    lng: article.lng,
+    sourceId: id,
+    lat: coord.lat,
+    lng: coord.lng,
     propertyType,
     salesType,
-    title: article.atclNm,
-    deposit: parseDeposit(article.hanPrc) ?? (salesType === "sale" ? undefined : article.prc),
-    rent: article.rentPrc,
-    price: salesType === "sale" ? article.prc : undefined,
+    title,
+    deposit,
+    rent,
+    price,
     areaM2: Number.isFinite(area) ? area : undefined,
-    floor: article.flrInfo,
-    thumbnail: article.repImgUrl
-      ? `https://landthumb-phinf.pstatic.net${article.repImgUrl}`
-      : undefined,
-    url: naverListingUrl(sourceId),
-    foreignerOk: detectForeignerOk(article.atclNm),
-    updatedAt: article.atclCfmYmd,
+    floor: article.floorInfo ?? article.flrInfo,
+    thumbnail: thumbnailUrl(article.repImgUrl ?? article.representativeImgUrl),
+    url: naverListingUrl(id),
+    foreignerOk: detectForeignerOk(title),
+    updatedAt: article.articleConfirmYmd ?? article.atclCfmYmd,
   };
 }
 
@@ -184,6 +279,56 @@ function salesQuery(types?: SalesType[]): string {
   return selected.map((type) => naverSalesCodes[type]).join(":");
 }
 
+function nearestRegion(regions: NaverRegion[], lat: number, lng: number): NaverRegion | undefined {
+  let best: NaverRegion | undefined;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const region of regions) {
+    if (typeof region.centerLat !== "number" || typeof region.centerLon !== "number") continue;
+    const dlat = region.centerLat - lat;
+    const dlng = region.centerLon - lng;
+    const dist = dlat * dlat + dlng * dlng;
+    if (dist < bestDist) {
+      best = region;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+async function listRegions(cortarNo: string): Promise<NaverRegion[]> {
+  return cached(`nv:regions:${cortarNo}`, REGION_TTL_MS, async () => {
+    const payload = await naverAuthorizedJson<NaverRegionResponse>(
+      `${NEW_LAND_ORIGIN}/api/regions/list?cortarNo=${cortarNo}`,
+      naverRequestTimeoutMs(),
+    );
+    return payload.regionList ?? [];
+  });
+}
+
+/**
+ * new.land article/cluster APIs are keyed by 법정동 cortarNo, not only a
+ * bounding box. Walk 시도 → 구 → 동 using cached region lists and pick the
+ * nearest centre to the viewport.
+ */
+export async function cortarNoForPoint(
+  lat: number,
+  lng: number,
+  zoom: number,
+): Promise<string | undefined> {
+  const z = naverZoom(zoom);
+  const sidos = await listRegions(ROOT_CORTAR);
+  const sido = nearestRegion(sidos, lat, lng);
+  if (!sido) return undefined;
+  if (z <= 11) return sido.cortarNo;
+
+  const gus = await listRegions(sido.cortarNo);
+  const gu = nearestRegion(gus, lat, lng) ?? sido;
+  if (z <= 14) return gu.cortarNo;
+
+  const dongs = await listRegions(gu.cortarNo);
+  return nearestRegion(dongs, lat, lng)?.cortarNo ?? gu.cortarNo;
+}
+
 async function fetchClusterList(input: {
   bounds: Bounds;
   zoom: number;
@@ -192,8 +337,12 @@ async function fetchClusterList(input: {
 }): Promise<MapListing[]> {
   const center = boundsCenter(input.bounds);
   const z = naverZoom(input.zoom);
+  const cortarNo = await cortarNoForPoint(center.lat, center.lng, input.zoom);
+  if (!cortarNo) return [];
+
   const key = [
     "nv:cluster",
+    cortarNo,
     z,
     input.bounds.south.toFixed(3),
     input.bounds.west.toFixed(3),
@@ -205,22 +354,19 @@ async function fetchClusterList(input: {
 
   return cached(key, TILE_TTL_MS, async () => {
     const params = new URLSearchParams({
-      view: "atcl",
-      rletTpCd: propertyQuery(input.propertyTypes),
-      tradTpCd: salesQuery(input.salesTypes),
-      z: String(z),
-      lat: String(center.lat),
-      lon: String(center.lng),
-      btm: String(input.bounds.south),
-      lft: String(input.bounds.west),
-      top: String(input.bounds.north),
-      rgt: String(input.bounds.east),
-      addon: "COMPLEX",
-      isOnlyIsale: "false",
+      cortarNo,
+      zoom: String(z),
+      priceType: "RETAIL",
+      realEstateType: propertyQuery(input.propertyTypes),
+      tradeType: salesQuery(input.salesTypes),
+      leftLon: String(input.bounds.west),
+      rightLon: String(input.bounds.east),
+      topLat: String(input.bounds.north),
+      bottomLat: String(input.bounds.south),
     });
-    const payload = await fetchJson<NaverClusterResponse>(
-      `${NAVER_ORIGIN}/cluster/clusterList?${params.toString()}`,
-      { headers: NAVER_HEADERS, timeoutMs: 2500 },
+    const payload = await naverAuthorizedJson<NaverClusterResponse | NaverCluster[]>(
+      `${NEW_LAND_ORIGIN}/api/articles/clusters?${params.toString()}`,
+      naverRequestTimeoutMs(),
     );
     return extractClusters(payload)
       .map(clusterToListing)
@@ -236,39 +382,34 @@ async function fetchArticleList(input: {
 }): Promise<MapListing[]> {
   const center = boundsCenter(input.bounds);
   const z = naverZoom(input.zoom);
+  const cortarNo = await cortarNoForPoint(center.lat, center.lng, input.zoom);
+  if (!cortarNo) return [];
+
   const listings: MapListing[] = [];
 
   for (let page = 1; page <= 2; page += 1) {
     const key = [
       "nv:articles",
+      cortarNo,
       z,
       page,
-      input.bounds.south.toFixed(3),
-      input.bounds.west.toFixed(3),
-      input.bounds.north.toFixed(3),
-      input.bounds.east.toFixed(3),
       propertyQuery(input.propertyTypes),
       salesQuery(input.salesTypes),
     ].join(":");
 
     const pageItems = await cached(key, TILE_TTL_MS, async () => {
       const params = new URLSearchParams({
-        rletTpCd: propertyQuery(input.propertyTypes),
-        tradTpCd: salesQuery(input.salesTypes),
-        z: String(z),
-        lat: String(center.lat),
-        lon: String(center.lng),
-        btm: String(input.bounds.south),
-        lft: String(input.bounds.west),
-        top: String(input.bounds.north),
-        rgt: String(input.bounds.east),
+        cortarNo,
+        order: "rank",
+        realEstateType: propertyQuery(input.propertyTypes),
+        tradeType: salesQuery(input.salesTypes),
         page: String(page),
       });
-      const payload = await fetchJson<NaverArticleResponse>(
-        `${NAVER_ORIGIN}/cluster/ajax/articleList?${params.toString()}`,
-        { headers: NAVER_HEADERS, timeoutMs: 2500 },
+      const payload = await naverAuthorizedJson<NaverArticleResponse>(
+        `${NEW_LAND_ORIGIN}/api/articles?${params.toString()}`,
+        naverRequestTimeoutMs(),
       );
-      return (payload.body ?? [])
+      return (payload.articleList ?? payload.body ?? [])
         .map(articleToListing)
         .filter((item): item is MapListing => item !== null);
     });

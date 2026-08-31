@@ -22,7 +22,7 @@ import {
 } from "~/lib/listings/filter";
 import { parseSearchQuery } from "~/lib/listings/search";
 import { settledError, withTimeout } from "./http";
-import { fetchNaverDetail, fetchNaverListings } from "./naver";
+import { fetchNaverDetail, fetchNaverListings, naverBudgetMs } from "./naver";
 import { fetchPeterpanDetail, fetchPeterpanListings } from "./peterpan";
 import {
   fetchZigbangDetail,
@@ -33,7 +33,6 @@ import {
 const MAX_MARKERS = 400;
 const MIN_LIST_ITEMS = 60;
 const MAX_LIST_ITEMS = 300;
-const NAVER_BUDGET_MS = 2500;
 const PETERPAN_BUDGET_MS = 4000;
 const ZIGBANG_DETAIL_BUDGET_MS = 3500;
 
@@ -130,7 +129,7 @@ export async function getMapData(
           propertyTypes,
           salesTypes: selectedSalesTypes,
         }),
-        NAVER_BUDGET_MS,
+        naverBudgetMs(),
         "Naver",
       ),
     );
