@@ -645,6 +645,11 @@ export function clipNaverListingsToViewport(
   return listings;
 }
 
+async function fulfilledResults<T>(jobs: Array<Promise<T>>): Promise<T[]> {
+  const results = await Promise.allSettled(jobs);
+  return results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+}
+
 async function fetchClusterList(input: {
   bounds: Bounds;
   zoom: number;
@@ -762,11 +767,19 @@ async function fetchArticleList(input: {
   const neededPages = total
     ? Math.min(maxPages, Math.max(2, Math.ceil(total / 20)))
     : maxPages;
-  const extra = await Promise.all(
-    Array.from({ length: neededPages - 1 }, (_, index) =>
-      fetchArticlePage({ ...input, page: index + 2 }),
-    ),
-  );
+  // Extra pages are parallel, but a single timed-out page must not drop the
+  // dong. Batch them so the proxy is not hit with ~30 requests at once.
+  const extra: Array<{ items: MapListing[]; isMore: boolean; total?: number }> = [];
+  for (let page = 2; page <= neededPages; page += 4) {
+    const batchSize = Math.min(4, neededPages - page + 1);
+    extra.push(
+      ...(await fulfilledResults(
+        Array.from({ length: batchSize }, (_, index) =>
+          fetchArticlePage({ ...input, page: page + index }),
+        ),
+      )),
+    );
+  }
   for (const page of extra) {
     listings.push(...page.items);
     if (page.total != null) total = Math.max(total ?? 0, page.total);
@@ -778,13 +791,16 @@ export async function fetchNaverListings(input: NaverListingQuery): Promise<Nave
   const cortarNos = await cortarNosForViewport(input.bounds, input.zoom);
   if (!cortarNos.length) return { listings: [] };
 
-  const loadClusters = (nos: string[]) =>
-    Promise.all(nos.map((cortarNo) => fetchClusterList({ ...input, cortarNo }))).then((groups) =>
-      clipNaverListingsToViewport(dedupeNaverListings(groups.flat()), input.bounds),
+  const loadClusters = async (nos: string[]) =>
+    clipNaverListingsToViewport(
+      dedupeNaverListings(
+        (await fulfilledResults(nos.map((cortarNo) => fetchClusterList({ ...input, cortarNo })))).flat(),
+      ),
+      input.bounds,
     );
 
-  const loadArticles = (nos: string[]) =>
-    Promise.all(
+  const loadArticles = async (nos: string[]) => {
+    const groups = await fulfilledResults(
       nos.map((cortarNo) =>
         fetchArticleList({
           ...input,
@@ -792,14 +808,14 @@ export async function fetchNaverListings(input: NaverListingQuery): Promise<Nave
           pages: articlePagesForCortarCount(nos.length),
         }),
       ),
-    ).then((groups) => {
-      const fetched = dedupeNaverListings(groups.flatMap((group) => group.listings));
-      const reported = groups.reduce((sum, group) => sum + (group.total ?? 0), 0);
-      return {
-        listings: clipNaverListingsToViewport(fetched, input.bounds),
-        reported: reported > 0 ? reported : undefined,
-      };
-    });
+    );
+    const fetched = dedupeNaverListings(groups.flatMap((group) => group.listings));
+    const reported = groups.reduce((sum, group) => sum + (group.total ?? 0), 0);
+    return {
+      listings: clipNaverListingsToViewport(fetched, input.bounds),
+      reported: reported > 0 ? reported : undefined,
+    };
+  };
 
   if (input.zoom >= 15) {
     // Article pins are the ones users can open. Skip clusters unless the

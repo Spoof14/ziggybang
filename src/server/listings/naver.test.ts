@@ -214,8 +214,8 @@ describe("naver mappers", () => {
     expect(naverBudgetMs("direct")).toBe(2500);
     expect(naverBudgetMs("proxy")).toBeGreaterThan(naverBudgetMs("direct"));
     expect(naverBudgetMs("unlocker")).toBeGreaterThanOrEqual(naverRequestTimeoutMs("unlocker"));
-    // First article page, then extra pages in parallel, must fit the proxied budget.
-    expect(naverRequestTimeoutMs("proxy") * 2).toBeLessThanOrEqual(naverBudgetMs("proxy"));
+    // Page 1, then extra pages in batches of 4: three waves must fit the proxy budget.
+    expect(naverRequestTimeoutMs("proxy") * 3).toBeLessThanOrEqual(naverBudgetMs("proxy"));
     // Without proxy or unlocker configured, nothing changes.
     expect(naverTransport()).toBe("direct");
   });
