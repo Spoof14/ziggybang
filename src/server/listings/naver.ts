@@ -1,4 +1,5 @@
-import { boundsCenter, containsPoint, expandBounds } from "~/lib/geo/bounds";
+import { boundsCenter, containsPoint, expandBounds, padBoundsByMeters } from "~/lib/geo/bounds";
+import { distanceM } from "~/lib/geo/shape";
 import { areaBuckets, isAllAreaBuckets, type AreaBucketId } from "~/lib/listings/area";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
@@ -89,7 +90,7 @@ export function articlePagesForCortarCount(_count: number): number {
   return NAVER_ARTICLE_PAGES;
 }
 
-const MAX_NAVER_CORTARS = 4;
+const MAX_NAVER_CORTARS = 6;
 
 export function pickRegionsInView(
   regions: Array<{ cortarNo: string; centerLat?: number; centerLon?: number }>,
@@ -104,10 +105,10 @@ export function pickRegionsInView(
       Number.isFinite(region.centerLon),
   );
   if (!usable.length) return [];
-  const expanded = expandBounds(bounds, 0.2);
+  const padded = padBoundsByMeters(bounds, 800);
   const center = boundsCenter(bounds);
   const inView = usable.filter((region) =>
-    containsPoint(expanded, region.centerLat, region.centerLon),
+    containsPoint(padded, region.centerLat, region.centerLon),
   );
   const pool = inView.length ? inView : usable;
   return [...pool]
@@ -251,6 +252,20 @@ export function mapNaverSalesType(value?: string): SalesType | undefined {
   return undefined;
 }
 
+export function inferNaverSalesType(input: {
+  code?: string;
+  rent?: number;
+  deposit?: number;
+  price?: number;
+}): SalesType | undefined {
+  const mapped = mapNaverSalesType(input.code);
+  if (mapped) return mapped;
+  if (input.rent != null && input.rent > 0) return "wolse";
+  if (input.deposit != null && input.deposit > 0) return "jeonse";
+  if (input.price != null && input.price > 0) return "sale";
+  return undefined;
+}
+
 export function mapNaverPropertyType(value?: string): PropertyType {
   if (!value) return "apartment";
   return codeToPropertyType[value] ?? "apartment";
@@ -292,8 +307,11 @@ export type NaverArticle = {
   tradeTypeName?: string;
   lat?: number | string;
   lng?: number | string;
+  lon?: number | string;
   latitude?: number | string;
   longitude?: number | string;
+  latitudeNum?: number | string;
+  longitudeNum?: number | string;
   prc?: number;
   rentPrc?: number | string;
   hanPrc?: number | string;
@@ -431,10 +449,7 @@ function naverDetailCoords(
 }
 
 function articleCoord(article: NaverArticle): { lat: number; lng: number } | null {
-  const lat = asCoord(article.latitude) ?? asCoord(article.lat);
-  const lng = asCoord(article.longitude) ?? asCoord(article.lng);
-  if (lat == null || lng == null) return null;
-  return { lat, lng };
+  return coordsFrom(article);
 }
 
 function thumbnailUrl(path?: string): string | undefined {
@@ -500,17 +515,19 @@ export function articleToListing(article: NaverArticle): MapListing | null {
       article.realEstateTypeName ??
       article.rletTpNm,
   );
-  const salesType = mapNaverSalesType(
-    article.tradeTypeCode ?? article.tradTpCd ?? article.tradeTypeName ?? article.tradTpNm,
-  );
-  const area = Number(article.area2 ?? article.spc2 ?? article.area1 ?? article.spc1);
   const warrant =
     parseNaverManwon(article.hanPrc) ?? parseNaverManwon(article.dealOrWarrantPrc);
   const rent = parseNaverManwon(article.rentPrc);
-  const price =
-    salesType === "sale"
-      ? (parseNaverManwon(article.prc) ?? parseNaverManwon(article.dealOrWarrantPrc))
-      : undefined;
+  const deal = parseNaverManwon(article.prc) ?? parseNaverManwon(article.dealOrWarrantPrc);
+  const salesType = inferNaverSalesType({
+    code:
+      article.tradeTypeCode ?? article.tradTpCd ?? article.tradeTypeName ?? article.tradTpNm,
+    rent,
+    deposit: warrant ?? (deal && deal > 0 ? deal : undefined),
+    price: deal,
+  });
+  const area = Number(article.area2 ?? article.spc2 ?? article.area1 ?? article.spc1);
+  const price = salesType === "sale" ? deal : undefined;
   const deposit = warrant ?? (salesType === "sale" ? undefined : parseNaverManwon(article.prc));
   const title = article.articleName ?? article.atclNm ?? article.buildingName;
   const photos = extractNaverPhotos(article);
@@ -645,6 +662,16 @@ export function clipNaverListingsToViewport(
   );
   if (nearby.length) return nearby;
   return listings;
+}
+
+/** Keep article pins, and add cluster markers that are not the same building. */
+export function mergeNaverPins(articles: MapListing[], clusters: MapListing[]): MapListing[] {
+  if (!clusters.length) return articles;
+  if (!articles.length) return clusters;
+  const extra = clusters.filter((cluster) =>
+    articles.every((article) => distanceM(article, cluster) > 120),
+  );
+  return [...articles, ...extra];
 }
 
 async function fulfilledResults<T>(jobs: Array<Promise<T>>): Promise<T[]> {
@@ -820,24 +847,22 @@ export async function fetchNaverListings(input: NaverListingQuery): Promise<Nave
   };
 
   if (input.zoom >= 15) {
-    // Article pins are the ones users can open. Skip clusters unless the
-    // list comes back empty — they share the same proxy budget.
-    const articles = await loadArticles(cortarNos);
-    if (articles.listings.length) {
-      const available = Math.max(
-        listingInventoryCount(articles.listings),
-        articles.reported ?? 0,
-        articles.listings.length,
-      );
-      return {
-        listings: articles.listings,
-        available: available > 0 ? available : undefined,
-      };
-    }
-    const clusters = await loadClusters(cortarNos);
+    // Articles miss many apartment rows (no list coords). Clusters still
+    // mark those buildings — merge them in so a 90 m pan cannot blank Magok.
+    const [articles, clusters] = await Promise.all([
+      loadArticles(cortarNos),
+      loadClusters(cortarNos),
+    ]);
+    const listings = mergeNaverPins(articles.listings, clusters);
+    const available = Math.max(
+      listingInventoryCount(listings),
+      articles.reported ?? 0,
+      listingInventoryCount(clusters),
+      listings.length,
+    );
     return {
-      listings: clusters,
-      available: listingInventoryCount(clusters) || undefined,
+      listings,
+      available: available > 0 ? available : undefined,
     };
   }
 
@@ -941,7 +966,6 @@ export function mapNaverArticleDetail(
   const propertyType = mapNaverPropertyType(
     payload.realEstateTypeCode ?? payload.realEstateTypeName,
   );
-  const salesType = mapNaverSalesType(payload.tradeTypeCode ?? payload.tradeTypeName);
   const area = payload.articleSpace?.exclusiveSpace ?? payload.articleSpace?.supplySpace;
   const floor =
     payload.articleFloor?.correspondingFloorCount != null &&
@@ -956,6 +980,12 @@ export function mapNaverArticleDetail(
   const warrant = payload.articlePrice?.warrantPrice;
   const rent = payload.articlePrice?.rentPrice;
   const deal = payload.articlePrice?.dealPrice;
+  const salesType = inferNaverSalesType({
+    code: payload.tradeTypeCode ?? payload.tradeTypeName,
+    rent,
+    deposit: warrant,
+    price: deal,
+  });
   const bathrooms = Number(nested?.bathroomCount);
   const rooms = nested?.roomCount != null ? String(nested.roomCount) : undefined;
 

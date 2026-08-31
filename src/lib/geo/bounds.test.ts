@@ -4,6 +4,7 @@ import {
   boundsCenter,
   containsPoint,
   expandBounds,
+  padBoundsByMeters,
   isUsableMapViewport,
   isValidBounds,
   overlapRatio,
@@ -43,5 +44,8 @@ describe("bounds", () => {
     expect(overlapRatio(seoul, seoul)).toBe(1);
     expect(overlapRatio(seoul, { ...seoul, south: 38 })).toBe(0);
     expect(boundsArea(expandBounds(seoul, 1))).toBeGreaterThan(boundsArea(seoul));
+    const padded = padBoundsByMeters(seoul, 800);
+    expect(padded.south).toBeLessThan(seoul.south);
+    expect(padded.north).toBeGreaterThan(seoul.north);
   });
 });
