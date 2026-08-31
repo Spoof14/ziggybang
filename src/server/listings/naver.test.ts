@@ -11,6 +11,7 @@ import {
   NAVER_ARTICLE_PAGES,
   articlePagesForCortarCount,
   listingInventoryCount,
+  naverArticleListParams,
   naverAreaRange,
   naverBudgetMs,
   naverClusterZoom,
@@ -162,6 +163,19 @@ describe("naver mappers", () => {
     expect(params.areaMax).toBe("33");
     expect(params.recentlyBuildYears).toBe("10");
     expect(listingInventoryCount([{ count: 12 }, { count: 1 }, {}])).toBe(14);
+    const articleQuery = naverArticleListParams({
+      cortarNo: "1168010800",
+      page: 1,
+      propertyTypes: ["oneroom", "officetel"],
+      salesTypes: ["jeonse", "wolse"],
+      maxDeposit: 2000,
+    });
+    expect(articleQuery.leftLon).toBeUndefined();
+    expect(articleQuery.zoom).toBeUndefined();
+    expect(articleQuery.priceMax).toBe("2000");
+    expect(articleQuery.priceMin).toBeUndefined();
+    expect(naverFilterParams({}).priceMax).toBeUndefined();
+    expect(naverFilterParams({}, { defaults: true }).priceMax).toBe("900000000");
   });
 
   it("gives proxied and unlocked Naver requests more time than direct ones", () => {
