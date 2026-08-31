@@ -9,6 +9,8 @@ describe("leafletBasemap", () => {
       const tiles = leafletBasemap();
       expect(tiles.url).toContain("arcgisonline.com");
       expect(tiles.url).not.toContain("key=");
+      // Leaflet crashes if subdomains is undefined (it always indexes .length).
+      expect(tiles.subdomains.length).toBeGreaterThan(0);
     } finally {
       if (previous !== undefined) process.env.NEXT_PUBLIC_CARTO_API_KEY = previous;
     }
@@ -21,6 +23,7 @@ describe("leafletBasemap", () => {
       const tiles = leafletBasemap();
       expect(tiles.url).toContain("basemaps.cartocdn.com");
       expect(tiles.url).toContain("key=test-key");
+      expect(tiles.subdomains).toEqual(["a", "b", "c", "d"]);
     } finally {
       if (previous === undefined) delete process.env.NEXT_PUBLIC_CARTO_API_KEY;
       else process.env.NEXT_PUBLIC_CARTO_API_KEY = previous;
