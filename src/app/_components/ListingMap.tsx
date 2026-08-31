@@ -22,6 +22,7 @@ import {
   DomUtil,
   type Map as LeafletMap,
 } from "leaflet";
+import { leafletBasemap } from "~/lib/geo/basemap";
 import { isUsableMapViewport } from "~/lib/geo/bounds";
 import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
 import { formatPrice, propertyTypeLabel } from "~/lib/listings/copy";
@@ -29,6 +30,7 @@ import { type MapCluster, type MapListing } from "~/lib/listings/types";
 
 const SEOUL: [number, number] = [37.5665, 126.978];
 const USER_ZOOM = 16;
+const BASEMAP = leafletBasemap();
 
 function flyToUserLocation(
   map: LeafletMap,
@@ -506,10 +508,10 @@ export function ListingMap({
       preferCanvas={listings.length > 80}
     >
       <TileLayer
-        attribution="© OpenStreetMap © CARTO"
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-        subdomains={["a", "b", "c", "d"]}
-        maxZoom={20}
+        attribution={BASEMAP.attribution}
+        url={BASEMAP.url}
+        subdomains={BASEMAP.subdomains}
+        maxZoom={BASEMAP.maxZoom}
       />
       <LocateMeControl />
       <ZoomControl position="bottomright" />

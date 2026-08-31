@@ -74,6 +74,10 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). Pan and zoom the map; only the visible area is fetched.
 
+The map uses Esri street tiles by default. CARTO Voyager now requires a free key
+([get one here](https://carto.com/basemaps/apikey)); set `NEXT_PUBLIC_CARTO_API_KEY`
+if you want that style back.
+
 ## Tests
 
 `npm test` runs unit tests for geohash tiling, clustering, source mapping, English copy, and aggregation, plus a live Zigbang smoke test. Naver is asserted to fail soft if the host is unreachable.

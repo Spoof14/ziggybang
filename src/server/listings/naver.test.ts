@@ -5,6 +5,7 @@ import {
   extractClusters,
   mapNaverPropertyType,
   mapNaverSalesType,
+  NAVER_ARTICLE_PAGES,
   naverBudgetMs,
   naverListingUrl,
   naverRequestTimeoutMs,
@@ -116,9 +117,11 @@ describe("naver mappers", () => {
     expect(naverBudgetMs("direct")).toBe(2500);
     expect(naverBudgetMs("proxy")).toBeGreaterThan(naverBudgetMs("direct"));
     expect(naverBudgetMs("unlocker")).toBeGreaterThanOrEqual(naverRequestTimeoutMs("unlocker"));
-    // Session + region lookups + two article pages must fit in the proxied budget.
+    // Session + region lookups + article pages must fit in the proxied budget.
     expect(naverRequestTimeoutMs("proxy") * 2).toBeLessThanOrEqual(naverBudgetMs("proxy"));
-    expect(naverRequestTimeoutMs("proxy") * 3).toBeLessThanOrEqual(naverBudgetMs("proxy"));
+    expect(
+      naverRequestTimeoutMs("proxy") * NAVER_ARTICLE_PAGES,
+    ).toBeLessThanOrEqual(naverBudgetMs("proxy"));
     // Without proxy or unlocker configured, nothing changes.
     expect(naverTransport()).toBe("direct");
   });

@@ -20,6 +20,8 @@ export { naverProxyUrl, naverTransport, type NaverTransport };
 const TILE_TTL_MS = 5 * 60 * 1000;
 const REGION_TTL_MS = 24 * 60 * 60 * 1000;
 const ROOT_CORTAR = "0000000000";
+/** new.land returns 20 rows per page; five pages is 100 listings. */
+export const NAVER_ARTICLE_PAGES = 5;
 
 /**
  * Direct requests hang until timeout when blocked. A proxy adds one hop to
@@ -34,7 +36,7 @@ export function naverRequestTimeoutMs(transport: NaverTransport = naverTransport
 
 export function naverBudgetMs(transport: NaverTransport = naverTransport()): number {
   if (transport === "direct") return 2500;
-  if (transport === "proxy") return 12000;
+  if (transport === "proxy") return 20000;
   return 8000;
 }
 
@@ -133,6 +135,7 @@ export type NaverArticle = {
 type NaverArticleResponse = {
   body?: NaverArticle[];
   articleList?: NaverArticle[];
+  isMoreData?: boolean;
 };
 
 type NaverRegion = {
@@ -387,7 +390,7 @@ async function fetchArticleList(input: {
 
   const listings: MapListing[] = [];
 
-  for (let page = 1; page <= 2; page += 1) {
+  for (let page = 1; page <= NAVER_ARTICLE_PAGES; page += 1) {
     const key = [
       "nv:articles",
       cortarNo,
@@ -409,13 +412,17 @@ async function fetchArticleList(input: {
         `${NEW_LAND_ORIGIN}/api/articles?${params.toString()}`,
         naverRequestTimeoutMs(),
       );
-      return (payload.articleList ?? payload.body ?? [])
+      const items = (payload.articleList ?? payload.body ?? [])
         .map(articleToListing)
         .filter((item): item is MapListing => item !== null);
+      return {
+        items,
+        isMore: payload.isMoreData ?? items.length >= 20,
+      };
     });
 
-    listings.push(...pageItems);
-    if (pageItems.length < 20) break;
+    listings.push(...pageItems.items);
+    if (!pageItems.isMore) break;
   }
 
   return listings;
