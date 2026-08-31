@@ -72,6 +72,39 @@ describe("map layers follow filters", () => {
     );
   });
 
+  it("keeps server area clusters when zoomed out with no individual homes", () => {
+    const layers = mapLayersForFilters(
+      [],
+      [
+        {
+          id: "seoul",
+          lat: 37.56,
+          lng: 126.97,
+          count: 6000,
+          sources: { naver: 6000 },
+        },
+      ],
+      {
+        propertyTypes: ["oneroom"],
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        query: "",
+        zoom: 12,
+        hasPhotos: true,
+      },
+    );
+    expect(layers.listings).toEqual([]);
+    expect(layers.clusters).toEqual([
+      {
+        id: "seoul",
+        lat: 37.56,
+        lng: 126.97,
+        count: 6000,
+        sources: { naver: 6000 },
+      },
+    ]);
+  });
+
   it("omits the default jeonse + monthly mix from the compact summary", () => {
     expect(
       describeActiveFilters({

@@ -94,6 +94,29 @@ describe("sales type filters", () => {
     ).toEqual(["studio"]);
   });
 
+  it("keeps Naver area clusters even when they lack sales type and photos", () => {
+    const cluster: MapListing = {
+      id: "naver:cluster:seoul",
+      source: "naver",
+      sourceId: "seoul",
+      lat: 37.56,
+      lng: 126.97,
+      propertyType: "apartment",
+      count: 6000,
+      url: "https://m.land.naver.com/",
+    };
+    expect(
+      filterListings([cluster], {
+        propertyTypes: ["oneroom", "villa"],
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        query: "",
+        requireDetails: true,
+        hasPhotos: true,
+      }).map((item) => item.id),
+    ).toEqual(["naver:cluster:seoul"]);
+  });
+
   it("keeps only listings that say foreigners are welcome", () => {
     const listings = [
       { ...listing("ok", "wolse"), foreignerOk: true },
