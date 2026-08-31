@@ -76,7 +76,9 @@ Open [http://localhost:3000](http://localhost:3000). Pan and zoom the map; only 
 
 The map uses Esri street tiles by default. CARTO Voyager now requires a free key
 ([get one here](https://carto.com/basemaps/apikey)); set `NEXT_PUBLIC_CARTO_API_KEY`
-if you want that style back.
+if you want that style back. That name matters — the key is compiled into the
+browser bundle, so after adding it on Vercel you must **Redeploy** (uncheck
+"Use existing Build Cache"). A dashboard save alone does not change the map.
 
 ## Tests
 

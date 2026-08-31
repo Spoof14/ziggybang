@@ -16,6 +16,18 @@ describe("leafletBasemap", () => {
     }
   });
 
+  it("treats a blank CARTO key as unset", () => {
+    const previous = process.env.NEXT_PUBLIC_CARTO_API_KEY;
+    process.env.NEXT_PUBLIC_CARTO_API_KEY = "  ";
+    try {
+      const tiles = leafletBasemap();
+      expect(tiles.url).toContain("arcgisonline.com");
+    } finally {
+      if (previous === undefined) delete process.env.NEXT_PUBLIC_CARTO_API_KEY;
+      else process.env.NEXT_PUBLIC_CARTO_API_KEY = previous;
+    }
+  });
+
   it("switches to CARTO Voyager when a key is present", () => {
     const previous = process.env.NEXT_PUBLIC_CARTO_API_KEY;
     process.env.NEXT_PUBLIC_CARTO_API_KEY = "test-key";

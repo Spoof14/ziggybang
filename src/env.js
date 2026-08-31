@@ -32,7 +32,11 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    // NEXT_PUBLIC_CLIENTVAR: z.string(),
+    /**
+     * CARTO raster basemap key (https://carto.com/basemaps/apikey). Inlined
+     * into the browser bundle at build time — redeploy after changing it.
+     */
+    NEXT_PUBLIC_CARTO_API_KEY: z.string().optional(),
   },
 
   /**
@@ -45,6 +49,7 @@ export const env = createEnv({
     NAVER_PROXY_URL: process.env.NAVER_PROXY_URL,
     BRIGHTDATA_API_KEY: process.env.BRIGHTDATA_API_KEY,
     BRIGHTDATA_UNLOCKER_ZONE: process.env.BRIGHTDATA_UNLOCKER_ZONE,
+    NEXT_PUBLIC_CARTO_API_KEY: process.env.NEXT_PUBLIC_CARTO_API_KEY,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
