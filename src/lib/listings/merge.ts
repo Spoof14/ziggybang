@@ -8,6 +8,10 @@ export function mergeMapData(parts: Array<MapData | undefined>): MapData {
   const zigbang = present.reduce((sum, part) => sum + part.stats.zigbang, 0);
   const naver = present.reduce((sum, part) => sum + part.stats.naver, 0);
   const peterpan = present.reduce((sum, part) => sum + part.stats.peterpan, 0);
+  const naverAvailable = present.reduce(
+    (sum, part) => sum + (part.stats.naverAvailable ?? 0),
+    0,
+  );
   const truncated = present.some((part) => part.stats.truncated);
   const hasListings = listings.length > 0;
 
@@ -19,6 +23,7 @@ export function mergeMapData(parts: Array<MapData | undefined>): MapData {
       zigbang,
       naver,
       peterpan,
+      naverAvailable: naverAvailable > naver ? naverAvailable : undefined,
       returned: hasListings ? listings.length : clusters.length,
       truncated,
     },

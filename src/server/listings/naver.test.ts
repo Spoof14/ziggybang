@@ -9,12 +9,19 @@ import {
   mapNaverPropertyType,
   mapNaverSalesType,
   NAVER_ARTICLE_PAGES,
+  articlePagesForCortarCount,
+  listingInventoryCount,
+  naverAreaRange,
   naverBudgetMs,
+  naverClusterZoom,
+  naverCortarLevel,
+  naverFilterParams,
   naverListingUrl,
   naverRequestTimeoutMs,
   naverTransport,
   naverZoom,
   parseNaverManwon,
+  pickRegionsInView,
 } from "./naver";
 
 describe("naver mappers", () => {
@@ -108,9 +115,53 @@ describe("naver mappers", () => {
   it("clamps Naver zoom and maps codes", () => {
     expect(naverZoom(3)).toBe(8);
     expect(naverZoom(21)).toBe(19);
+    expect(naverCortarLevel(11)).toBe("sido");
+    expect(naverCortarLevel(13)).toBe("gu");
+    expect(naverCortarLevel(16)).toBe("dong");
+    expect(naverClusterZoom(12)).toBe(15);
+    expect(naverClusterZoom(17)).toBe(17);
+    expect(articlePagesForCortarCount(1)).toBe(NAVER_ARTICLE_PAGES);
+    expect(articlePagesForCortarCount(3)).toBe(4);
     expect(mapNaverSalesType("B1")).toBe("jeonse");
     expect(mapNaverPropertyType("VL")).toBe("villa");
     expect(naverListingUrl("9")).toContain("/article/info/9");
+  });
+
+  it("picks every dong in the map view, not only the nearest centre", () => {
+    const hongdae = {
+      south: 37.548,
+      west: 126.91,
+      north: 37.562,
+      east: 126.93,
+    };
+    const dongs = [
+      { cortarNo: "seogyo", centerLat: 37.555, centerLon: 126.922 },
+      { cortarNo: "yeonnam", centerLat: 37.56, centerLon: 126.925 },
+      { cortarNo: "hapjeong", centerLat: 37.549, centerLon: 126.914 },
+      { cortarNo: "gangnam", centerLat: 37.498, centerLon: 127.028 },
+    ];
+    const picked = pickRegionsInView(dongs, hongdae, 3);
+    expect(picked).toEqual(expect.arrayContaining(["seogyo", "yeonnam", "hapjeong"]));
+    expect(picked).not.toContain("gangnam");
+    expect(picked[0]).toBe("seogyo");
+  });
+
+  it("sends budget, size, and building-age filters to Naver", () => {
+    expect(naverAreaRange(["s"])).toEqual({ min: 20, max: 33 });
+    expect(naverAreaRange(["s", "m"])).toEqual({ min: 20, max: 50 });
+    expect(naverAreaRange(["xs", "s", "m", "l"])).toBeNull();
+    const params = naverFilterParams({
+      maxDeposit: 2000,
+      maxRent: 70,
+      areaBucketIds: ["s"],
+      maxBuildingAge: 10,
+    });
+    expect(params.priceMax).toBe("2000");
+    expect(params.rentPriceMax).toBe("70");
+    expect(params.areaMin).toBe("20");
+    expect(params.areaMax).toBe("33");
+    expect(params.recentlyBuildYears).toBe("10");
+    expect(listingInventoryCount([{ count: 12 }, { count: 1 }, {}])).toBe(14);
   });
 
   it("gives proxied and unlocked Naver requests more time than direct ones", () => {
@@ -120,11 +171,8 @@ describe("naver mappers", () => {
     expect(naverBudgetMs("direct")).toBe(2500);
     expect(naverBudgetMs("proxy")).toBeGreaterThan(naverBudgetMs("direct"));
     expect(naverBudgetMs("unlocker")).toBeGreaterThanOrEqual(naverRequestTimeoutMs("unlocker"));
-    // Session + region lookups + article pages must fit in the proxied budget.
+    // First article page, then extra pages in parallel, must fit the proxied budget.
     expect(naverRequestTimeoutMs("proxy") * 2).toBeLessThanOrEqual(naverBudgetMs("proxy"));
-    expect(
-      naverRequestTimeoutMs("proxy") * NAVER_ARTICLE_PAGES,
-    ).toBeLessThanOrEqual(naverBudgetMs("proxy"));
     // Without proxy or unlocker configured, nothing changes.
     expect(naverTransport()).toBe("direct");
   });

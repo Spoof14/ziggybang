@@ -1,4 +1,5 @@
-import { boundsCenter, containsPoint } from "~/lib/geo/bounds";
+import { boundsCenter, containsPoint, expandBounds } from "~/lib/geo/bounds";
+import { areaBuckets, isAllAreaBuckets, type AreaBucketId } from "~/lib/listings/area";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
   type Bounds,
@@ -21,8 +22,8 @@ export { naverProxyUrl, naverTransport, type NaverTransport };
 const TILE_TTL_MS = 5 * 60 * 1000;
 const REGION_TTL_MS = 24 * 60 * 60 * 1000;
 const ROOT_CORTAR = "0000000000";
-/** new.land returns 20 rows per page; five pages is 100 listings. */
-export const NAVER_ARTICLE_PAGES = 5;
+/** new.land returns 20 rows per page; extra pages load in parallel. */
+export const NAVER_ARTICLE_PAGES = 8;
 
 /**
  * Direct requests hang until timeout when blocked. A proxy adds one hop to
@@ -61,6 +62,151 @@ const codeToPropertyType: Record<string, PropertyType> = {
 
 export function naverZoom(webZoom: number): number {
   return Math.max(8, Math.min(19, Math.round(webZoom)));
+}
+
+/** Administrative region the map should query at this Leaflet zoom. */
+export function naverCortarLevel(zoom: number): "sido" | "gu" | "dong" {
+  const z = naverZoom(zoom);
+  if (z <= 11) return "sido";
+  if (z <= 14) return "gu";
+  return "dong";
+}
+
+/**
+ * new.land /api/articles/clusters returns [] below zoom 15. Keep sending at
+ * least 15 so a city-wide view still gets pins, while cortarNo follows the
+ * real map zoom (gu/sido vs dong).
+ */
+export function naverClusterZoom(webZoom: number): number {
+  return Math.max(15, naverZoom(webZoom));
+}
+
+export function articlePagesForCortarCount(count: number): number {
+  return count > 1 ? 4 : NAVER_ARTICLE_PAGES;
+}
+
+const MAX_NAVER_CORTARS = 4;
+
+export function pickRegionsInView(
+  regions: Array<{ cortarNo: string; centerLat?: number; centerLon?: number }>,
+  bounds: Bounds,
+  limit = MAX_NAVER_CORTARS,
+): string[] {
+  const usable = regions.filter(
+    (region): region is { cortarNo: string; centerLat: number; centerLon: number } =>
+      typeof region.centerLat === "number" &&
+      Number.isFinite(region.centerLat) &&
+      typeof region.centerLon === "number" &&
+      Number.isFinite(region.centerLon),
+  );
+  if (!usable.length) return [];
+  const expanded = expandBounds(bounds, 0.45);
+  const center = boundsCenter(bounds);
+  const inView = usable.filter((region) =>
+    containsPoint(expanded, region.centerLat, region.centerLon),
+  );
+  const pool = inView.length ? inView : usable;
+  return [...pool]
+    .sort((a, b) => {
+      const da =
+        (a.centerLat - center.lat) * (a.centerLat - center.lat) +
+        (a.centerLon - center.lng) * (a.centerLon - center.lng);
+      const db =
+        (b.centerLat - center.lat) * (b.centerLat - center.lat) +
+        (b.centerLon - center.lng) * (b.centerLon - center.lng);
+      return da - db;
+    })
+    .slice(0, Math.max(1, limit))
+    .map((region) => region.cortarNo);
+}
+
+export type NaverListingQuery = {
+  bounds: Bounds;
+  zoom: number;
+  propertyTypes: PropertyType[];
+  salesTypes?: SalesType[];
+  minDeposit?: number;
+  maxDeposit?: number;
+  minRent?: number;
+  maxRent?: number;
+  areaBucketIds?: AreaBucketId[];
+  maxBuildingAge?: number;
+};
+
+export type NaverMapFetch = {
+  listings: MapListing[];
+  available?: number;
+};
+
+export function naverAreaRange(
+  selected?: AreaBucketId[],
+): { min: number; max?: number } | null {
+  if (!selected?.length || isAllAreaBuckets(selected)) return null;
+  const buckets = selected
+    .map((id) => areaBuckets.find((bucket) => bucket.id === id))
+    .filter((bucket): bucket is (typeof areaBuckets)[number] => Boolean(bucket));
+  if (!buckets.length) return null;
+  const min = Math.min(...buckets.map((bucket) => bucket.minM2));
+  if (buckets.some((bucket) => bucket.maxM2 == null)) return { min };
+  return {
+    min,
+    max: Math.max(...buckets.map((bucket) => bucket.maxM2 ?? min)),
+  };
+}
+
+export function naverFilterParams(input: {
+  minDeposit?: number;
+  maxDeposit?: number;
+  minRent?: number;
+  maxRent?: number;
+  areaBucketIds?: AreaBucketId[];
+  maxBuildingAge?: number;
+}): Record<string, string> {
+  const params: Record<string, string> = {
+    priceType: "RETAIL",
+    priceMin: "0",
+    priceMax: "900000000",
+    rentPriceMin: "0",
+    rentPriceMax: "900000000",
+    areaMin: "0",
+    areaMax: "900000000",
+    sameAddressGroup: "false",
+  };
+  if (input.minDeposit != null) params.priceMin = String(Math.round(input.minDeposit));
+  if (input.maxDeposit != null) params.priceMax = String(Math.round(input.maxDeposit));
+  if (input.minRent != null) params.rentPriceMin = String(Math.round(input.minRent));
+  if (input.maxRent != null) params.rentPriceMax = String(Math.round(input.maxRent));
+  const area = naverAreaRange(input.areaBucketIds);
+  if (area) {
+    params.areaMin = String(area.min);
+    params.areaMax = String(area.max ?? 900000000);
+  }
+  if (input.maxBuildingAge != null && input.maxBuildingAge > 0 && input.maxBuildingAge < 40) {
+    params.recentlyBuildYears = String(Math.round(input.maxBuildingAge));
+  }
+  return params;
+}
+
+export function naverFilterCacheKey(input: {
+  minDeposit?: number;
+  maxDeposit?: number;
+  minRent?: number;
+  maxRent?: number;
+  areaBucketIds?: AreaBucketId[];
+  maxBuildingAge?: number;
+}): string {
+  return [
+    input.minDeposit ?? "",
+    input.maxDeposit ?? "",
+    input.minRent ?? "",
+    input.maxRent ?? "",
+    (input.areaBucketIds ?? []).join(","),
+    input.maxBuildingAge ?? "",
+  ].join(":");
+}
+
+export function listingInventoryCount(listings: Array<{ count?: number }>): number {
+  return listings.reduce((sum, listing) => sum + (listing.count && listing.count > 1 ? listing.count : 1), 0);
 }
 
 export function naverListingUrl(articleNo: string): string {
@@ -148,6 +294,9 @@ type NaverArticleResponse = {
   body?: NaverArticle[];
   articleList?: NaverArticle[];
   isMoreData?: boolean;
+  totCnt?: number;
+  totalCount?: number;
+  mapCount?: number;
 };
 
 type NaverRegion = {
@@ -342,22 +491,6 @@ function salesQuery(types?: SalesType[]): string {
   return selected.map((type) => naverSalesCodes[type]).join(":");
 }
 
-function nearestRegion(regions: NaverRegion[], lat: number, lng: number): NaverRegion | undefined {
-  let best: NaverRegion | undefined;
-  let bestDist = Number.POSITIVE_INFINITY;
-  for (const region of regions) {
-    if (typeof region.centerLat !== "number" || typeof region.centerLon !== "number") continue;
-    const dlat = region.centerLat - lat;
-    const dlng = region.centerLon - lng;
-    const dist = dlat * dlat + dlng * dlng;
-    if (dist < bestDist) {
-      best = region;
-      bestDist = dist;
-    }
-  }
-  return best;
-}
-
 async function listRegions(cortarNo: string): Promise<NaverRegion[]> {
   return cached(`nv:regions:${cortarNo}`, REGION_TTL_MS, async () => {
     const payload = await naverAuthorizedJson<NaverRegionResponse>(
@@ -370,42 +503,85 @@ async function listRegions(cortarNo: string): Promise<NaverRegion[]> {
 
 /**
  * new.land article/cluster APIs are keyed by 법정동 cortarNo, not only a
- * bounding box. Walk 시도 → 구 → 동 using cached region lists and pick the
- * nearest centre to the viewport.
+ * bounding box. Walk 시도 → 구 → 동 using cached region lists and pick every
+ * centre that sits in the viewport (not just the nearest one).
  */
 export async function cortarNoForPoint(
   lat: number,
   lng: number,
   zoom: number,
 ): Promise<string | undefined> {
-  const z = naverZoom(zoom);
+  const nos = await cortarNosForViewport(
+    {
+      south: lat - 0.002,
+      north: lat + 0.002,
+      west: lng - 0.002,
+      east: lng + 0.002,
+    },
+    zoom,
+  );
+  return nos[0];
+}
+
+export async function cortarNosForViewport(bounds: Bounds, zoom: number): Promise<string[]> {
+  const level = naverCortarLevel(zoom);
   const sidos = await listRegions(ROOT_CORTAR);
-  const sido = nearestRegion(sidos, lat, lng);
-  if (!sido) return undefined;
-  if (z <= 11) return sido.cortarNo;
+  if (level === "sido") return pickRegionsInView(sidos, bounds, 1);
 
-  const gus = await listRegions(sido.cortarNo);
-  const gu = nearestRegion(gus, lat, lng) ?? sido;
-  if (z <= 14) return gu.cortarNo;
+  const sidoNos = pickRegionsInView(sidos, bounds, 2);
+  const gus: NaverRegion[] = [];
+  for (const cortarNo of sidoNos) {
+    gus.push(...(await listRegions(cortarNo)));
+  }
+  if (level === "gu") return pickRegionsInView(gus, bounds, MAX_NAVER_CORTARS);
 
-  const dongs = await listRegions(gu.cortarNo);
-  return nearestRegion(dongs, lat, lng)?.cortarNo ?? gu.cortarNo;
+  const guNos = pickRegionsInView(gus, bounds, 2);
+  const dongs: NaverRegion[] = [];
+  for (const cortarNo of guNos) {
+    dongs.push(...(await listRegions(cortarNo)));
+  }
+  return pickRegionsInView(dongs, bounds, MAX_NAVER_CORTARS);
+}
+
+function naverMapParams(bounds: Bounds, zoom: number): Record<string, string> {
+  const center = boundsCenter(bounds);
+  return {
+    zoom: String(naverClusterZoom(zoom)),
+    leftLon: String(bounds.west),
+    rightLon: String(bounds.east),
+    topLat: String(bounds.north),
+    bottomLat: String(bounds.south),
+    centerLat: String(center.lat),
+    centerLon: String(center.lng),
+  };
+}
+
+function dedupeNaverListings(listings: MapListing[]): MapListing[] {
+  const seen = new Map<string, MapListing>();
+  for (const listing of listings) {
+    seen.set(listing.id, listing);
+  }
+  return [...seen.values()];
 }
 
 async function fetchClusterList(input: {
   bounds: Bounds;
   zoom: number;
+  cortarNo: string;
   propertyTypes: PropertyType[];
   salesTypes?: SalesType[];
+  minDeposit?: number;
+  maxDeposit?: number;
+  minRent?: number;
+  maxRent?: number;
+  areaBucketIds?: AreaBucketId[];
+  maxBuildingAge?: number;
 }): Promise<MapListing[]> {
-  const center = boundsCenter(input.bounds);
-  const z = naverZoom(input.zoom);
-  const cortarNo = await cortarNoForPoint(center.lat, center.lng, input.zoom);
-  if (!cortarNo) return [];
-
+  const z = naverClusterZoom(input.zoom);
+  const filters = naverFilterParams(input);
   const key = [
     "nv:cluster",
-    cortarNo,
+    input.cortarNo,
     z,
     input.bounds.south.toFixed(3),
     input.bounds.west.toFixed(3),
@@ -413,19 +589,16 @@ async function fetchClusterList(input: {
     input.bounds.east.toFixed(3),
     propertyQuery(input.propertyTypes),
     salesQuery(input.salesTypes),
+    naverFilterCacheKey(input),
   ].join(":");
 
   return cached(key, TILE_TTL_MS, async () => {
     const params = new URLSearchParams({
-      cortarNo,
-      zoom: String(z),
-      priceType: "RETAIL",
+      cortarNo: input.cortarNo,
       realEstateType: propertyQuery(input.propertyTypes),
       tradeType: salesQuery(input.salesTypes),
-      leftLon: String(input.bounds.west),
-      rightLon: String(input.bounds.east),
-      topLat: String(input.bounds.north),
-      bottomLat: String(input.bounds.south),
+      ...filters,
+      ...naverMapParams(input.bounds, input.zoom),
     });
     const payload = await naverAuthorizedJson<NaverClusterResponse | NaverCluster[]>(
       `${NEW_LAND_ORIGIN}/api/articles/clusters?${params.toString()}`,
@@ -437,79 +610,153 @@ async function fetchClusterList(input: {
   });
 }
 
+function articleListTotal(payload: NaverArticleResponse, itemCount: number): number | undefined {
+  const total = payload.totCnt ?? payload.totalCount ?? payload.mapCount;
+  if (typeof total === "number" && Number.isFinite(total) && total > 0) return total;
+  if (itemCount > 0 && payload.isMoreData === false) return itemCount;
+  return undefined;
+}
+
+async function fetchArticlePage(input: {
+  bounds: Bounds;
+  zoom: number;
+  cortarNo: string;
+  page: number;
+  propertyTypes: PropertyType[];
+  salesTypes?: SalesType[];
+  minDeposit?: number;
+  maxDeposit?: number;
+  minRent?: number;
+  maxRent?: number;
+  areaBucketIds?: AreaBucketId[];
+  maxBuildingAge?: number;
+}): Promise<{ items: MapListing[]; isMore: boolean; total?: number }> {
+  const z = naverClusterZoom(input.zoom);
+  const filters = naverFilterParams(input);
+  const key = [
+    "nv:articles",
+    input.cortarNo,
+    z,
+    input.page,
+    input.bounds.south.toFixed(3),
+    input.bounds.west.toFixed(3),
+    propertyQuery(input.propertyTypes),
+    salesQuery(input.salesTypes),
+    naverFilterCacheKey(input),
+  ].join(":");
+
+  return cached(key, TILE_TTL_MS, async () => {
+    const params = new URLSearchParams({
+      cortarNo: input.cortarNo,
+      order: "rank",
+      realEstateType: propertyQuery(input.propertyTypes),
+      tradeType: salesQuery(input.salesTypes),
+      page: String(input.page),
+      ...filters,
+      ...naverMapParams(input.bounds, input.zoom),
+    });
+    const payload = await naverAuthorizedJson<NaverArticleResponse>(
+      `${NEW_LAND_ORIGIN}/api/articles?${params.toString()}`,
+      naverRequestTimeoutMs(),
+    );
+    const items = (payload.articleList ?? payload.body ?? [])
+      .map(articleToListing)
+      .filter((item): item is MapListing => item !== null);
+    return {
+      items,
+      isMore: payload.isMoreData ?? items.length >= 20,
+      total: articleListTotal(payload, items.length),
+    };
+  });
+}
+
 async function fetchArticleList(input: {
   bounds: Bounds;
   zoom: number;
+  cortarNo: string;
+  pages?: number;
   propertyTypes: PropertyType[];
   salesTypes?: SalesType[];
-}): Promise<MapListing[]> {
-  const center = boundsCenter(input.bounds);
-  const z = naverZoom(input.zoom);
-  const cortarNo = await cortarNoForPoint(center.lat, center.lng, input.zoom);
-  if (!cortarNo) return [];
+  minDeposit?: number;
+  maxDeposit?: number;
+  minRent?: number;
+  maxRent?: number;
+  areaBucketIds?: AreaBucketId[];
+  maxBuildingAge?: number;
+}): Promise<{ listings: MapListing[]; total?: number }> {
+  const maxPages = input.pages ?? NAVER_ARTICLE_PAGES;
+  const first = await fetchArticlePage({ ...input, page: 1 });
+  const listings = [...first.items];
+  let total = first.total;
+  if (!first.isMore || maxPages <= 1) return { listings, total };
 
-  const listings: MapListing[] = [];
-
-  for (let page = 1; page <= NAVER_ARTICLE_PAGES; page += 1) {
-    const key = [
-      "nv:articles",
-      cortarNo,
-      z,
-      page,
-      propertyQuery(input.propertyTypes),
-      salesQuery(input.salesTypes),
-    ].join(":");
-
-    const pageItems = await cached(key, TILE_TTL_MS, async () => {
-      const params = new URLSearchParams({
-        cortarNo,
-        order: "rank",
-        realEstateType: propertyQuery(input.propertyTypes),
-        tradeType: salesQuery(input.salesTypes),
-        page: String(page),
-      });
-      const payload = await naverAuthorizedJson<NaverArticleResponse>(
-        `${NEW_LAND_ORIGIN}/api/articles?${params.toString()}`,
-        naverRequestTimeoutMs(),
-      );
-      const items = (payload.articleList ?? payload.body ?? [])
-        .map(articleToListing)
-        .filter((item): item is MapListing => item !== null);
-      return {
-        items,
-        isMore: payload.isMoreData ?? items.length >= 20,
-      };
-    });
-
-    listings.push(...pageItems.items);
-    if (!pageItems.isMore) break;
+  const neededPages = total
+    ? Math.min(maxPages, Math.max(2, Math.ceil(total / 20)))
+    : maxPages;
+  const extra = await Promise.all(
+    Array.from({ length: neededPages - 1 }, (_, index) =>
+      fetchArticlePage({ ...input, page: index + 2 }),
+    ),
+  );
+  for (const page of extra) {
+    listings.push(...page.items);
+    if (page.total != null) total = Math.max(total ?? 0, page.total);
   }
-
-  return listings;
+  return { listings, total };
 }
 
-export async function fetchNaverListings(input: {
-  bounds: Bounds;
-  zoom: number;
-  propertyTypes: PropertyType[];
-  salesTypes?: SalesType[];
-}): Promise<MapListing[]> {
-  // new.land /api/articles/clusters returns [] below zoom 15, so a city-wide
-  // default view showed zero Naver pins with no error. Always load dong-level
-  // article rows; the map aggregator still clusters them when zoomed out.
-  const listings = await fetchArticleList({
-    ...input,
-    zoom: Math.max(input.zoom, 15),
-  });
-  if (listings.length > 0 || input.zoom >= 15) {
-    return listings.filter((listing) =>
-      containsPoint(input.bounds, listing.lat, listing.lng),
+export async function fetchNaverListings(input: NaverListingQuery): Promise<NaverMapFetch> {
+  const cortarNos = await cortarNosForViewport(input.bounds, input.zoom);
+  if (!cortarNos.length) return { listings: [] };
+
+  const inView = (listings: MapListing[]) =>
+    listings.filter((listing) => containsPoint(input.bounds, listing.lat, listing.lng));
+
+  const loadClusters = (nos: string[]) =>
+    Promise.all(nos.map((cortarNo) => fetchClusterList({ ...input, cortarNo }))).then((groups) =>
+      inView(dedupeNaverListings(groups.flat())),
     );
+
+  const loadArticles = (nos: string[]) =>
+    Promise.all(
+      nos.map((cortarNo) =>
+        fetchArticleList({
+          ...input,
+          cortarNo,
+          pages: articlePagesForCortarCount(nos.length),
+        }),
+      ),
+    ).then((groups) => {
+      const listings = inView(dedupeNaverListings(groups.flatMap((group) => group.listings)));
+      const reported = groups.reduce((sum, group) => sum + (group.total ?? 0), 0);
+      return { listings, reported: reported > 0 ? reported : undefined };
+    });
+
+  if (input.zoom >= 15) {
+    const [clusters, articles] = await Promise.all([loadClusters(cortarNos), loadArticles(cortarNos)]);
+    const listings = articles.listings.length ? articles.listings : clusters;
+    const available = Math.max(
+      listingInventoryCount(clusters),
+      articles.reported ?? 0,
+      listings.length,
+    );
+    return {
+      listings,
+      available: available > 0 ? available : undefined,
+    };
   }
-  const clusters = await fetchClusterList(input);
-  return clusters.filter((listing) =>
-    containsPoint(input.bounds, listing.lat, listing.lng),
-  );
+
+  const clustered = await loadClusters(cortarNos);
+  if (clustered.length) {
+    return { listings: clustered, available: listingInventoryCount(clustered) };
+  }
+
+  const dongNos = await cortarNosForViewport(input.bounds, 15);
+  const articles = await loadArticles(dongNos);
+  return {
+    listings: articles.listings,
+    available: Math.max(articles.reported ?? 0, articles.listings.length) || undefined,
+  };
 }
 
 export async function fetchNaverDetail(sourceId: string): Promise<ListingDetail> {

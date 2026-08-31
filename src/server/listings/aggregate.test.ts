@@ -67,6 +67,27 @@ describe("getMapData", () => {
     expect(data.stats.naver).toBe(0);
   });
 
+  it("keeps Naver's area inventory total when only a page of pins loaded", async () => {
+    const data = await getMapData(
+      {
+        bounds: seoulBounds,
+        zoom: 16,
+        sources: ["naver"],
+        propertyTypes: ["oneroom"],
+      },
+      {
+        zigbang: async () => [],
+        naver: async () => ({
+          listings: [listing("n1", "naver"), listing("n2", "naver")],
+          available: 480,
+        }),
+      },
+    );
+    expect(data.stats.naver).toBe(2);
+    expect(data.stats.naverAvailable).toBe(480);
+    expect(data.stats.truncated).toBe(true);
+  });
+
   it("keeps the other source if Naver fails", async () => {
     const data = await getMapData(
       {

@@ -22,7 +22,7 @@ import {
 } from "~/lib/listings/filter";
 import { parseSearchQuery } from "~/lib/listings/search";
 import { settledError, withTimeout } from "./http";
-import { fetchNaverDetail, fetchNaverListings, naverBudgetMs } from "./naver";
+import { fetchNaverDetail, fetchNaverListings, naverBudgetMs, type NaverMapFetch, type NaverListingQuery } from "./naver";
 import { fetchPeterpanDetail, fetchPeterpanListings } from "./peterpan";
 import {
   fetchZigbangDetail,
@@ -38,7 +38,7 @@ const ZIGBANG_DETAIL_BUDGET_MS = 3500;
 
 export type ListingAdapters = {
   zigbang: typeof fetchZigbangListings;
-  naver: typeof fetchNaverListings;
+  naver: (input: NaverListingQuery) => Promise<MapListing[] | NaverMapFetch>;
   peterpan?: typeof fetchPeterpanListings;
 };
 
@@ -47,6 +47,10 @@ const defaultAdapters: ListingAdapters = {
   naver: fetchNaverListings,
   peterpan: fetchPeterpanListings,
 };
+
+function naverFetchFrom(result: MapListing[] | NaverMapFetch): NaverMapFetch {
+  return Array.isArray(result) ? { listings: result } : result;
+}
 
 function dedupeListings(listings: MapListing[]): MapListing[] {
   const seen = new Map<string, MapListing>();
@@ -105,6 +109,7 @@ export async function getMapData(
 
   const jobs: Promise<MapListing[]>[] = [];
   const jobSources: Source[] = [];
+  let naverAvailable: number | undefined;
 
   if (sources.includes("zigbang")) {
     jobSources.push("zigbang");
@@ -124,12 +129,24 @@ export async function getMapData(
     jobSources.push("naver");
     jobs.push(
       withTimeout(
-        adapters.naver({
-          bounds: fetchBounds,
-          zoom: query.zoom,
-          propertyTypes,
-          salesTypes: selectedSalesTypes,
-        }),
+        adapters
+          .naver({
+            bounds: fetchBounds,
+            zoom: query.zoom,
+            propertyTypes,
+            salesTypes: selectedSalesTypes,
+            minDeposit: query.minDeposit,
+            maxDeposit: query.maxDeposit,
+            minRent: query.minRent,
+            maxRent: query.maxRent,
+            areaBucketIds,
+            maxBuildingAge: query.maxBuildingAge,
+          })
+          .then((result) => {
+            const fetched = naverFetchFrom(result);
+            naverAvailable = fetched.available;
+            return fetched.listings;
+          }),
         naverBudgetMs(),
         "Naver",
       ),
@@ -181,6 +198,8 @@ export async function getMapData(
   const zigbang = unique.filter((item) => item.source === "zigbang").length;
   const naver = unique.filter((item) => item.source === "naver").length;
   const peterpan = unique.filter((item) => item.source === "peterpan").length;
+  const naverTotal =
+    naverAvailable != null && naverAvailable > naver ? naverAvailable : undefined;
   const clustered = shouldCluster(query.zoom, unique.length, MAX_MARKERS);
   const clusters = clustered
     ? clusterListings(unique, cellSizeForZoom(query.zoom))
@@ -228,6 +247,7 @@ export async function getMapData(
         zigbang,
         naver,
         peterpan,
+        naverAvailable: naverTotal,
         returned: clusters.length,
         truncated: false,
       },
@@ -235,7 +255,7 @@ export async function getMapData(
     };
   }
 
-  const truncated = unique.length > listings.length;
+  const truncated = unique.length > listings.length || Boolean(naverTotal);
   return {
     mode: clustered ? "clusters" : "markers",
     clusters,
@@ -244,6 +264,7 @@ export async function getMapData(
       zigbang,
       naver,
       peterpan,
+      naverAvailable: naverTotal,
       returned: listings.length || clusters.length,
       truncated,
     },

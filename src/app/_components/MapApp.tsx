@@ -982,7 +982,10 @@ export default function MapApp() {
           ? `Zigbang ${visible.stats.zigbang.toLocaleString("en-US")}`
           : null,
         sources.includes("naver")
-          ? `Naver ${visible.stats.naver.toLocaleString("en-US")}`
+          ? visible.stats.naverAvailable &&
+            visible.stats.naverAvailable > visible.stats.naver
+            ? `Naver ${visible.stats.naver.toLocaleString("en-US")} of ${visible.stats.naverAvailable.toLocaleString("en-US")}`
+            : `Naver ${visible.stats.naver.toLocaleString("en-US")}`
           : null,
         sources.includes("peterpan")
           ? `Peterpan ${visible.stats.peterpan.toLocaleString("en-US")}`
@@ -1467,7 +1470,9 @@ export default function MapApp() {
               totalCount={
                 viewMode === "saved"
                   ? savedHomes.length
-                  : visible.stats.zigbang + visible.stats.naver + visible.stats.peterpan
+                  : visible.stats.zigbang +
+                    (visible.stats.naverAvailable ?? visible.stats.naver) +
+                    visible.stats.peterpan
               }
               sort={listSort}
               savedIds={savedHomes.map((item) => item.id)}
