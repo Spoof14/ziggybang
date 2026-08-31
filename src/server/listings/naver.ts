@@ -77,11 +77,11 @@ export function mapNaverPropertyType(value?: string): PropertyType {
 }
 
 export type NaverCluster = {
-  lat?: number;
-  lon?: number;
-  lng?: number;
-  latitude?: number;
-  longitude?: number;
+  lat?: number | string;
+  lon?: number | string;
+  lng?: number | string;
+  latitude?: number | string;
+  longitude?: number | string;
   count?: number;
   cnt?: number;
   lgeo?: string;
@@ -110,10 +110,10 @@ export type NaverArticle = {
   tradTpNm?: string;
   tradeTypeCode?: string;
   tradeTypeName?: string;
-  lat?: number;
-  lng?: number;
-  latitude?: number;
-  longitude?: number;
+  lat?: number | string;
+  lng?: number | string;
+  latitude?: number | string;
+  longitude?: number | string;
   prc?: number;
   rentPrc?: number | string;
   hanPrc?: number | string;
@@ -177,10 +177,10 @@ export function extractClusters(
 }
 
 export function clusterToListing(cluster: NaverCluster, index: number): MapListing | null {
-  const lat = cluster.latitude ?? cluster.lat;
-  const lng = cluster.longitude ?? cluster.lon ?? cluster.lng;
+  const lat = asCoord(cluster.latitude) ?? asCoord(cluster.lat);
+  const lng = asCoord(cluster.longitude) ?? asCoord(cluster.lon) ?? asCoord(cluster.lng);
   const count = cluster.count ?? cluster.cnt ?? 1;
-  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  if (lat == null || lng == null) return null;
 
   const sourceId = cluster.markerId ?? cluster.lgeo ?? `cluster-${index}`;
   return {
@@ -195,10 +195,19 @@ export function clusterToListing(cluster: NaverCluster, index: number): MapListi
   };
 }
 
+function asCoord(value: number | string | undefined): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
 function articleCoord(article: NaverArticle): { lat: number; lng: number } | null {
-  const lat = article.latitude ?? article.lat;
-  const lng = article.longitude ?? article.lng;
-  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  const lat = asCoord(article.latitude) ?? asCoord(article.lat);
+  const lng = asCoord(article.longitude) ?? asCoord(article.lng);
+  if (lat == null || lng == null) return null;
   return { lat, lng };
 }
 
