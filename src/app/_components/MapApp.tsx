@@ -72,7 +72,7 @@ import { usePhotoQuality } from "./usePhotoQuality";
 const ALL_SOURCES: Source[] = ["zigbang", "naver", "peterpan"];
 const ALL_TYPES: PropertyType[] = ["oneroom", "villa", "officetel", "apartment"];
 const ALL_SALES: SalesType[] = ["jeonse", "wolse", "sale"];
-const DEFAULT_SOURCES: Source[] = ["zigbang", "peterpan"];
+const DEFAULT_SOURCES: Source[] = ["zigbang", "naver", "peterpan"];
 const DEFAULT_SALES: SalesType[] = ["jeonse", "wolse"];
 const DEFAULT_RADIUS_M = 1200;
 const NAVER_HIDE_KEY = "ziggybang:hide-naver-error";

@@ -427,12 +427,20 @@ export async function fetchNaverListings(input: {
   propertyTypes: PropertyType[];
   salesTypes?: SalesType[];
 }): Promise<MapListing[]> {
-  const listings =
-    input.zoom >= 15
-      ? await fetchArticleList(input)
-      : await fetchClusterList(input);
-
-  return listings.filter((listing) =>
+  // new.land /api/articles/clusters returns [] below zoom 15, so a city-wide
+  // default view showed zero Naver pins with no error. Always load dong-level
+  // article rows; the map aggregator still clusters them when zoomed out.
+  const listings = await fetchArticleList({
+    ...input,
+    zoom: Math.max(input.zoom, 15),
+  });
+  if (listings.length > 0 || input.zoom >= 15) {
+    return listings.filter((listing) =>
+      containsPoint(input.bounds, listing.lat, listing.lng),
+    );
+  }
+  const clusters = await fetchClusterList(input);
+  return clusters.filter((listing) =>
     containsPoint(input.bounds, listing.lat, listing.lng),
   );
 }
