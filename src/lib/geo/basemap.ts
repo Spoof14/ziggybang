@@ -10,7 +10,7 @@ export function leafletBasemap(): {
   subdomains?: string[];
   maxZoom: number;
 } {
-  const cartoKey = process.env.NEXT_PUBLIC_CARTO_API_KEY;
+  const cartoKey = process.env.NEXT_PUBLIC_CARTO_API_KEY?.trim();
   if (cartoKey) {
     return {
       url: `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(cartoKey)}`,
