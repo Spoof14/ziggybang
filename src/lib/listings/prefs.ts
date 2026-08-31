@@ -33,6 +33,7 @@ export type SavedPrefs = {
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
   maxBuildingAge?: number;
+  hasPhotos?: boolean;
 } & PriceFilter;
 
 const KEY = "ziggybang:prefs:v1";
@@ -141,6 +142,7 @@ export function loadPrefs(): SavedPrefs | null {
           ? parsed.listSort
           : "featured",
       foreignerOk: parsed.foreignerOk === true,
+      hasPhotos: parsed.hasPhotos === true,
       floorFilter: pickKnown([parsed.floorFilter], floorFilters)[0],
       ageFilter: pickKnown([parsed.ageFilter], ageFilters)[0],
       ...normalizeBuildingAgeFilter({ maxBuildingAge: parsed.maxBuildingAge }),

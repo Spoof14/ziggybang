@@ -100,6 +100,14 @@ describe("map layers follow filters", () => {
         propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
         salesTypes: ["jeonse", "wolse"],
         areaBucketIds: [],
+        hasPhotos: true,
+      }),
+    ).toBe("Has photos");
+    expect(
+      describeActiveFilters({
+        propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
         floorFilter: "no-basement",
       }),
     ).toBe("No basement");

@@ -31,7 +31,7 @@ export type VisibleFilterInput = {
   circle?: CircleFilter;
   polygon?: LatLng[] | null;
   zoom: number;
-} & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter; ageFilter?: AgeFilter; maxBuildingAge?: number };
+} & PriceFilter & { foreignerOk?: boolean; floorFilter?: FloorFilter; ageFilter?: AgeFilter; maxBuildingAge?: number; hasPhotos?: boolean };
 
 function detailInputOf(input: VisibleFilterInput) {
   return {
@@ -46,6 +46,7 @@ function detailInputOf(input: VisibleFilterInput) {
     floorFilter: input.floorFilter,
     ageFilter: input.ageFilter,
     maxBuildingAge: input.maxBuildingAge,
+    hasPhotos: input.hasPhotos,
   };
 }
 
@@ -73,6 +74,7 @@ export function listingsMatchingFilters(
     floorFilter: input.floorFilter,
     ageFilter: input.ageFilter,
     maxBuildingAge: input.maxBuildingAge,
+    hasPhotos: input.hasPhotos,
   });
 }
 
@@ -112,6 +114,7 @@ export function describeActiveFilters(input: {
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
   maxBuildingAge?: number;
+  hasPhotos?: boolean;
 } & PriceFilter): string | null {
   const parts: string[] = [];
   if (!isAllPropertyTypes(input.propertyTypes) && input.propertyTypes.length) {
@@ -135,6 +138,7 @@ export function describeActiveFilters(input: {
   const price = describePriceFilter(input);
   if (price) parts.push(price);
   if (input.foreignerOk) parts.push("Foreigners welcome");
+  if (input.hasPhotos) parts.push("Has photos");
   if (input.floorFilter) parts.push(floorFilterLabel[input.floorFilter]);
   if (input.ageFilter) parts.push(ageFilterLabel[input.ageFilter]);
   const built = describeBuildingAgeFilter(input.maxBuildingAge);
@@ -152,6 +156,7 @@ export function filterKeyOf(input: {
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
   maxBuildingAge?: number;
+  hasPhotos?: boolean;
 } & PriceFilter): string {
   return [
     input.sources.join(","),
@@ -160,6 +165,7 @@ export function filterKeyOf(input: {
     input.areaBucketIds.join(","),
     input.query,
     input.foreignerOk ? "ok" : "",
+    input.hasPhotos ? "pics" : "",
     input.floorFilter ?? "",
     input.ageFilter ?? "",
     input.maxBuildingAge ?? "",

@@ -1,3 +1,26 @@
+export function listingHasPhotos(listing: {
+  thumbnail?: string;
+  photos?: string[];
+}): boolean {
+  if (listing.thumbnail?.trim()) return true;
+  return Boolean(listing.photos?.some((url) => url.trim()));
+}
+
+/** Gallery order: listing photos first (Naver floor plans live there), then thumbnail. */
+export function listingGalleryUrls(listing: {
+  thumbnail?: string;
+  photos?: string[];
+}): string[] {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  for (const url of [...(listing.photos ?? []), listing.thumbnail]) {
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
+  }
+  return urls;
+}
+
 export function listingPhotoUrl(
   url?: string,
   width = 800,

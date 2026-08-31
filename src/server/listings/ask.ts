@@ -63,6 +63,8 @@ function intentFromUnknown(raw: unknown): SearchIntent {
     maxRent: asNumber(data.maxRent),
     foreignerOk:
       data.foreignerOk === null ? null : typeof data.foreignerOk === "boolean" ? data.foreignerOk : undefined,
+    hasPhotos:
+      data.hasPhotos === null ? null : typeof data.hasPhotos === "boolean" ? data.hasPhotos : undefined,
     floorFilter:
       data.floorFilter === null
         ? null
@@ -127,6 +129,7 @@ Return JSON with:
 - viewMode: map, list, or best. Use best for good value / recommend / nicest.
 - minDeposit, maxDeposit, minRent, maxRent in 만원 (₩20 million = 2000, ₩800,000/month = 80, 1억 = 10000)
 - foreignerOk: true if they need a landlord who accepts foreigners
+- hasPhotos: true if they only want listings with photos
 - floorFilter: no-basement, min-2, or min-5
 - ageFilter: week or month (listing recency, NOT building age)
 - maxBuildingAge: integer 5–39. "less than 15 years old" / "under 10 years" → 15 or 10. null to clear.

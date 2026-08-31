@@ -43,6 +43,7 @@ export type SearchSnapshot = {
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
   maxBuildingAge?: number;
+  hasPhotos?: boolean;
 };
 
 export type SearchIntent = {
@@ -61,6 +62,7 @@ export type SearchIntent = {
   ageFilter?: AgeFilter | null;
   listingQuery?: string | null;
   maxBuildingAge?: number | null;
+  hasPhotos?: boolean | null;
 };
 
 export type InterpretedSearch = {
@@ -351,6 +353,8 @@ export function mergeSearchIntent(
     viewMode: patch.viewMode === null ? "map" : (patch.viewMode ?? current.viewMode),
     foreignerOk:
       patch.foreignerOk === null ? false : (patch.foreignerOk ?? current.foreignerOk),
+    hasPhotos:
+      patch.hasPhotos === null ? false : (patch.hasPhotos ?? current.hasPhotos),
     floorFilter:
       patch.floorFilter === null ? undefined : (patch.floorFilter ?? current.floorFilter),
     ageFilter:
@@ -389,6 +393,7 @@ export function describeSearchSnapshot(snapshot: SearchSnapshot): string {
     price,
     size ? `Size: ${size}.` : null,
     snapshot.foreignerOk ? "Only listings that say foreigners are welcome." : null,
+    snapshot.hasPhotos ? "Only listings with photos." : null,
     snapshot.floorFilter ? `${floorFilterLabel[snapshot.floorFilter]}.` : null,
     snapshot.ageFilter ? `${ageFilterLabel[snapshot.ageFilter]}.` : null,
     describeBuildingAgeFilter(snapshot.maxBuildingAge),
@@ -529,6 +534,14 @@ export function interpretSearch(
   }
   if (/any landlord|clear foreigner/i.test(text)) {
     intent.foreignerOk = null;
+  }
+  if (
+    /\b(?:with|has|have)\s+(?:photos?|pictures?)\b|사진\s*있/i.test(text)
+  ) {
+    intent.hasPhotos = true;
+  }
+  if (/any photos?|clear photos?|without photos?/i.test(text)) {
+    intent.hasPhotos = null;
   }
   const floor = followUp ? { floorFilter: undefined } : parseFloorFilter(text);
   if (floor.floorFilter) intent.floorFilter = floor.floorFilter;

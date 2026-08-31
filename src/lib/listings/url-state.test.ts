@@ -64,6 +64,23 @@ describe("shareable search URLs", () => {
     expect(parseAppUrl(search).foreignerOk).toBe(true);
   });
 
+  it("round-trips the has-photos chip", () => {
+    const search = buildAppSearch({
+      searchInput: "hongdae",
+      viewMode: "map",
+      sources: ["zigbang", "peterpan"],
+      propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+      salesTypes: ["jeonse", "wolse"],
+      areaBucketIds: [],
+      radiusM: 1200,
+      view: { lat: 37.556, lng: 126.923, zoom: 15 },
+      listSort: "featured",
+      hasPhotos: true,
+    });
+    expect(search).toContain("pics=1");
+    expect(parseAppUrl(search).hasPhotos).toBe(true);
+  });
+
   it("round-trips the no-basement floor chip", () => {
     const search = buildAppSearch({
       searchInput: "guro digital",

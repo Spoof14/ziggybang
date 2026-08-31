@@ -19,6 +19,7 @@ import {
 import { listingMatchesAge, type AgeFilter } from "./age";
 import { listingMatchesQuery } from "./search";
 import { listingMatchesFloor, type FloorFilter } from "./floor";
+import { listingHasPhotos } from "./photo";
 
 export type ListingFilterInput = {
   propertyTypes?: PropertyType[];
@@ -29,6 +30,7 @@ export type ListingFilterInput = {
   foreignerOk?: boolean;
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
+  hasPhotos?: boolean;
 } & PriceFilter & BuildingAgeFilter;
 
 export function isAllPropertyTypes(selected: PropertyType[]): boolean {
@@ -110,6 +112,9 @@ export function filterListings(
       if (input.requireDetails && listing.foreignerOk !== true) return false;
       if (!input.requireDetails && listing.foreignerOk === false) return false;
     }
+    if (input.hasPhotos) {
+      if (input.requireDetails && !listingHasPhotos(listing)) return false;
+    }
     if (
       !listingMatchesFloor(
         listing.floor,
@@ -149,6 +154,7 @@ export function needsListingDetails(
     !isAllAreaBuckets(input.areaBucketIds) ||
     Boolean(input.query.trim()) ||
     Boolean(input.foreignerOk) ||
+    Boolean(input.hasPhotos) ||
     Boolean(input.floorFilter) ||
     Boolean(input.ageFilter) ||
     !isEmptyBuildingAgeFilter(input) ||

@@ -46,6 +46,7 @@ export type MapQuery = {
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
   maxBuildingAge?: number;
+  hasPhotos?: boolean;
 };
 
 export type MapListing = {

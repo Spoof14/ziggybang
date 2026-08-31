@@ -2,6 +2,7 @@ import { boundsCenter, containsPoint } from "~/lib/geo/bounds";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
   type Bounds,
+  type ListingDetail,
   type MapListing,
   type PropertyType,
   type SalesType,
@@ -128,8 +129,19 @@ export type NaverArticle = {
   floorInfo?: string;
   repImgUrl?: string;
   representativeImgUrl?: string;
+  articlePhotos?: NaverArticlePhoto[];
+  imageList?: Array<string | NaverArticlePhoto>;
   atclCfmYmd?: string;
   articleConfirmYmd?: string;
+};
+
+export type NaverArticlePhoto = {
+  imageSrc?: string;
+  imageUrl?: string;
+  imgUrl?: string;
+  url?: string;
+  imageType?: string | number;
+  imageOrder?: number;
 };
 
 type NaverArticleResponse = {
@@ -217,7 +229,52 @@ function articleCoord(article: NaverArticle): { lat: number; lng: number } | nul
 function thumbnailUrl(path?: string): string | undefined {
   if (!path) return undefined;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  return `https://landthumb-phinf.pstatic.net${path}`;
+  if (path.startsWith("//")) return `https:${path}`;
+  return `https://landthumb-phinf.pstatic.net${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function photoPath(photo: string | NaverArticlePhoto | undefined): string | undefined {
+  if (!photo) return undefined;
+  if (typeof photo === "string") return photo;
+  return photo.imageSrc ?? photo.imageUrl ?? photo.imgUrl ?? photo.url;
+}
+
+/** new.land imageType 10 is the 평면도 (floor plan with room dimensions). */
+export function isNaverFloorplan(imageType?: string | number): boolean {
+  const value = String(imageType ?? "").toUpperCase();
+  return value === "10" || value === "F" || value === "FP" || value === "PLAN";
+}
+
+export function extractNaverPhotos(article: {
+  repImgUrl?: string;
+  representativeImgUrl?: string;
+  articlePhotos?: NaverArticlePhoto[];
+  imageList?: Array<string | NaverArticlePhoto>;
+  photos?: NaverArticlePhoto[];
+}): string[] {
+  const gallery = [
+    ...(article.articlePhotos ?? []),
+    ...(article.photos ?? []),
+    ...(article.imageList ?? []),
+  ];
+  const ranked = [...gallery].sort((left, right) => {
+    if (typeof left === "string" || typeof right === "string") return 0;
+    const leftPlan = isNaverFloorplan(left.imageType) ? 0 : 1;
+    const rightPlan = isNaverFloorplan(right.imageType) ? 0 : 1;
+    if (leftPlan !== rightPlan) return leftPlan - rightPlan;
+    return (left.imageOrder ?? 99) - (right.imageOrder ?? 99);
+  });
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  for (const photo of ranked) {
+    const url = thumbnailUrl(photoPath(photo));
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
+  }
+  const thumbnail = thumbnailUrl(article.repImgUrl ?? article.representativeImgUrl);
+  if (thumbnail && !seen.has(thumbnail)) urls.push(thumbnail);
+  return urls;
 }
 
 export function articleToListing(article: NaverArticle): MapListing | null {
@@ -245,6 +302,8 @@ export function articleToListing(article: NaverArticle): MapListing | null {
       : undefined;
   const deposit = warrant ?? (salesType === "sale" ? undefined : parseNaverManwon(article.prc));
   const title = article.articleName ?? article.atclNm ?? article.buildingName;
+  const photos = extractNaverPhotos(article);
+  const thumbnail = photos[0] ?? thumbnailUrl(article.repImgUrl ?? article.representativeImgUrl);
 
   return {
     id: `naver:${propertyType}:${id}`,
@@ -260,7 +319,8 @@ export function articleToListing(article: NaverArticle): MapListing | null {
     price,
     areaM2: Number.isFinite(area) ? area : undefined,
     floor: article.floorInfo ?? article.flrInfo,
-    thumbnail: thumbnailUrl(article.repImgUrl ?? article.representativeImgUrl),
+    thumbnail,
+    photos: photos.length ? photos : undefined,
     url: naverListingUrl(id),
     foreignerOk: detectForeignerOk(title),
     updatedAt: article.articleConfirmYmd ?? article.atclCfmYmd,
@@ -452,15 +512,129 @@ export async function fetchNaverListings(input: {
   );
 }
 
-export async function fetchNaverDetail(sourceId: string): Promise<MapListing> {
+export async function fetchNaverDetail(sourceId: string): Promise<ListingDetail> {
+  return cached(`nv:detail:${sourceId}`, TILE_TTL_MS, async () => {
+    const payload = await naverAuthorizedJson<NaverArticleDetailPayload>(
+      `${NEW_LAND_ORIGIN}/api/articles/${encodeURIComponent(sourceId)}`,
+      naverRequestTimeoutMs(),
+    );
+    const listing = mapNaverArticleDetail(payload, sourceId);
+    if (!listing) {
+      throw new Error(`Naver listing ${sourceId} was not found`);
+    }
+    return listing;
+  });
+}
+
+type NaverArticleDetailPayload = {
+  articleNo?: string | number;
+  articleName?: string;
+  latitude?: number | string;
+  longitude?: number | string;
+  latitudeNum?: number | string;
+  longitudeNum?: number | string;
+  realEstateTypeCode?: string;
+  realEstateTypeName?: string;
+  tradeTypeCode?: string;
+  tradeTypeName?: string;
+  exposureAddress?: string;
+  featureDesc?: string;
+  tagList?: string[];
+  articleConfirmYmd?: string;
+  repImgUrl?: string;
+  representativeImgUrl?: string;
+  articlePhotos?: NaverArticlePhoto[];
+  photos?: NaverArticlePhoto[];
+  imageList?: Array<string | NaverArticlePhoto>;
+  articleDetail?: {
+    articleNo?: string | number;
+    articleName?: string;
+    aptName?: string;
+    exposureAddress?: string;
+    detailDescription?: string;
+    roomCount?: string | number;
+    bathroomCount?: string | number;
+    moveInTypeName?: string;
+    aptUseApproveYmd?: string;
+    directTrade?: boolean;
+  };
+  articlePrice?: {
+    dealPrice?: number;
+    warrantPrice?: number;
+    rentPrice?: number;
+  };
+  articleFloor?: {
+    correspondingFloorCount?: string | number;
+    totalFloorCount?: string | number;
+  };
+  articleSpace?: {
+    supplySpace?: number;
+    exclusiveSpace?: number;
+  };
+};
+
+export function mapNaverArticleDetail(
+  payload: NaverArticleDetailPayload,
+  fallbackId: string,
+): ListingDetail | null {
+  const nested = payload.articleDetail;
+  const sourceId = String(nested?.articleNo ?? payload.articleNo ?? fallbackId);
+  if (!sourceId || sourceId === "undefined") return null;
+
+  const photos = extractNaverPhotos(payload);
+  const lat =
+    asCoord(payload.latitudeNum) ??
+    asCoord(payload.latitude) ??
+    asCoord((payload as NaverArticle).lat);
+  const lng =
+    asCoord(payload.longitudeNum) ??
+    asCoord(payload.longitude) ??
+    asCoord((payload as NaverArticle).lng);
+  const propertyType = mapNaverPropertyType(
+    payload.realEstateTypeCode ?? payload.realEstateTypeName,
+  );
+  const salesType = mapNaverSalesType(payload.tradeTypeCode ?? payload.tradeTypeName);
+  const area = payload.articleSpace?.exclusiveSpace ?? payload.articleSpace?.supplySpace;
+  const floor =
+    payload.articleFloor?.correspondingFloorCount != null &&
+    payload.articleFloor.totalFloorCount != null
+      ? `${payload.articleFloor.correspondingFloorCount}/${payload.articleFloor.totalFloorCount}`
+      : undefined;
+  const title =
+    payload.articleName ?? nested?.articleName ?? nested?.aptName ?? `Naver listing ${sourceId}`;
+  const description = [nested?.detailDescription, payload.featureDesc, payload.tagList?.join(", ")]
+    .filter((part) => part && String(part).trim())
+    .join("\n");
+  const warrant = payload.articlePrice?.warrantPrice;
+  const rent = payload.articlePrice?.rentPrice;
+  const deal = payload.articlePrice?.dealPrice;
+  const bathrooms = Number(nested?.bathroomCount);
+  const rooms = nested?.roomCount != null ? String(nested.roomCount) : undefined;
+
   return {
-    id: `naver:listing:${sourceId}`,
+    id: `naver:${propertyType}:${sourceId}`,
     source: "naver",
     sourceId,
-    lat: 0,
-    lng: 0,
-    propertyType: "apartment",
-    title: `Naver listing ${sourceId}`,
+    lat: lat ?? 0,
+    lng: lng ?? 0,
+    propertyType,
+    salesType,
+    title,
+    deposit: salesType === "sale" ? undefined : warrant,
+    rent: rent && rent > 0 ? rent : undefined,
+    price: salesType === "sale" ? deal : undefined,
+    areaM2: typeof area === "number" && Number.isFinite(area) ? area : undefined,
+    floor,
+    address: nested?.exposureAddress ?? payload.exposureAddress,
+    thumbnail: photos[0],
+    photos: photos.length ? photos : undefined,
     url: naverListingUrl(sourceId),
+    description: description || undefined,
+    roomType: rooms,
+    bathrooms: Number.isFinite(bathrooms) && bathrooms > 0 ? bathrooms : undefined,
+    moveIn: nested?.moveInTypeName,
+    approveDate: nested?.aptUseApproveYmd,
+    foreignerOk: detectForeignerOk(title, description),
+    updatedAt: payload.articleConfirmYmd,
   };
 }
