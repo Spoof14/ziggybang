@@ -81,8 +81,12 @@ export function naverClusterZoom(webZoom: number): number {
   return Math.max(15, naverZoom(webZoom));
 }
 
-export function articlePagesForCortarCount(count: number): number {
-  return count > 1 ? 4 : NAVER_ARTICLE_PAGES;
+/**
+ * Extra article pages are fetched in parallel after page 1, so querying
+ * several dongs should not cut how deep we page. A dense dong is ~160 rows.
+ */
+export function articlePagesForCortarCount(_count: number): number {
+  return NAVER_ARTICLE_PAGES;
 }
 
 const MAX_NAVER_CORTARS = 4;
@@ -100,7 +104,7 @@ export function pickRegionsInView(
       Number.isFinite(region.centerLon),
   );
   if (!usable.length) return [];
-  const expanded = expandBounds(bounds, 0.45);
+  const expanded = expandBounds(bounds, 0.2);
   const center = boundsCenter(bounds);
   const inView = usable.filter((region) =>
     containsPoint(expanded, region.centerLat, region.centerLon),
@@ -620,6 +624,27 @@ function dedupeNaverListings(listings: MapListing[]): MapListing[] {
   return [...seen.values()];
 }
 
+/**
+ * /api/articles is cortar-scoped, so a dong's rank list includes homes
+ * outside the map. Prefer pins on screen; only keep the rest when none of
+ * the geocoded rows sit in (or just beside) the viewport — that is the
+ * "0 of 88" safety net, not the default.
+ */
+export function clipNaverListingsToViewport(
+  listings: MapListing[],
+  bounds: Bounds,
+): MapListing[] {
+  const exact = listings.filter((listing) =>
+    containsPoint(bounds, listing.lat, listing.lng),
+  );
+  if (exact.length) return exact;
+  const nearby = listings.filter((listing) =>
+    containsPoint(expandBounds(bounds, 0.15), listing.lat, listing.lng),
+  );
+  if (nearby.length) return nearby;
+  return listings;
+}
+
 async function fetchClusterList(input: {
   bounds: Bounds;
   zoom: number;
@@ -753,14 +778,9 @@ export async function fetchNaverListings(input: NaverListingQuery): Promise<Nave
   const cortarNos = await cortarNosForViewport(input.bounds, input.zoom);
   if (!cortarNos.length) return { listings: [] };
 
-  const inView = (listings: MapListing[]) => {
-    const area = expandBounds(input.bounds, 0.5);
-    return listings.filter((listing) => containsPoint(area, listing.lat, listing.lng));
-  };
-
   const loadClusters = (nos: string[]) =>
     Promise.all(nos.map((cortarNo) => fetchClusterList({ ...input, cortarNo }))).then((groups) =>
-      inView(dedupeNaverListings(groups.flat())),
+      clipNaverListingsToViewport(dedupeNaverListings(groups.flat()), input.bounds),
     );
 
   const loadArticles = (nos: string[]) =>
@@ -774,28 +794,32 @@ export async function fetchNaverListings(input: NaverListingQuery): Promise<Nave
       ),
     ).then((groups) => {
       const fetched = dedupeNaverListings(groups.flatMap((group) => group.listings));
-      const nearby = inView(fetched);
       const reported = groups.reduce((sum, group) => sum + (group.total ?? 0), 0);
       return {
-        // /api/articles is cortar-scoped, not bbox-scoped. If the map box clips
-        // every pin, still keep the dong's geocoded rows so "0 of 88" cannot happen.
-        listings: nearby.length ? nearby : fetched,
+        listings: clipNaverListingsToViewport(fetched, input.bounds),
         reported: reported > 0 ? reported : undefined,
       };
     });
 
   if (input.zoom >= 15) {
-    const [clusters, articles] = await Promise.all([loadClusters(cortarNos), loadArticles(cortarNos)]);
-    const listings = articles.listings.length ? articles.listings : clusters;
-    const available = Math.max(
-      listingInventoryCount(articles.listings),
-      articles.reported ?? 0,
-      listingInventoryCount(clusters),
-      listings.length,
-    );
+    // Article pins are the ones users can open. Skip clusters unless the
+    // list comes back empty — they share the same proxy budget.
+    const articles = await loadArticles(cortarNos);
+    if (articles.listings.length) {
+      const available = Math.max(
+        listingInventoryCount(articles.listings),
+        articles.reported ?? 0,
+        articles.listings.length,
+      );
+      return {
+        listings: articles.listings,
+        available: available > 0 ? available : undefined,
+      };
+    }
+    const clusters = await loadClusters(cortarNos);
     return {
-      listings,
-      available: available > 0 ? available : undefined,
+      listings: clusters,
+      available: listingInventoryCount(clusters) || undefined,
     };
   }
 

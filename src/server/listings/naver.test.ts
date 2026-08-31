@@ -10,6 +10,7 @@ import {
   mapNaverSalesType,
   NAVER_ARTICLE_PAGES,
   articlePagesForCortarCount,
+  clipNaverListingsToViewport,
   listingInventoryCount,
   naverArticleListParams,
   naverAreaRange,
@@ -122,7 +123,7 @@ describe("naver mappers", () => {
     expect(naverClusterZoom(12)).toBe(15);
     expect(naverClusterZoom(17)).toBe(17);
     expect(articlePagesForCortarCount(1)).toBe(NAVER_ARTICLE_PAGES);
-    expect(articlePagesForCortarCount(3)).toBe(4);
+    expect(articlePagesForCortarCount(3)).toBe(NAVER_ARTICLE_PAGES);
     expect(mapNaverSalesType("B1")).toBe("jeonse");
     expect(mapNaverPropertyType("VL")).toBe("villa");
     expect(naverListingUrl("9")).toContain("/article/info/9");
@@ -145,6 +146,34 @@ describe("naver mappers", () => {
     expect(picked).toEqual(expect.arrayContaining(["seogyo", "yeonnam", "hapjeong"]));
     expect(picked).not.toContain("gangnam");
     expect(picked[0]).toBe("seogyo");
+  });
+
+  it("keeps map pins inside the viewport instead of the whole dong", () => {
+    const hongdae = {
+      south: 37.548,
+      west: 126.91,
+      north: 37.562,
+      east: 126.93,
+    };
+    const pin = (id: string, lat: number, lng: number) =>
+      articleToListing({
+        articleNo: id,
+        realEstateTypeCode: "OR",
+        tradeTypeCode: "B2",
+        latitude: lat,
+        longitude: lng,
+      });
+    const inside = pin("in", 37.555, 126.922)!;
+    const beside = pin("edge", 37.5485, 126.909)!;
+    const far = pin("far", 37.498, 127.028)!;
+
+    expect(clipNaverListingsToViewport([inside, beside, far], hongdae).map((item) => item.sourceId)).toEqual([
+      "in",
+    ]);
+    expect(clipNaverListingsToViewport([beside, far], hongdae).map((item) => item.sourceId)).toEqual([
+      "edge",
+    ]);
+    expect(clipNaverListingsToViewport([far], hongdae).map((item) => item.sourceId)).toEqual(["far"]);
   });
 
   it("sends budget, size, and building-age filters to Naver", () => {

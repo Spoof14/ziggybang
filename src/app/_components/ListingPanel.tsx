@@ -20,7 +20,7 @@ import {
 } from "~/lib/listings/english";
 import { agencyFeeCopy } from "~/lib/listings/agency-fee";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
-import { listingPagePath, mergeListingDetail } from "~/lib/listings/path";
+import { listingPagePath, mergeListingDetail, hasListingCoords } from "~/lib/listings/path";
 import { listingGalleryUrls } from "~/lib/listings/photo";
 import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
@@ -217,34 +217,39 @@ export function ListingPanel({
         <p className="px-4 pb-2 text-sm leading-relaxed text-slate-300">{description}</p>
       ) : null}
 
-      <ListingLocationCard listing={detail} title={englishTitle} compact />
-
       {detailQuery.isLoading ? (
         <p className="px-4 text-sm text-slate-400">Loading listing details…</p>
       ) : null}
 
-      <div className="mt-auto flex flex-col gap-2 p-4">
-        <ListingPageLink
-          listing={detail}
-          className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
-        >
-          Open full page
-        </ListingPageLink>
-        <a
-          href={detail.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/20"
-        >
-          Open on {sourceLabel[listing.source]}
-        </a>
-        <button
-          type="button"
-          onClick={() => void copy("link", `${window.location.origin}${listingPagePath(detail)}`)}
-          className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/20"
-        >
-          {copied === "link" ? "Page link copied" : "Copy page link"}
-        </button>
+      <div className="mt-auto">
+        <ListingLocationCard
+          listing={hasListingCoords(detail) ? detail : listing}
+          title={englishTitle}
+          compact
+        />
+        <div className="flex flex-col gap-2 p-4">
+          <ListingPageLink
+            listing={detail}
+            className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
+          >
+            Open full page
+          </ListingPageLink>
+          <a
+            href={detail.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/20"
+          >
+            Open on {sourceLabel[listing.source]}
+          </a>
+          <button
+            type="button"
+            onClick={() => void copy("link", `${window.location.origin}${listingPagePath(detail)}`)}
+            className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/20"
+          >
+            {copied === "link" ? "Page link copied" : "Copy page link"}
+          </button>
+        </div>
       </div>
     </aside>
   );
