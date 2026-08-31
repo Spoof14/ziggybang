@@ -1,5 +1,6 @@
 "use client";
 
+import { Component, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { hasListingCoords, listingMapLinks } from "~/lib/listings/path";
 import { type MapListing } from "~/lib/listings/types";
@@ -8,6 +9,25 @@ const MiniMap = dynamic(
   () => import("./ListingMiniMap").then((mod) => mod.ListingMiniMap),
   { ssr: false },
 );
+
+type MiniMapGuardProps = {
+  children: ReactNode;
+  fallback: ReactNode;
+};
+
+type MiniMapGuardState = { failed: boolean };
+
+class MiniMapGuard extends Component<MiniMapGuardProps, MiniMapGuardState> {
+  state: MiniMapGuardState = { failed: false };
+
+  static getDerivedStateFromError(): MiniMapGuardState {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 
 export function ListingLocationCard({
   listing,
@@ -31,11 +51,13 @@ export function ListingLocationCard({
       }
     >
       {hasCoords ? (
-        <MiniMap
-          lat={listing.lat}
-          lng={listing.lng}
-          className={compact ? "h-40 w-full" : "h-56 w-full"}
-        />
+        <MiniMapGuard fallback={<div className={compact ? "h-40 w-full bg-slate-900" : "h-56 w-full bg-slate-900"} />}>
+          <MiniMap
+            lat={listing.lat}
+            lng={listing.lng}
+            className={compact ? "h-40 w-full" : "h-56 w-full"}
+          />
+        </MiniMapGuard>
       ) : (
         <p className="px-3 pt-3 text-xs text-slate-400">
           Open a map with the listing address.
