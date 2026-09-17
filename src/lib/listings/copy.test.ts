@@ -34,7 +34,7 @@ describe("English listing copy", () => {
   });
 
   it("shows square meters and pyeong", () => {
-    expect(formatArea(16.42)).toBe("16.42 m² (5.0 pyeong)");
+    expect(formatArea(16.42)).toBe("16.42 m² exclusive (5.0 pyeong)");
   });
 
   it("translates Korean floor and room labels", () => {

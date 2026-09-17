@@ -1,4 +1,5 @@
 import { containsPoint } from "~/lib/geo/bounds";
+import { exclusiveAreaM2 } from "~/lib/listings/area";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
   type Bounds,
@@ -157,7 +158,10 @@ export function houseToListing(house: PeterpanHouse): MapListing | null {
     deposit: salesType === "sale" ? undefined : deposit,
     rent: salesType === "wolse" ? rent : undefined,
     price: salesType === "sale" ? (salePrice ?? deposit) : undefined,
-    areaM2: house.info?.real_size ?? house.info?.supplied_size,
+    areaM2: exclusiveAreaM2({
+      real_size: house.info?.real_size,
+      supplied_size: house.info?.supplied_size,
+    }),
     floor: house.floor?.floor_text_detail,
     address: house.location?.address?.text,
     thumbnail: house.info?.thumbnail,

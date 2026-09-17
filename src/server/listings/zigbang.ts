@@ -4,7 +4,7 @@ import {
   precisionForZoom,
 } from "~/lib/geo/geohash";
 import { needsListingDetails } from "~/lib/listings/filter";
-import { type AreaBucketId } from "~/lib/listings/area";
+import { exclusiveAreaM2, type AreaBucketId } from "~/lib/listings/area";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
   type Bounds,
@@ -375,9 +375,7 @@ export function mapZigbangItemDetail(
 ): ListingDetail | null {
   const item = data.item;
   if (!item?.itemId) return null;
-  const area = item.area
-    ? Object.values(item.area).find((value) => typeof value === "number")
-    : undefined;
+  const area = exclusiveAreaM2(item.area);
   const realtor = data.realtor;
   const agent = data.agent;
   const nearby = (item.neighborhoods?.nearbyPois ?? [])
