@@ -1029,7 +1029,7 @@ export default function MapApp() {
                   </span>
                 ) : null}
               </p>
-              <h1 className="truncate text-sm font-semibold sm:text-lg">
+              <h1 className="text-sm font-semibold sm:text-lg">
                 Korea rentals, in English
               </h1>
               {statusLabel ? (
