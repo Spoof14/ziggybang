@@ -74,11 +74,17 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). Pan and zoom the map; only the visible area is fetched.
 
-The map uses Esri street tiles by default. CARTO Voyager now requires a free key
-([get one here](https://carto.com/basemaps/apikey)); set `NEXT_PUBLIC_CARTO_API_KEY`
-if you want that style back. That name matters — the key is compiled into the
-browser bundle, so after adding it on Vercel you must **Redeploy** (uncheck
-"Use existing Build Cache"). A dashboard save alone does not change the map.
+The map uses OpenStreetMap DE tiles by default so Seoul still has streets, parks,
+and bilingual labels when you zoom in. Colored metro lines (Seoul metropolitan
+subway plus Busan, Daegu, Daejeon, and Gwangju) sit on top; the subway button
+next to zoom hides them. Esri World Street Map goes blank across Seoul from zoom
+14 up, so it is no longer the fallback.
+
+CARTO Voyager needs a free key ([get one here](https://carto.com/basemaps/apikey));
+set `NEXT_PUBLIC_CARTO_API_KEY` if you want that style. That name matters — the
+key is compiled into the browser bundle, so after adding it on Vercel you must
+**Redeploy** (uncheck "Use existing Build Cache"). A dashboard save alone does
+not change the map.
 
 ## Tests
 

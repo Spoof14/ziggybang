@@ -3,6 +3,7 @@
 import "leaflet/dist/leaflet.css";
 import { CircleMarker, MapContainer, TileLayer } from "react-leaflet";
 import { leafletBasemap } from "~/lib/geo/basemap";
+import { MetroLayer } from "./MetroLayer";
 
 const BASEMAP = leafletBasemap();
 
@@ -34,6 +35,7 @@ export function ListingMiniMap({
         subdomains={BASEMAP.subdomains}
         maxZoom={BASEMAP.maxZoom}
       />
+      <MetroLayer toggle={false} />
       <CircleMarker
         center={[lat, lng]}
         radius={9}
