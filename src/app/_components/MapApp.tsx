@@ -1012,11 +1012,11 @@ export default function MapApp() {
   return (
     <div
       className="relative h-[100dvh] w-screen overflow-hidden bg-slate-950 text-slate-100"
-      style={{ ["--filters-col" as string]: "min(24rem, 42vw)" }}
+      style={{ ["--desktop-panel" as string]: "min(40vw, 40%)" }}
     >
       <header
         ref={headerRef}
-        className="pointer-events-none absolute inset-x-0 top-0 z-[1300] p-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:right-auto md:w-[var(--filters-col)] md:max-h-[calc(100dvh-0.5rem)]"
+        className="pointer-events-none absolute inset-x-0 top-0 z-[1300] p-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:right-auto md:w-[var(--desktop-panel)] md:max-h-[calc(100dvh-0.5rem)]"
       >
         <div className="pointer-events-auto mx-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-slate-950/75 p-2.5 shadow-xl backdrop-blur-md md:mx-0 md:max-w-none">
           <div className="flex items-start justify-between gap-3">
@@ -1527,8 +1527,8 @@ export default function MapApp() {
         {viewMode === "map" && visible.listings.length ? (
           <div
             ref={carouselRef}
-            className={`pointer-events-auto absolute bottom-4 left-4 right-4 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:left-[calc(var(--filters-col)+1.25rem)] ${
-              selected ? "md:right-[26.5rem]" : ""
+            className={`pointer-events-auto absolute bottom-4 left-4 right-4 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:left-[calc(var(--desktop-panel)+1.25rem)] ${
+              selected ? "md:right-[calc(var(--desktop-panel)+1rem)]" : ""
             } ${uiCompact ? "" : "max-md:hidden"} ${
               selected ? "max-md:invisible max-md:pointer-events-none" : ""
             }`}
