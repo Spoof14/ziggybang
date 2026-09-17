@@ -87,7 +87,7 @@ export function PriceFilters({
   const hint = describePriceFilter(value);
   return (
     <div className="mt-1.5">
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-2">
         <WonField
           label="Min deposit ₩"
           placeholder="5,000,000"

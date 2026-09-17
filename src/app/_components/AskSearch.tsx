@@ -78,7 +78,7 @@ export function AskSearch({
         className="fixed inset-0 z-[1400] bg-slate-950/40 md:hidden"
         onClick={onClose}
       />
-      <div className="fixed inset-x-3 bottom-3 z-[1401] flex max-h-[min(28rem,58dvh)] w-auto max-w-none flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl md:inset-auto md:right-4 md:top-24 md:bottom-4 md:w-[22.5rem]">
+      <div className="fixed inset-x-3 bottom-3 z-[1401] flex max-h-[min(28rem,58dvh)] w-auto max-w-none flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl md:inset-auto md:left-3 md:right-auto md:top-3 md:bottom-3 md:w-[22.5rem]">
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div>
             <p className="text-[10px] uppercase tracking-[0.18em] text-sky-300">Ask Ziggybang</p>
