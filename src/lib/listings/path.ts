@@ -21,6 +21,17 @@ export function listingPagePath(listing: {
   return `/listing/${listing.source}/${listing.propertyType}/${encodeURIComponent(listing.sourceId)}`;
 }
 
+export function listingPageUrl(
+  listing: {
+    source: Source;
+    propertyType: PropertyType;
+    sourceId: string;
+  },
+  origin: string,
+): string {
+  return `${origin.replace(/\/$/, "")}${listingPagePath(listing)}`;
+}
+
 /** True when the listing page was opened from Ziggybang, so history.back() returns to the map. */
 export function cameFromApp(
   historyState: unknown = typeof window === "undefined" ? null : window.history.state,
