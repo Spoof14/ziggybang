@@ -154,7 +154,7 @@ export function ListingPanel({
         ) : null}
         {area ? (
           <div>
-            <dt className="text-slate-400">Size</dt>
+            <dt className="text-slate-400">Exclusive area</dt>
             <dd>{area}</dd>
           </div>
         ) : null}
