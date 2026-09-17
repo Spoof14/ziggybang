@@ -102,7 +102,7 @@ export function formatPrice(listing: {
 export function formatArea(areaM2?: number): string | null {
   if (areaM2 == null || !Number.isFinite(areaM2)) return null;
   const pyeong = areaM2 / 3.3058;
-  return `${areaM2.toLocaleString("en-US")} m² exclusive (${pyeong.toFixed(1)} pyeong)`;
+  return `${areaM2.toLocaleString("en-US")} m² (${pyeong.toFixed(1)} pyeong)`;
 }
 
 export function formatFloor(value?: string): string | null {
