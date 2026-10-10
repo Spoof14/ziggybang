@@ -166,6 +166,7 @@ export default function MapApp() {
   const lastViewportKey = useRef<string | null>(null);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPlaceId = useRef<string | null>(null);
+  const keepUrlCircle = useRef(false);
   const inspectedPhotos = useRef<string>("");
   const filterKeyRef = useRef<string>("");
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -238,8 +239,13 @@ export default function MapApp() {
     setAgeFilter(url.ageFilter ?? base?.ageFilter);
     setMaxBuildingAge(url.maxBuildingAge ?? base?.maxBuildingAge);
     setRadiusM(url.radiusM ?? base?.radiusM ?? DEFAULT_RADIUS_M);
-    setManualCircle(base?.circle ?? null);
-    setPolygon(base?.polygon ?? null);
+    keepUrlCircle.current = Boolean(url.circleCenter);
+    setManualCircle(
+      url.circleCenter
+        ? { ...url.circleCenter, radiusM: url.radiusM ?? DEFAULT_RADIUS_M }
+        : (base?.circle ?? null),
+    );
+    setPolygon(url.circleCenter ? null : (base?.polygon ?? null));
     if (typeof base?.uiCompact === "boolean") {
       setUiCompact(base.uiCompact);
     } else {
@@ -337,6 +343,7 @@ export default function MapApp() {
       salesTypes,
       areaBucketIds,
       radiusM,
+      circleCenter: manualCircle && !polygon ? { lat: manualCircle.lat, lng: manualCircle.lng } : null,
       view: urlView,
       listSort,
       minDeposit,
@@ -363,6 +370,8 @@ export default function MapApp() {
     prefsLoaded,
     propertyTypes,
     radiusM,
+    manualCircle,
+    polygon,
     salesTypes,
     searchInput,
     sources,
@@ -412,6 +421,11 @@ export default function MapApp() {
     }
     if (lastPlaceId.current === place.id) return;
     lastPlaceId.current = place.id;
+    if (keepUrlCircle.current) {
+      // A shared link's manual radius wins over its place search once.
+      keepUrlCircle.current = false;
+      return;
+    }
     setPolygon(null);
     setDraftPoints([]);
     setManualCircle(null);
@@ -749,6 +763,7 @@ export default function MapApp() {
       salesTypes,
       areaBucketIds,
       radiusM,
+      circleCenter: manualCircle && !polygon ? { lat: manualCircle.lat, lng: manualCircle.lng } : null,
       view: {
         lat: (bounds.south + bounds.north) / 2,
         lng: (bounds.west + bounds.east) / 2,
@@ -786,6 +801,8 @@ export default function MapApp() {
     minRent,
     propertyTypes,
     radiusM,
+    manualCircle,
+    polygon,
     salesTypes,
     searchInput,
     sources,
@@ -990,7 +1007,7 @@ export default function MapApp() {
     : visible.errors.find((error) => error.source === "naver");
 
   const statusLabel = waitingForFirst
-    ? "Loading…"
+    ? "Loading homes… first load can take a few seconds"
     : [
         sources.includes("zigbang")
           ? `Zigbang ${visible.stats.zigbang.toLocaleString("en-US")}`
@@ -1032,7 +1049,7 @@ export default function MapApp() {
         ref={headerRef}
         className="pointer-events-none absolute inset-x-0 top-0 z-[1300] p-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:right-auto md:w-[var(--desktop-panel)] md:max-h-[calc(100dvh-0.5rem)]"
       >
-        <div className="pointer-events-auto mx-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-slate-950/75 p-2.5 shadow-xl backdrop-blur-md md:mx-0 md:max-w-none">
+        <div className="pointer-events-auto mx-auto max-h-[min(62dvh,calc(100dvh-1.5rem))] w-full md:max-h-[calc(100dvh-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-slate-950/75 p-2.5 shadow-xl backdrop-blur-md md:mx-0 md:max-w-none">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] uppercase tracking-[0.18em] text-sky-300">
@@ -1047,7 +1064,7 @@ export default function MapApp() {
                 Korea rentals, in English
               </p>
               {statusLabel ? (
-                <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                <p className={`mt-0.5 text-[11px] leading-snug text-slate-400 sm:truncate ${waitingForFirst ? "animate-pulse" : ""}`}>
                   {statusLabel}
                 </p>
               ) : null}

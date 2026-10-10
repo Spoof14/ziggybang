@@ -254,6 +254,15 @@ function PhotoLightbox({
   onNext: () => void;
 }) {
   const start = useRef<{ x: number; y: number } | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [broken, setBroken] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    setBroken(false);
+    // Already-cached images can finish before React attaches onLoad.
+    setLoaded(Boolean(imgRef.current?.complete && imgRef.current.naturalWidth > 0));
+  }, [src]);
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -314,13 +323,34 @@ function PhotoLightbox({
           start.current = null;
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt={alt}
-          draggable={false}
-          className="h-full w-full select-none object-contain"
-        />
+        {!loaded && !broken ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-slate-300"
+          >
+            <span className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-sky-400" />
+            Loading photo…
+          </div>
+        ) : null}
+        {broken ? (
+          <p role="alert" className="text-sm text-slate-300">
+            This photo could not be loaded.
+          </p>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            ref={imgRef}
+            src={src}
+            alt={alt}
+            draggable={false}
+            onLoad={() => setLoaded(true)}
+            onError={() => setBroken(true)}
+            className={`h-full w-full select-none object-contain transition-opacity duration-200 ${
+              loaded ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        )}
         {total > 1 ? (
           <>
             <button
