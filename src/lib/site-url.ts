@@ -11,7 +11,8 @@ function withProtocol(value: string): string {
 export function siteUrl(
   env: Record<string, string | undefined> = process.env,
 ): string {
-  const raw = env.NEXT_PUBLIC_SITE_URL?.trim() || env.VERCEL_URL?.trim();
+  const explicit = env.NEXT_PUBLIC_SITE_URL?.trim();
+  const raw = explicit ? explicit : env.VERCEL_URL?.trim();
   if (!raw) return PRODUCTION_SITE_URL;
   try {
     return new URL(withProtocol(raw)).origin;
