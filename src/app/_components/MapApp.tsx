@@ -18,6 +18,7 @@ import {
 } from "~/lib/listings/copy";
 import {
   isAllPropertyTypes,
+  isNaverClusterListing,
   needsHydratedFilters,
 } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
@@ -908,6 +909,16 @@ export default function MapApp() {
     return () => observer.disconnect();
   }, [showList, uiCompact, filterSummary]);
   const listListings = viewMode === "saved" ? savedHomes : visible.listings;
+  // Naver's count includes grouped inventory that has no individual home to
+  // show. Say so instead of leaving "Naver 1,643" next to a short list.
+  const naverListed = visible.listings.filter(
+    (item) => item.source === "naver" && !isNaverClusterListing(item),
+  ).length;
+  const naverInventory = visible.stats.naverAvailable ?? visible.stats.naver;
+  const listNote =
+    sources.includes("naver") && naverInventory > naverListed
+      ? `Naver reports ${naverInventory.toLocaleString("en-US")} homes here, but only ${naverListed.toLocaleString("en-US")} can be listed individually. The rest are grouped on the map; zoom in or narrow the area to list more.`
+      : undefined;
   const photoScores = usePhotoQuality(
     viewMode === "best" ? listListings.map((item) => item.thumbnail) : [],
     viewMode === "best",
@@ -1494,6 +1505,11 @@ export default function MapApp() {
                 listingLimit < 300
               }
               ranked={ranked}
+              note={
+                viewMode === "saved" || waitingForFirst
+                  ? undefined
+                  : listNote
+              }
               recommendHint={
                 viewMode !== "best"
                   ? undefined

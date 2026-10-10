@@ -52,6 +52,7 @@ export function ListingList({
   emptyHint,
   ranked,
   recommendHint,
+  note,
   onSort,
   onSelect,
   onToggleSave,
@@ -71,6 +72,7 @@ export function ListingList({
   emptyHint?: string;
   ranked?: RankedListing[];
   recommendHint?: string;
+  note?: string;
   onSort: (sort: ListSort) => void;
   onSelect: (listing: MapListing) => void;
   onToggleSave: (listing: MapListing) => void;
@@ -139,6 +141,11 @@ export function ListingList({
         <p className="text-xs text-slate-400">{countLabel}</p>
         {recommendHint ? (
           <p className="text-[11px] leading-snug text-sky-300">{recommendHint}</p>
+        ) : null}
+        {note ? (
+          <p className="text-[11px] leading-snug text-amber-300" role="note">
+            {note}
+          </p>
         ) : null}
         {ranked ? null : (
         <div className="flex flex-wrap gap-1">
