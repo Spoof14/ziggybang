@@ -257,7 +257,7 @@ describe("Ask room count and off-topic messages", () => {
       const result = interpretSearch(text, busy);
       expect(result.noIntent).toBe(true);
       expect(result.snapshot).toEqual(busy);
-      expect(result.reply).toMatch(/I can only help with finding rentals/);
+      expect(result.reply).toMatch(/I can only help find a rental/);
     },
   );
 

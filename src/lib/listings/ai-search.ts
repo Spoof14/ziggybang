@@ -480,24 +480,8 @@ function usableLocalListingQuery(query?: string | null): string | null | undefin
   return query.trim();
 }
 
-export type AskFallbackReason =
-  | "rate_limited"
-  | "quota"
-  | "auth"
-  | "timeout"
-  | "error";
-
-/** Small UI notice shown when on-site search answered instead of the AI. */
-export const ASK_FALLBACK_NOTICE: Record<AskFallbackReason, string> = {
-  rate_limited: "Using basic search — AI is busy",
-  quota: "Using basic search — AI quota exhausted",
-  auth: "Using basic search — AI key rejected",
-  timeout: "Using basic search — AI took too long",
-  error: "Using basic search — AI is unavailable",
-};
-
 export const OFF_TOPIC_REPLY =
-  "I can only help with finding rentals. Try a neighborhood or station, a budget, or a type, like “studio near Hongdae under ₩700,000”. Your filters are unchanged.";
+  "I can only help find a rental. Tell me an area or station, a budget, or a type — like “quiet studio near Hongdae under ₩700,000”.";
 export const ROOM_COUNT_NOTE =
   "Room count isn't supported yet, so I didn't filter by bedrooms.";
 
@@ -830,9 +814,3 @@ export function interpretSearch(
     .join(" ");
   return { intent, snapshot, reply };
 }
-
-export const ASK_SUGGESTIONS = [
-  "Best value studios near Hongdae, with decent photos",
-  "Good value places under 15 years old near Guro Digital",
-  "No basement near Guro Digital",
-];
