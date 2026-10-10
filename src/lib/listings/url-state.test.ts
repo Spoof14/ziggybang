@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAppSearch, parseAppUrl } from "./url-state";
+import { buildAppSearch, parseAppUrl, prefsForInitialState } from "./url-state";
 
 describe("shareable search URLs", () => {
   it("round-trips a Hongdae monthly list view", () => {
@@ -130,5 +130,21 @@ describe("shareable search URLs", () => {
     });
     expect(search).toContain("age=7");
     expect(parseAppUrl(search).ageFilter).toBe("week");
+  });
+});
+
+describe("prefsForInitialState", () => {
+  const saved = { uiCompact: true, viewMode: "list", maxDeposit: 500 };
+  it("uses stored prefs when the URL has no app params", () => {
+    expect(prefsForInitialState("", saved)).toBe(saved);
+    expect(prefsForInitialState("?utm_source=x", saved)).toBe(saved);
+  });
+  it("lets the URL win: stored filters/view mode are dropped", () => {
+    expect(prefsForInitialState("?lat=37.5&lng=127&z=13", saved)).toEqual({
+      uiCompact: true,
+    });
+  });
+  it("returns null without stored prefs", () => {
+    expect(prefsForInitialState("?view=list", null)).toBeNull();
   });
 });

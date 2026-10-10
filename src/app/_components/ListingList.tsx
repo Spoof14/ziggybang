@@ -52,6 +52,7 @@ export function ListingList({
   emptyHint,
   ranked,
   recommendHint,
+  note,
   onSort,
   onSelect,
   onToggleSave,
@@ -71,6 +72,7 @@ export function ListingList({
   emptyHint?: string;
   ranked?: RankedListing[];
   recommendHint?: string;
+  note?: string;
   onSort: (sort: ListSort) => void;
   onSelect: (listing: MapListing) => void;
   onToggleSave: (listing: MapListing) => void;
@@ -140,12 +142,18 @@ export function ListingList({
         {recommendHint ? (
           <p className="text-[11px] leading-snug text-sky-300">{recommendHint}</p>
         ) : null}
+        {note ? (
+          <p className="text-[11px] leading-snug text-amber-300" role="note">
+            {note}
+          </p>
+        ) : null}
         {ranked ? null : (
         <div className="flex flex-wrap gap-1">
           {SORT_OPTIONS.map((option) => (
             <button
               key={option.id}
               type="button"
+              aria-pressed={sort === option.id}
               onClick={() => onSort(option.id)}
               className={`rounded-full px-2 py-0.5 text-[11px] ${
                 sort === option.id ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
@@ -195,7 +203,7 @@ export function ListingList({
                       <span className="relative h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-white/5">
                         <ListingPhoto
                           url={listing.thumbnail}
-                          alt=""
+                          alt={title.trim() ? title : (listing.title ?? "Listing photo")}
                           width={400}
                           className="h-20 w-24 object-cover"
                         />
@@ -245,7 +253,8 @@ export function ListingList({
                         type="button"
                         onClick={() => onToggleSave(listing)}
                         className="rounded-full bg-white/10 px-2 py-1 text-sm"
-                        aria-label={saved ? "Unsave home" : "Save home"}
+                        aria-label={saved ? "Remove from saved" : "Save listing"}
+                        aria-pressed={saved}
                       >
                         {saved ? "♥" : "♡"}
                       </button>

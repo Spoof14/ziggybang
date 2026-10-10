@@ -54,6 +54,7 @@ import { ListingAgeLine } from "./ListingAgeLine";
 import { ListingGallery } from "./ListingGallery";
 import { ListingLocationCard } from "./ListingLocationCard";
 import { ListingPrice } from "./ListingPrice";
+import { ListingShareButton } from "./ListingShareButton";
 
 async function copyText(value: string) {
   try {
@@ -179,6 +180,12 @@ export function ListingDetailView({
             >
               {saved ? "Saved ♥" : "Save ♡"}
             </button>
+            <ListingShareButton
+              listing={listing}
+              title={englishTitle}
+              labeled
+              className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/20"
+            />
           </div>
         </div>
       </header>
@@ -288,7 +295,7 @@ export function ListingDetailView({
               {firstMonth ? (
                 <Fact label="Move-in cash" value={firstMonth} wide />
               ) : null}
-              {area ? <Fact label="Size" value={area} /> : null}
+              {area ? <Fact label="Exclusive area" value={area} /> : null}
               {floor ? <Fact label="Floor" value={floor} /> : null}
               {roomType ? <Fact label="Layout" value={roomType} /> : null}
               {listing.bathrooms ? (

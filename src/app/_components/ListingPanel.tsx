@@ -29,6 +29,7 @@ import { ListingGallery } from "./ListingGallery";
 import { ListingLocationCard } from "./ListingLocationCard";
 import { ListingPageLink } from "./ListingPageLink";
 import { ListingPrice } from "./ListingPrice";
+import { ListingShareButton } from "./ListingShareButton";
 
 async function copyText(value: string) {
   try {
@@ -115,11 +116,17 @@ export function ListingPanel({
               type="button"
               onClick={() => onToggleSave(detail)}
               className="rounded-full bg-white/10 px-2 py-1 text-sm hover:bg-white/20"
-              aria-label={saved ? "Unsave home" : "Save home"}
+              aria-label={saved ? "Remove from saved" : "Save listing"}
+              aria-pressed={saved}
             >
               {saved ? "♥" : "♡"}
             </button>
           ) : null}
+          <ListingShareButton
+            listing={detail}
+            title={englishTitle}
+            className="inline-flex items-center justify-center rounded-full bg-white/10 px-2 py-1 text-sm text-slate-200 hover:bg-white/20"
+          />
           <button
             type="button"
             onClick={onClose}
@@ -154,7 +161,7 @@ export function ListingPanel({
         ) : null}
         {area ? (
           <div>
-            <dt className="text-slate-400">Size</dt>
+            <dt className="text-slate-400">Exclusive area</dt>
             <dd>{area}</dd>
           </div>
         ) : null}

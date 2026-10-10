@@ -1,6 +1,5 @@
 import { areaBuckets, type AreaBucketId } from "./area";
 import { type AgeFilter } from "./age";
-import { normalizeBuildingAgeFilter } from "./building-age";
 import { type FloorFilter } from "./floor";
 import { type ListSort, type ViewMode } from "./prefs";
 import { normalizePriceFilter, type PriceFilter } from "./price";
@@ -164,4 +163,18 @@ export function hasAppUrlState(search: string): boolean {
   return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort", "ok", "pics", "floor", "age", "maxage", "dmin", "dmax", "rmin", "rmax"].some(
     (key) => params.has(key),
   );
+}
+
+/**
+ * Which saved preferences may seed initial state. A shared URL is the source
+ * of truth: when it carries any app param, filters/view mode absent from it
+ * fall back to defaults rather than the visitor's stored prefs, so a shared
+ * link reproduces the sender's results. Only device-level UI prefs survive.
+ */
+export function prefsForInitialState<T extends { uiCompact: boolean }>(
+  search: string,
+  saved: T | null,
+): T | { uiCompact: boolean } | null {
+  if (!saved) return null;
+  return hasAppUrlState(search) ? { uiCompact: saved.uiCompact } : saved;
 }

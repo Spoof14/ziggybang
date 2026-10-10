@@ -4,6 +4,7 @@ import {
   hasListingCoords,
   listingMapLinks,
   listingPagePath,
+  listingPageUrl,
   mergeListingDetail,
   parseListingPath,
 } from "./path";
@@ -31,6 +32,9 @@ describe("listing page path", () => {
     expect(
       parseListingPath({ source: "craigslist", propertyType: "oneroom", sourceId: "1" }),
     ).toBeNull();
+    expect(listingPageUrl(studio, "https://ziggybang.example/")).toBe(
+      "https://ziggybang.example/listing/zigbang/oneroom/1",
+    );
   });
 
   it("uses history.back when the listing was opened from the app", () => {

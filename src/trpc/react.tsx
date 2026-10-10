@@ -43,9 +43,9 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
     api.createClient({
       links: [
         loggerLink({
-          enabled: (op) =>
-            process.env.NODE_ENV === "development" ||
-            (op.direction === "down" && op.result instanceof Error),
+          // Dev only: expected errors (e.g. listing not found) must not
+          // surface as error-level console noise in production.
+          enabled: () => process.env.NODE_ENV === "development",
         }),
         unstable_httpBatchStreamLink({
           transformer: SuperJSON,

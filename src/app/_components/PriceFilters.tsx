@@ -11,11 +11,13 @@ import {
 
 function WonField({
   label,
+  ariaLabel,
   placeholder,
   value,
   onChange,
 }: {
   label: string;
+  ariaLabel: string;
   placeholder: string;
   value?: number;
   onChange: (next?: number) => void;
@@ -46,6 +48,7 @@ function WonField({
       <input
         type="text"
         inputMode="numeric"
+        aria-label={ariaLabel}
         placeholder={placeholder}
         value={draft}
         onFocus={() => {
@@ -64,7 +67,7 @@ function WonField({
           onChange(manwon);
           setDraft(formatWonInput(manwon));
         }}
-        className="search-input mt-0.5 w-full rounded-lg border border-white/15 bg-slate-900 px-2 py-1 text-sm text-slate-100 outline-none focus:border-sky-400"
+        className="search-input price-input mt-0.5 w-full rounded-lg border border-white/15 bg-slate-900 px-2 py-1 text-sm text-slate-100 outline-none focus:border-sky-400"
       />
       {value != null ? (
         <span className="mt-0.5 block text-[10px] text-slate-500">
@@ -90,25 +93,29 @@ export function PriceFilters({
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-2">
         <WonField
           label="Min deposit ₩"
-          placeholder="5,000,000"
+          ariaLabel="Minimum deposit in won"
+          placeholder="e.g. 5,000,000"
           value={value.minDeposit}
           onChange={(minDeposit) => onChange({ ...value, minDeposit })}
         />
         <WonField
           label="Max deposit ₩"
-          placeholder="20,000,000"
+          ariaLabel="Maximum deposit in won"
+          placeholder="e.g. 20,000,000"
           value={value.maxDeposit}
           onChange={(maxDeposit) => onChange({ ...value, maxDeposit })}
         />
         <WonField
           label="Min monthly ₩"
-          placeholder="500,000"
+          ariaLabel="Minimum monthly rent in won"
+          placeholder="e.g. 500,000"
           value={value.minRent}
           onChange={(minRent) => onChange({ ...value, minRent })}
         />
         <WonField
           label="Max monthly ₩"
-          placeholder="800,000"
+          ariaLabel="Maximum monthly rent in won"
+          placeholder="e.g. 800,000"
           value={value.maxRent}
           onChange={(maxRent) => onChange({ ...value, maxRent })}
         />

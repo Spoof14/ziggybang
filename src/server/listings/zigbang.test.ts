@@ -73,7 +73,7 @@ describe("zigbang mappers", () => {
           options: ["에어컨", "냉장고"],
           price: { deposit: 1000, rent: 55 },
           location: { lat: 37.54, lng: 126.97 },
-          area: { 전용면적M2: 15.2 },
+          area: { 계약면적M2: 42.95, 전용면적M2: 15.2 },
           floor: { floor: "3", allFloors: "4" },
           manageCost: {
             amount: 5,
@@ -117,6 +117,7 @@ describe("zigbang mappers", () => {
       nearby: [{ type: "지하철역", meters: 322, walkMinutes: 5 }],
       agent: { name: "Kim", office: "Kim Realty" },
       foreignerOk: true,
+      areaM2: 15.2,
     });
   });
 });

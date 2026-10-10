@@ -13,8 +13,8 @@ export function ListingGallery({
   alt: string;
   layout?: "sheet" | "page";
 }) {
-  const photos = uniquePhotoUrls(urls, 800);
-  const largePhotos = uniquePhotoUrls(urls, 1600);
+  const photos = uniquePhotoUrls(urls, layout === "page" ? 1200 : 800);
+  const largePhotos = uniquePhotoUrls(urls, 2000);
   const photoKey = photos.join("|");
   const [failed, setFailed] = useState<Set<string>>(new Set());
   const [index, setIndex] = useState(0);
@@ -200,6 +200,8 @@ export function ListingGallery({
             <button
               key={src}
               type="button"
+              aria-label={`Show photo ${photoIndex + 1} of ${visible.length}`}
+              aria-current={photoIndex === currentIndex}
               onClick={() => setIndex(photoIndex)}
               className={`h-14 w-20 shrink-0 overflow-hidden rounded-lg border ${
                 photoIndex === currentIndex
@@ -208,7 +210,13 @@ export function ListingGallery({
               }`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={src} alt="" className="h-full w-full object-cover" />
+              <img
+                src={src}
+                alt={`${alt} thumbnail ${photoIndex + 1}`}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
             </button>
           ))}
         </div>
@@ -311,7 +319,7 @@ function PhotoLightbox({
           src={src}
           alt={alt}
           draggable={false}
-          className="max-h-full max-w-full select-none object-contain"
+          className="h-full w-full select-none object-contain"
         />
         {total > 1 ? (
           <>

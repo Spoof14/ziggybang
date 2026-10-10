@@ -18,11 +18,12 @@ import {
 } from "~/lib/listings/copy";
 import {
   isAllPropertyTypes,
+  isNaverClusterListing,
   needsHydratedFilters,
 } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
 import { describeActiveFilters, filterKeyOf, mapLayersForFilters } from "~/lib/listings/visible";
-import { loadPrefs, savePrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
+import { loadPrefs, savePrefs, type SavedPrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
 import { type PriceFilter } from "~/lib/listings/price";
 import {
   circleForPlaceSearch,
@@ -46,6 +47,7 @@ import {
 import {
   buildAppSearch,
   hasAppUrlState,
+  prefsForInitialState,
   parseAppUrl,
 } from "~/lib/listings/url-state";
 import {
@@ -79,7 +81,7 @@ const NAVER_HIDE_KEY = "ziggybang:hide-naver-error";
 const TYPE_CHIP_ON: Record<PropertyType, string> = {
   oneroom: "bg-orange-500 text-slate-950",
   villa: "bg-amber-300 text-slate-950",
-  officetel: "bg-violet-500 text-white",
+  officetel: "bg-violet-300 text-slate-950",
   apartment: "bg-sky-400 text-slate-950",
 };
 
@@ -211,11 +213,13 @@ export default function MapApp() {
   }, [debouncedQuery, manualCircle, place, polygon, radiusM]);
 
   useEffect(() => {
-    const saved = loadPrefs();
-    const url = typeof window !== "undefined" && hasAppUrlState(window.location.search)
-      ? parseAppUrl(window.location.search)
-      : {};
-    const base = saved;
+    const search = window.location.search;
+    const url = hasAppUrlState(search) ? parseAppUrl(search) : {};
+    // URL params win; a shared link without a filter renders its default
+    // rather than this browser's stored value.
+    const base = prefsForInitialState(search, loadPrefs()) as
+      | Partial<SavedPrefs>
+      | null;
     setSources(url.sources ?? base?.sources ?? DEFAULT_SOURCES);
     setPropertyTypes(url.propertyTypes ?? base?.propertyTypes ?? ALL_TYPES);
     setSalesTypes(url.salesTypes ?? base?.salesTypes ?? DEFAULT_SALES);
@@ -905,6 +909,16 @@ export default function MapApp() {
     return () => observer.disconnect();
   }, [showList, uiCompact, filterSummary]);
   const listListings = viewMode === "saved" ? savedHomes : visible.listings;
+  // Naver's count includes grouped inventory that has no individual home to
+  // show. Say so instead of leaving "Naver 1,643" next to a short list.
+  const naverListed = visible.listings.filter(
+    (item) => item.source === "naver" && !isNaverClusterListing(item),
+  ).length;
+  const naverInventory = visible.stats.naverAvailable ?? visible.stats.naver;
+  const listNote =
+    sources.includes("naver") && naverInventory > naverListed
+      ? `Naver reports ${naverInventory.toLocaleString("en-US")} homes here, but only ${naverListed.toLocaleString("en-US")} can be listed individually. The rest are grouped on the map; zoom in or narrow the area to list more.`
+      : undefined;
   const photoScores = usePhotoQuality(
     viewMode === "best" ? listListings.map((item) => item.thumbnail) : [],
     viewMode === "best",
@@ -1029,9 +1043,9 @@ export default function MapApp() {
                   </span>
                 ) : null}
               </p>
-              <h1 className="text-sm font-semibold sm:text-lg">
+              <p className="text-sm font-semibold sm:text-lg">
                 Korea rentals, in English
-              </h1>
+              </p>
               {statusLabel ? (
                 <p className="mt-0.5 truncate text-[11px] text-slate-400">
                   {statusLabel}
@@ -1063,6 +1077,7 @@ export default function MapApp() {
               <button
                 key={source}
                 type="button"
+                aria-pressed={sources.includes(source)}
                 onClick={() =>
                   setSources((current) => {
                     const next = toggleValue(current, source);
@@ -1086,6 +1101,7 @@ export default function MapApp() {
               <button
                 key={type}
                 type="button"
+                aria-pressed={propertyTypes.includes(type)}
                 onClick={() =>
                   setPropertyTypes((current) => {
                     const next = toggleValue(current, type);
@@ -1107,6 +1123,7 @@ export default function MapApp() {
               <button
                 key={type}
                 type="button"
+                aria-pressed={salesTypes.includes(type)}
                 onClick={() =>
                   setSalesTypes((current) => {
                     const next = toggleValue(current, type);
@@ -1124,6 +1141,7 @@ export default function MapApp() {
             ))}
             <button
               type="button"
+              aria-pressed={foreignerOk}
               onClick={() => setForeignerOk((current) => !current)}
               title="Only ads that mention foreigners are welcome. Most landlords never write it."
               className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
@@ -1136,6 +1154,7 @@ export default function MapApp() {
             </button>
             <button
               type="button"
+              aria-pressed={hasPhotos}
               onClick={() => setHasPhotos((current) => !current)}
               title="Hide listings that have no photos."
               className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
@@ -1150,6 +1169,7 @@ export default function MapApp() {
               <button
                 key={filter}
                 type="button"
+                aria-pressed={floorFilter === filter}
                 onClick={() =>
                   setFloorFilter((current) => (current === filter ? undefined : filter))
                 }
@@ -1166,6 +1186,7 @@ export default function MapApp() {
               <button
                 key={filter}
                 type="button"
+                aria-pressed={ageFilter === filter}
                 title={
                   filter === "week"
                     ? "Listed in the last 7 days"
@@ -1205,6 +1226,7 @@ export default function MapApp() {
             {searchInput ? (
               <button
                 type="button"
+                aria-label="Clear search"
                 onClick={() => {
                   setSearchInput("");
                   setDebouncedQuery("");
@@ -1242,6 +1264,7 @@ export default function MapApp() {
                 <button
                   key={mode}
                   type="button"
+                aria-pressed={viewMode === mode}
                   onClick={() => setViewMode(mode)}
                   className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
                     viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
@@ -1255,6 +1278,7 @@ export default function MapApp() {
             </div>
             <button
               type="button"
+              aria-label="Ask a question about listings"
               onClick={() => setAskOpen(true)}
               className="shrink-0 rounded-full bg-sky-400 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-sky-300 sm:text-sm"
             >
@@ -1271,6 +1295,7 @@ export default function MapApp() {
                 <button
                   key={bucket.id}
                   type="button"
+                aria-pressed={active}
                   title={bucket.hint}
                   onClick={() =>
                     setAreaBucketIds((current) => toggleValue(current, bucket.id))
@@ -1321,6 +1346,7 @@ export default function MapApp() {
               <button
                 key={nextTool}
                 type="button"
+                aria-pressed={tool === nextTool}
                 onClick={() => setTool(nextTool)}
                 className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
                   tool === nextTool ? "bg-sky-400 text-slate-950" : "bg-white/10 text-slate-300"
@@ -1479,6 +1505,11 @@ export default function MapApp() {
                 listingLimit < 300
               }
               ranked={ranked}
+              note={
+                viewMode === "saved" || waitingForFirst
+                  ? undefined
+                  : listNote
+              }
               recommendHint={
                 viewMode !== "best"
                   ? undefined
@@ -1549,7 +1580,7 @@ export default function MapApp() {
                 >
                   <ListingPhoto
                     url={listing.thumbnail}
-                    alt=""
+                    alt={listing.title ?? "Listing photo"}
                     width={240}
                     className="h-16 w-full object-cover"
                   />

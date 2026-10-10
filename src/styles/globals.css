@@ -62,6 +62,25 @@ body {
   color: #dc2626;
 }
 
+.leaflet-control-metro a {
+  align-items: center;
+  color: #0f172a;
+  display: flex;
+  height: 30px;
+  justify-content: center;
+  line-height: 0;
+  width: 30px;
+}
+
+.leaflet-control-metro a svg {
+  height: 16px;
+  width: 16px;
+}
+
+.leaflet-control-metro a.is-on {
+  color: #0369a1;
+}
+
 @keyframes locate-spin {
   to {
     transform: rotate(360deg);
@@ -77,6 +96,8 @@ body {
 
 .leaflet-control-attribution a {
   color: #e2e8f0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .listing-cluster {
@@ -127,4 +148,34 @@ body {
   -webkit-text-fill-color: #f8fafc;
   box-shadow: 0 0 0 1000px #0f172a inset;
   transition: background-color 9999s ease-out;
+}
+
+/* Visible keyboard focus on dark UI and Leaflet controls. */
+:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.leaflet-container a:focus-visible,
+.leaflet-bar a:focus-visible {
+  outline: 2px solid #0284c7;
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Price inputs: example values must read as hints, not entered text. */
+.price-input::placeholder {
+  color: #7c8ba1;
+  -webkit-text-fill-color: #7c8ba1;
+  font-style: italic;
 }

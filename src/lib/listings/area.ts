@@ -8,6 +8,45 @@ export function pyeongToM2(pyeong: number): number {
   return pyeong * M2_PER_PYEONG;
 }
 
+const EXCLUSIVE_KEY = /전용|exclusive|real[_ ]?size/i;
+const SHARED_KEY = /공급|계약|supply|supplied|contract|common|shared/i;
+const PYEONG_KEY = /평|pyeong|\bpy\b/i;
+
+function positiveArea(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return n;
+}
+
+/**
+ * Floor area the tenant actually gets (전용면적), never 공급/계약면적.
+ * Those larger figures include shared corridors, elevator shafts, etc.
+ */
+export function exclusiveAreaM2(
+  fields?: Record<string, unknown> | null,
+  preferred?: unknown,
+): number | undefined {
+  const hinted = positiveArea(preferred);
+  if (hinted != null) return hinted;
+  if (!fields) return undefined;
+
+  const exclusiveM2: number[] = [];
+  const exclusivePyeong: number[] = [];
+  const otherM2: number[] = [];
+  for (const [key, raw] of Object.entries(fields)) {
+    const n = positiveArea(raw);
+    if (n == null || SHARED_KEY.test(key)) continue;
+    const exclusive = EXCLUSIVE_KEY.test(key);
+    const pyeong = PYEONG_KEY.test(key);
+    if (exclusive && pyeong) exclusivePyeong.push(n);
+    else if (exclusive) exclusiveM2.push(n);
+    else if (!pyeong) otherM2.push(n);
+  }
+  if (exclusiveM2[0] != null) return exclusiveM2[0];
+  if (exclusivePyeong[0] != null) return exclusivePyeong[0] * M2_PER_PYEONG;
+  return otherM2[0];
+}
+
 export const areaBuckets = [
   {
     id: "xs",
