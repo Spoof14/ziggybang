@@ -2,6 +2,8 @@
 
 An English-language map of Zigbang, Naver, and Peterpan Korea rentals. Built as a foreigner-friendly alternative to those Korean-only sites.
 
+**Live site:** <https://ziggybang.vercel.app>
+
 ## What it does
 
 - Loads only the listings in the current map view
@@ -66,10 +68,19 @@ bills all requests, not only successful ones.
 
 ## Develop
 
+This project uses [Bun](https://bun.sh) (`bun.lockb` is the lockfile; there is no `package-lock.json`).
+
 ```bash
-npm install
-npm test
-npm run dev
+bun install
+cp .env.example .env   # optional: every variable is optional, see .env.example
+bun run test
+bun run dev
+```
+
+Set `SKIP_ENV_VALIDATION=1` to build or run without a `.env` file (used by CI and Docker builds):
+
+```bash
+SKIP_ENV_VALIDATION=1 bun run build
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Pan and zoom the map; only the visible area is fetched.
@@ -82,4 +93,6 @@ browser bundle, so after adding it on Vercel you must **Redeploy** (uncheck
 
 ## Tests
 
-`npm test` runs unit tests for geohash tiling, clustering, source mapping, English copy, and aggregation, plus a live Zigbang smoke test. Naver is asserted to fail soft if the host is unreachable.
+`bun run test` runs the Vitest unit tests for geohash tiling, clustering, source mapping, English copy, and aggregation. Naver is asserted to fail soft if the host is unreachable. `src/server/listings/live.test.ts` is a live Zigbang smoke test that needs network access and can be flaky; CI excludes it (`bun run test --exclude src/server/listings/live.test.ts`).
+
+CI (`.github/workflows/ci.yml`) runs lint, `tsc`, build, and tests with Bun on every PR and push to `main`.
