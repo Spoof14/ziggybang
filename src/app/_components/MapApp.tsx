@@ -1029,9 +1029,9 @@ export default function MapApp() {
                   </span>
                 ) : null}
               </p>
-              <h1 className="text-sm font-semibold sm:text-lg">
+              <p className="text-sm font-semibold sm:text-lg">
                 Korea rentals, in English
-              </h1>
+              </p>
               {statusLabel ? (
                 <p className="mt-0.5 truncate text-[11px] text-slate-400">
                   {statusLabel}
