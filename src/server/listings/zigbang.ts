@@ -247,7 +247,22 @@ export async function fetchZigbangListings(input: {
   const types = input.propertyTypes;
   const listings: MapListing[] = [];
 
-  const jobs: Array<() => Promise<void>> = [];
+  const rawJobs: Array<() => Promise<void>> = [];
+  // One broken tile/endpoint (Zigbang's apartment endpoint currently 404s)
+  // must not discard results from the tiles that worked. Only fail when every
+  // request failed.
+  const failures: unknown[] = [];
+  const jobs = {
+    push(job: () => Promise<void>) {
+      rawJobs.push(async () => {
+        try {
+          await job();
+        } catch (error) {
+          failures.push(error);
+        }
+      });
+    },
+  };
 
   for (const type of types) {
     if (type === "apartment") {
@@ -285,7 +300,10 @@ export async function fetchZigbangListings(input: {
     }
   }
 
-  await runPool(jobs, 8);
+  await runPool(rawJobs, 8);
+  if (rawJobs.length > 0 && failures.length === rawJobs.length) {
+    throw failures[0];
+  }
   const shouldHydrate =
     input.needsDetails ??
     (input.zoom >= 15 &&
