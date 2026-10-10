@@ -77,7 +77,8 @@ describe("listings.ask route (OpenAI mocked)", () => {
     expect(out.picks).toHaveLength(10);
     expect(out.picks.every((p) => /^zigbang:oneroom:([1-9]|[12]\d|30)$/.test(p.listing.id))).toBe(true);
     expect(out.picks.every((p) => p.reason.length > 0)).toBe(true);
-    expect(out.picks[0]!.listing.id).toBe("zigbang:oneroom:10");
+    // "cheap" requests keep our rent+deposit order rather than the model's: the cheapest home leads.
+    expect(out.picks[0]!.listing.id).toBe("zigbang:oneroom:1");
     expect(out.constraints.maxRent).toBe(70);
     expect(out.constraints.preferences).toEqual(expect.arrayContaining(["quiet", "close to subway"]));
     // The area was resolved from the place table and fetched per live source.

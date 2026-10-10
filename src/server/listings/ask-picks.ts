@@ -23,6 +23,7 @@ import {
   type AskPicksResult,
 } from "~/lib/listings/ask-picks";
 import {
+  CHEAP_WORDS,
   ROOMS_APPROX_NOTE,
   buildAskSummary,
   floorKind,
@@ -119,7 +120,7 @@ const RANK_PROMPT = `You are the picker behind Ziggybang's "Ask" for Korean rent
 Rules:
 - Pick exactly {N} candidates (or all if fewer), best first. Use ONLY ids in "candidates"; never invent or alter an id. Keep our order unless a candidate clearly fits the request better.
 - All candidates satisfy the hard constraints. Judge fit on: price, distance (metersFromCenter is from the search center, NOT from a subway), size, floor, photos and "preferences".
-- "cheap"/low cost: compare effectiveMonthly (rent plus deposit cost), never the monthly rent alone — a ₩80 million deposit is not cheap.
+- "cheap"/low cost: compare effectiveMonthly (monthly-rent homes only: rent + maintenance + deposit cost) and prefer a low deposit; never judge by the monthly rent alone — a ₩80 million deposit is not cheap. For jeonse just quote the deposit.
 - Avoid floor "Semi-basement" and "Rooftop" homes unless the request asks for them or for the cheapest option.
 - Candidates without a photo (hasPhoto false) are weaker picks.
 - "reason": ONE line, max 90 characters, English, using ONLY fields present on that candidate. NEVER mention a field the candidate does not have (no build year unless builtYear exists, no subway time unless subwayWalkMin exists, no elevator/quiet/parking unless listed in facts). Say "spacious" only if size is "large" or "very large"; use the size word given. Quote money exactly as the formatted strings (deposit, monthlyRent, salePrice, effectiveMonthly).
@@ -332,7 +333,12 @@ export async function computeAskPicks(
     }
   }
 
-  const assembled = assemblePicks(ai, ranked, target, prepared);
+  const cheap = (c.preferences ?? []).some((p) => preferenceKey(p) === "cheap") || CHEAP_WORDS.test(requestText);
+  const assembled = assemblePicks(ai, ranked, target, {
+    ...prepared,
+    avoidBadFloors: !cheap && !asksForBasementOrRooftop(requestText),
+    orderByScore: cheap,
+  });
   const summary = basicSummary(assembled.map((p) => p.listing), filtered.listings.length, c);
   const picks = assembled.map((pick) => ({ ...pick, listing: slimListing(pick.listing) }));
   if (assembled.some((p) => floorKind(p.listing.floor) !== "normal") && !asksForBasementOrRooftop(requestText)) {

@@ -694,7 +694,7 @@ export function compactCandidate(
       listing.salesType === "wolse" && listing.rent != null ? (formatKrwFromManwon(listing.rent) ?? undefined) : undefined,
     maintenanceFee: listing.manageCost ? (formatKrwFromManwon(listing.manageCost) ?? undefined) : undefined,
     salePrice: listing.salesType === "sale" ? (formatKrwFromManwon(listing.price) ?? undefined) : undefined,
-    effectiveMonthly: effective != null && listing.salesType !== "sale" ? (formatKrwFromManwon(Math.round(effective * 10) / 10) ?? undefined) : undefined,
+    effectiveMonthly: effective != null && listing.salesType === "wolse" ? (formatKrwFromManwon(Math.round(effective * 10) / 10) ?? undefined) : undefined,
     m2: listing.areaM2,
     size: sizeClass(listing.areaM2),
     floor: formatFloor(listing.floor) ?? undefined,
@@ -776,7 +776,12 @@ export function assemblePicks(
   ai: ValidatedAiRanking | null,
   ranked: ScoredCandidate[],
   target = ASK_PICK_COUNT,
-  dupes: Partial<DuplicateInfo> = {},
+  dupes: Partial<DuplicateInfo> & {
+    /** Semi-basement / rooftop AI picks only count when nothing else is left. */
+    avoidBadFloors?: boolean;
+    /** Ignore the model's order and keep our score order (cheap requests). */
+    orderByScore?: boolean;
+  } = {},
 ): AskPick[] {
   const groups = dupes.groups ?? new Map<string, string>();
   const groupOf = (l: MapListing) => groups.get(l.id) ?? l.id;
@@ -797,15 +802,30 @@ export function assemblePicks(
     });
   };
   const roomFor = (item: ScoredCandidate) => (perGroup.get(groupOf(item.listing)) ?? 0) < MAX_NEAR_DUPLICATES;
-  for (const pick of ai?.picks ?? []) {
+  const rankIndex = new Map(ranked.map((r, index) => [r.listing.id, index]));
+  const aiPicks = [...(ai?.picks ?? [])];
+  if (dupes.orderByScore) aiPicks.sort((a, b) => (rankIndex.get(a.id) ?? 1e9) - (rankIndex.get(b.id) ?? 1e9));
+  const badFloor = (item: ScoredCandidate) => floorKind(item.listing.floor) !== "normal";
+  const deferred: Array<{ item: ScoredCandidate; reason?: string }> = [];
+  for (const pick of aiPicks) {
     const found = byId.get(pick.id);
     if (!found || used.has(pick.id) || !roomFor(found)) continue;
-    take(found, groundedReason(pick.reason, found.listing));
+    const reason = groundedReason(pick.reason, found.listing);
+    if (dupes.avoidBadFloors && badFloor(found)) {
+      deferred.push({ item: found, reason });
+      continue;
+    }
+    take(found, reason);
   }
   for (const item of ranked) {
     if (out.length >= target) break;
     if (used.has(item.listing.id) || !roomFor(item)) continue;
     take(item);
+  }
+  // Deferred basement/rooftop picks only when nothing better is left.
+  for (const { item, reason } of deferred) {
+    if (out.length >= target) break;
+    if (!used.has(item.listing.id) && roomFor(item)) take(item, reason);
   }
   // Short of picks because of the cap: fill from what is left rather than show fewer.
   for (const item of ranked) {
