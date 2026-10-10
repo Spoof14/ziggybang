@@ -1063,6 +1063,7 @@ export default function MapApp() {
               <button
                 key={source}
                 type="button"
+                aria-pressed={sources.includes(source)}
                 onClick={() =>
                   setSources((current) => {
                     const next = toggleValue(current, source);
@@ -1086,6 +1087,7 @@ export default function MapApp() {
               <button
                 key={type}
                 type="button"
+                aria-pressed={propertyTypes.includes(type)}
                 onClick={() =>
                   setPropertyTypes((current) => {
                     const next = toggleValue(current, type);
@@ -1107,6 +1109,7 @@ export default function MapApp() {
               <button
                 key={type}
                 type="button"
+                aria-pressed={salesTypes.includes(type)}
                 onClick={() =>
                   setSalesTypes((current) => {
                     const next = toggleValue(current, type);
@@ -1124,6 +1127,7 @@ export default function MapApp() {
             ))}
             <button
               type="button"
+              aria-pressed={foreignerOk}
               onClick={() => setForeignerOk((current) => !current)}
               title="Only ads that mention foreigners are welcome. Most landlords never write it."
               className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
@@ -1136,6 +1140,7 @@ export default function MapApp() {
             </button>
             <button
               type="button"
+              aria-pressed={hasPhotos}
               onClick={() => setHasPhotos((current) => !current)}
               title="Hide listings that have no photos."
               className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
@@ -1150,6 +1155,7 @@ export default function MapApp() {
               <button
                 key={filter}
                 type="button"
+                aria-pressed={floorFilter === filter}
                 onClick={() =>
                   setFloorFilter((current) => (current === filter ? undefined : filter))
                 }
@@ -1166,6 +1172,7 @@ export default function MapApp() {
               <button
                 key={filter}
                 type="button"
+                aria-pressed={ageFilter === filter}
                 title={
                   filter === "week"
                     ? "Listed in the last 7 days"
@@ -1205,6 +1212,7 @@ export default function MapApp() {
             {searchInput ? (
               <button
                 type="button"
+                aria-label="Clear search"
                 onClick={() => {
                   setSearchInput("");
                   setDebouncedQuery("");
@@ -1242,6 +1250,7 @@ export default function MapApp() {
                 <button
                   key={mode}
                   type="button"
+                aria-pressed={viewMode === mode}
                   onClick={() => setViewMode(mode)}
                   className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
                     viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
@@ -1255,6 +1264,7 @@ export default function MapApp() {
             </div>
             <button
               type="button"
+              aria-label="Ask a question about listings"
               onClick={() => setAskOpen(true)}
               className="shrink-0 rounded-full bg-sky-400 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-sky-300 sm:text-sm"
             >
@@ -1271,6 +1281,7 @@ export default function MapApp() {
                 <button
                   key={bucket.id}
                   type="button"
+                aria-pressed={active}
                   title={bucket.hint}
                   onClick={() =>
                     setAreaBucketIds((current) => toggleValue(current, bucket.id))
@@ -1321,6 +1332,7 @@ export default function MapApp() {
               <button
                 key={nextTool}
                 type="button"
+                aria-pressed={tool === nextTool}
                 onClick={() => setTool(nextTool)}
                 className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
                   tool === nextTool ? "bg-sky-400 text-slate-950" : "bg-white/10 text-slate-300"
@@ -1549,7 +1561,7 @@ export default function MapApp() {
                 >
                   <ListingPhoto
                     url={listing.thumbnail}
-                    alt=""
+                    alt={listing.title ?? "Listing photo"}
                     width={240}
                     className="h-16 w-full object-cover"
                   />

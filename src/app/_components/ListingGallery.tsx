@@ -200,6 +200,8 @@ export function ListingGallery({
             <button
               key={src}
               type="button"
+              aria-label={`Show photo ${photoIndex + 1} of ${visible.length}`}
+              aria-current={photoIndex === currentIndex}
               onClick={() => setIndex(photoIndex)}
               className={`h-14 w-20 shrink-0 overflow-hidden rounded-lg border ${
                 photoIndex === currentIndex
@@ -208,7 +210,11 @@ export function ListingGallery({
               }`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={src} alt="" className="h-full w-full object-cover" />
+              <img
+                src={src}
+                alt={`${alt} thumbnail ${photoIndex + 1}`}
+                className="h-full w-full object-cover"
+              />
             </button>
           ))}
         </div>

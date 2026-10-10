@@ -146,6 +146,7 @@ export function ListingList({
             <button
               key={option.id}
               type="button"
+              aria-pressed={sort === option.id}
               onClick={() => onSort(option.id)}
               className={`rounded-full px-2 py-0.5 text-[11px] ${
                 sort === option.id ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
@@ -195,7 +196,7 @@ export function ListingList({
                       <span className="relative h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-white/5">
                         <ListingPhoto
                           url={listing.thumbnail}
-                          alt=""
+                          alt={title.trim() ? title : (listing.title ?? "Listing photo")}
                           width={400}
                           className="h-20 w-24 object-cover"
                         />
