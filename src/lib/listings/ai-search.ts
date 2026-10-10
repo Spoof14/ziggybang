@@ -461,17 +461,6 @@ export function emptyAskSnapshot(
   };
 }
 
-export function appendUniqueSearchTerms(base: string, extra?: string | null): string {
-  const extraTerms = normalizeSearch(extra ?? "")
-    .split(" ")
-    .filter(Boolean);
-  if (!extraTerms.length) return base.trim();
-  const hay = ` ${normalizeSearch(base)} `;
-  const missing = extraTerms.filter((term) => !hay.includes(` ${term} `));
-  if (!missing.length) return base.trim();
-  return [base.trim(), missing.join(" ")].filter(Boolean).join(" ");
-}
-
 function usableLocalListingQuery(query?: string | null): string | null | undefined {
   if (query == null) return query;
   const tokens = query.trim().split(/\s+/).filter(Boolean);
