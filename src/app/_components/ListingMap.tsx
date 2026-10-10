@@ -27,6 +27,7 @@ import { isUsableMapViewport } from "~/lib/geo/bounds";
 import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
 import { formatPrice, propertyTypeLabel } from "~/lib/listings/copy";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
+import { MetroLayer } from "./MetroLayer";
 
 const SEOUL: [number, number] = [37.5665, 126.978];
 const USER_ZOOM = 16;
@@ -513,6 +514,7 @@ export function ListingMap({
         subdomains={BASEMAP.subdomains}
         maxZoom={BASEMAP.maxZoom}
       />
+      <MetroLayer />
       <LocateMeControl />
       <ZoomControl position="bottomright" />
       <MapEvents

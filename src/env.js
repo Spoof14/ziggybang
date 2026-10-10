@@ -35,6 +35,7 @@ export const env = createEnv({
     /**
      * CARTO raster basemap key (https://carto.com/basemaps/apikey). Inlined
      * into the browser bundle at build time — redeploy after changing it.
+     * Without it the map uses OpenStreetMap DE tiles plus a metro overlay.
      */
     NEXT_PUBLIC_CARTO_API_KEY: z.string().optional(),
   },

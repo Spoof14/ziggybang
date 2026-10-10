@@ -2,17 +2,19 @@ import { describe, expect, it } from "vitest";
 import { leafletBasemap } from "./basemap";
 
 describe("leafletBasemap", () => {
-  it("uses Esri street tiles when no CARTO key is set", () => {
+  it("uses OpenStreetMap DE tiles when no CARTO key is set", () => {
     const previous = process.env.NEXT_PUBLIC_CARTO_API_KEY;
     delete process.env.NEXT_PUBLIC_CARTO_API_KEY;
     try {
       const tiles = leafletBasemap();
-      expect(tiles.url).toContain("arcgisonline.com");
+      expect(tiles.url).toContain("tile.openstreetmap.de");
+      expect(tiles.url).not.toContain("arcgisonline.com");
       expect(tiles.url).not.toContain("key=");
       // Leaflet crashes if subdomains is undefined (it always indexes .length).
       expect(tiles.subdomains.length).toBeGreaterThan(0);
     } finally {
-      if (previous !== undefined) process.env.NEXT_PUBLIC_CARTO_API_KEY = previous;
+      if (previous !== undefined)
+        process.env.NEXT_PUBLIC_CARTO_API_KEY = previous;
     }
   });
 
@@ -21,7 +23,7 @@ describe("leafletBasemap", () => {
     process.env.NEXT_PUBLIC_CARTO_API_KEY = "  ";
     try {
       const tiles = leafletBasemap();
-      expect(tiles.url).toContain("arcgisonline.com");
+      expect(tiles.url).toContain("tile.openstreetmap.de");
     } finally {
       if (previous === undefined) delete process.env.NEXT_PUBLIC_CARTO_API_KEY;
       else process.env.NEXT_PUBLIC_CARTO_API_KEY = previous;
