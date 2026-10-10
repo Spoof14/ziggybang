@@ -75,10 +75,22 @@ export function geocodeQueryCandidates(query: string): string[] {
   return [...new Set(candidates)];
 }
 
+function distanceM(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const dLat = (a.lat - b.lat) * 111_200;
+  const dLng = (a.lng - b.lng) * 111_200 * Math.cos((a.lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLng);
+}
+
+export type NominatimOptions = {
+  allowRoads?: boolean;
+  /** Point road segments are measured against (default: the middle of the road hits). */
+  near?: { lat: number; lng: number };
+};
+
 export function scoreNominatimHit(
   hit: NominatimHit,
   query: string,
-  options: { allowRoads?: boolean } = {},
+  options: NominatimOptions = {},
 ): number {
   const road = options.allowRoads && categoryOf(hit) === "highway";
   if (isPoiHit(hit) && !road) return -1;
@@ -112,6 +124,13 @@ export function scoreNominatimHit(
     score += 4_000;
     const district = query.match(/[가-힣]+(?:구|동)/g) ?? [];
     if (district.some((name) => display.includes(name))) score += 6_000;
+    // A road runs for kilometres and OSM returns one hit per segment; the
+    // segment closest to the district center is the likeliest address spot
+    // (the others can be at a bridge or the far end of the street).
+    if (options.near) {
+      const meters = distanceM({ lat, lng }, options.near);
+      score += Math.max(0, 6_000 - meters * 2);
+    }
   }
   return score;
 }
@@ -119,11 +138,33 @@ export function scoreNominatimHit(
 export function pickNominatimHit(
   hits: NominatimHit[],
   query: string,
-  options: { allowRoads?: boolean } = {},
+  options: NominatimOptions = {},
 ): NominatimHit | undefined {
   let best: { hit: NominatimHit; score: number } | undefined;
+  let opts = options;
+  if (options.allowRoads && !options.near) {
+    // A street is many segments; aim for the middle of the ones in the named
+    // district instead of an end of the street (a bridge, another ward).
+    const district = query.match(/[가-힣]+(?:구|동)/g) ?? [];
+    const roads = hits.filter(
+      (hit) =>
+        categoryOf(hit) === "highway" &&
+        Number.isFinite(Number(hit.lat)) &&
+        Number.isFinite(Number(hit.lon)) &&
+        (!district.length || district.some((name) => (hit.display_name ?? "").includes(name))),
+    );
+    if (roads.length > 1) {
+      opts = {
+        ...options,
+        near: {
+          lat: roads.reduce((sum, hit) => sum + Number(hit.lat), 0) / roads.length,
+          lng: roads.reduce((sum, hit) => sum + Number(hit.lon), 0) / roads.length,
+        },
+      };
+    }
+  }
   for (const hit of hits) {
-    const score = scoreNominatimHit(hit, query, options);
+    const score = scoreNominatimHit(hit, query, opts);
     if (score < 0) continue;
     if (!best || score > best.score) best = { hit, score };
   }
@@ -134,13 +175,20 @@ async function searchNominatim(
   q: string,
   trimmed: string,
   allowRoads: boolean,
+  near?: { lat: number; lng: number },
+  structured?: { street: string; city: string },
 ): Promise<Place | null> {
   const params = new URLSearchParams({
     format: "jsonv2",
     limit: "8",
     countrycodes: "kr",
-    q,
   });
+  if (structured) {
+    params.set("street", structured.street);
+    params.set("city", structured.city);
+  } else {
+    params.set("q", q);
+  }
   const hits = await fetchJson<NominatimHit[]>(
     `https://nominatim.openstreetmap.org/search?${params.toString()}`,
     {
@@ -151,7 +199,7 @@ async function searchNominatim(
       },
     },
   );
-  const hit = pickNominatimHit(hits, trimmed, { allowRoads });
+  const hit = pickNominatimHit(hits, trimmed, { allowRoads, near });
   const lat = Number(hit?.lat);
   const lng = Number(hit?.lon);
   if (!hit || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
@@ -165,6 +213,7 @@ async function searchNominatim(
     lng,
     zoom: street ? 17 : station ? 16 : zoomFromBox(hit.boundingbox),
     radiusM: street ? 400 : station ? 800 : undefined,
+    ...(street ? { roadLevel: true } : {}),
   };
 }
 
@@ -175,14 +224,23 @@ export async function geocodeKorea(query: string): Promise<Place | null> {
   const address = looksLikeStreetAddress(trimmed);
   if (catalog && !address) return catalog;
 
-  return cached(`geo:v3:${trimmed.toLowerCase()}`, GEOCODE_TTL_MS, async () => {
+  return cached(`geo:v4:${trimmed.toLowerCase()}`, GEOCODE_TTL_MS, async () => {
     if (address) {
       // A full street address must not collapse to the district the catalog
       // matched on ("마포"). OpenStreetMap knows the road even when it lacks
       // the house number, which is close enough for a 400 m circle.
-      for (const q of [...new Set([trimmed, `${trimmed} 서울`])]) {
+      const parts = trimmed.match(/([가-힣]+구)\s+([가-힣]+\d*(?:대로|로|길))\s*(\d+(?:-\d+)?)/);
+      const attempts: Array<{ q: string; structured?: { street: string; city: string } }> = [];
+      if (parts) {
+        attempts.push({
+          q: trimmed,
+          structured: { street: `${parts[3]} ${parts[2]}`, city: parts[1]! },
+        });
+      }
+      for (const q of [...new Set([trimmed, `${trimmed} 서울`])]) attempts.push({ q });
+      for (const attempt of attempts) {
         try {
-          const found = await searchNominatim(q, trimmed, true);
+          const found = await searchNominatim(attempt.q, trimmed, true, undefined, attempt.structured);
           if (found) return found;
         } catch {
           /* try the next candidate, then the district */

@@ -8,6 +8,8 @@ import { createTRPCContext } from "~/server/api/trpc";
 /** Naver Land only answers from Korean IPs. */
 export const preferredRegion = "icn1";
 export const runtime = "nodejs";
+/** Ask waits on OpenAI (up to 20s); the platform default would cut it off and look like "AI unavailable". */
+export const maxDuration = 30;
 
 /**
  * This wraps the `createTRPCContext` helper and provides the required context for the tRPC API when

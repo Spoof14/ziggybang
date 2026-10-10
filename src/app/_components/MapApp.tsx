@@ -27,6 +27,7 @@ import { loadPrefs, savePrefs, type SavedPrefs, type ListSort, type ViewMode } f
 import { type PriceFilter } from "~/lib/listings/price";
 import {
   DISTRICT_ONLY_HINT,
+  ROAD_LEVEL_HINT,
   circleForPlaceSearch,
   looksLikeStreetAddress,
   isStationQuery,
@@ -1053,6 +1054,8 @@ export default function MapApp() {
       Boolean(parsedSearch.place));
   const areaHint = districtOnlyAddress
     ? DISTRICT_ONLY_HINT
+    : place?.roadLevel
+    ? ROAD_LEVEL_HINT
     : place
     ? circle
       ? `${placeLabel} · ${formatRadius(circle.radiusM)}`
@@ -1284,10 +1287,10 @@ export default function MapApp() {
           {areaHint ? (
             <p className="mt-1 text-[11px] text-sky-300">{areaHint}</p>
           ) : null}
-          {uiCompact && filterSummary ? (
+          {uiCompact ? (
             <p className="mt-1 flex items-center justify-between gap-2 text-[11px] text-violet-200">
               <span className="min-w-0 truncate">
-                {filterSummary}
+                {filterSummary ?? "No filters"}
                 {visibleHomeCount
                   ? ` · ${visibleHomeCount.toLocaleString("en-US")} on map`
                   : ""}
@@ -1367,10 +1370,10 @@ export default function MapApp() {
             maxBuildingAge={maxBuildingAge}
             onChange={setMaxBuildingAge}
           />
-          {filterSummary ? (
+          {!uiCompact ? (
             <div className="mt-1.5 flex items-center justify-between gap-2">
               <p className="min-w-0 truncate text-[11px] text-violet-200">
-                {filterSummary}
+                {filterSummary ?? "No filters"}
                 {visibleHomeCount
                   ? ` · ${visibleHomeCount.toLocaleString("en-US")} on map`
                   : ""}

@@ -17,6 +17,7 @@ import {
   type PriceFilter,
 } from "./price";
 import {
+  extractStreetAddress,
   isAskListingToken,
   isListingFilterToken,
   isStationQuery,
@@ -451,9 +452,9 @@ export function emptyAskSnapshot(
   return {
     searchInput: "",
     propertyTypes: ALL_TYPES,
-    // A fresh search drops old filters, but not the user's rent/jeonse choice
-    // or their current view: neither was part of what they just asked for.
-    salesTypes: current.salesTypes?.length ? current.salesTypes : ["jeonse", "wolse"],
+    // A fresh search drops old filters, including a leftover jeonse/wolse
+    // choice the new message never mentioned; only the view is kept.
+    salesTypes: ["jeonse", "wolse"],
     areaBucketIds: [],
     radiusM: current.radiusM || 1200,
     viewMode: current.viewMode ?? "list",
@@ -479,11 +480,18 @@ function usableLocalListingQuery(query?: string | null): string | null | undefin
   return query.trim();
 }
 
-export type AskFallbackReason = "rate_limited" | "timeout" | "error";
+export type AskFallbackReason =
+  | "rate_limited"
+  | "quota"
+  | "auth"
+  | "timeout"
+  | "error";
 
 /** Small UI notice shown when on-site search answered instead of the AI. */
 export const ASK_FALLBACK_NOTICE: Record<AskFallbackReason, string> = {
   rate_limited: "Using basic search — AI is busy",
+  quota: "Using basic search — AI quota exhausted",
+  auth: "Using basic search — AI key rejected",
   timeout: "Using basic search — AI took too long",
   error: "Using basic search — AI is unavailable",
 };
@@ -545,11 +553,15 @@ function cleanPlaceText(value: string | null | undefined): string | null | undef
  * narrow results. Explicit nulls ("clear the budget") only survive when
  * the text asks for a clear.
  */
-export function groundIntent(intent: SearchIntent, text: string): SearchIntent {
+export function groundIntent(intent: SearchIntent, fullText: string): SearchIntent {
+  // A street number ("양화로 160") is not a rent or a distance.
+  const address = extractStreetAddress(fullText);
+  const text = address ? fullText.replace(address, " ") : fullText;
   const clear = CLEAR_WORDS.test(text);
   const out: SearchIntent = {};
   const place = cleanPlaceText(intent.searchInput);
-  if (place !== undefined) out.searchInput = place;
+  if (address) out.searchInput = address;
+  else if (place !== undefined) out.searchInput = place;
   else if (intent.searchInput === null && clear) out.searchInput = null;
 
   if (intent.listingQuery === null) {
@@ -680,6 +692,11 @@ export function composeAskIntent(
   const grounded = text === undefined ? ai : groundIntent(ai, text);
   return {
     ...grounded,
+    // Type / deal words are plain text evidence: if the model dropped them
+    // (e.g. because a room count was mentioned), keep what the parser found.
+    propertyTypes:
+      grounded.propertyTypes === undefined ? local.propertyTypes : grounded.propertyTypes,
+    salesTypes: grounded.salesTypes === undefined ? local.salesTypes : grounded.salesTypes,
     searchInput:
       grounded.searchInput === undefined ? local.searchInput : grounded.searchInput,
     radiusM: grounded.radiusM === undefined ? local.radiusM : grounded.radiusM,
@@ -699,11 +716,14 @@ export function interpretSearch(
   message: string,
   current: SearchSnapshot,
 ): InterpretedSearch {
-  const text = message.trim();
+  const address = extractStreetAddress(message);
+  const text = (address ? message.replace(address, " ") : message).replace(/\s+/g, " ").trim();
   const intent: SearchIntent = {};
   const followUp = isFollowUp(text);
-  const place = followUp ? undefined : matchPlace(text);
-  if (place) {
+  const place = followUp || address ? undefined : matchPlace(text);
+  if (address) {
+    intent.searchInput = address;
+  } else if (place) {
     const geoLeftover = unrefinedPlaceLeftover(text, place);
     if (isStationQuery(text)) {
       const base = place.names[0] ?? place.id;

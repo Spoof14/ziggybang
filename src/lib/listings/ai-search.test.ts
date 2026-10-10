@@ -176,9 +176,9 @@ describe("Ask only applies what the user stated", () => {
     expect(interpretSearch("studios near hongdae as a list", base).snapshot.viewMode).toBe("list");
   });
 
-  it("keeps the user's rent/jeonse choice on a fresh search", () => {
+  it("resets a leftover rent/jeonse choice on a fresh search", () => {
     const result = interpretSearch("villa near Dangsan", { ...base, salesTypes: ["wolse"] });
-    expect(result.snapshot.salesTypes).toEqual(["wolse"]);
+    expect(result.snapshot.salesTypes).toEqual(["jeonse", "wolse"]);
   });
 
   it("groundIntent drops unstated fields from a model answer", () => {

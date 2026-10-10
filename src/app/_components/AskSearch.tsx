@@ -11,7 +11,7 @@ import {
 import { api } from "~/trpc/react";
 
 /** After this long we stop waiting on the AI and use on-site search instead. */
-const AI_TIMEOUT_MS = 25_000;
+const AI_TIMEOUT_MS = 30_000;
 
 type ChatMessage = {
   role: "user" | "assistant";

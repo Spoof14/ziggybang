@@ -104,22 +104,32 @@ export function romanizeHangul(value: string): string {
   return out;
 }
 
-function levenshtein(a: string, b: string): number {
+/** Damerau-Levenshtein (optimal string alignment): a swap like "hongdea" -> "hongdae" costs 1. */
+export function levenshtein(a: string, b: string): number {
   if (a === b) return 0;
   if (!a.length) return b.length;
   if (!b.length) return a.length;
-  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
-  for (let i = 1; i <= a.length; i += 1) {
-    let prev = i - 1;
+  const rows: number[][] = Array.from({ length: a.length + 1 }, (_, i) => {
+    const row = new Array<number>(b.length + 1).fill(0);
     row[0] = i;
+    return row;
+  });
+  for (let j = 0; j <= b.length; j += 1) rows[0]![j] = j;
+  for (let i = 1; i <= a.length; i += 1) {
     for (let j = 1; j <= b.length; j += 1) {
-      const current = row[j]!;
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      row[j] = Math.min(row[j]! + 1, row[j - 1]! + 1, prev + cost);
-      prev = current;
+      let value = Math.min(
+        rows[i - 1]![j]! + 1,
+        rows[i]![j - 1]! + 1,
+        rows[i - 1]![j - 1]! + cost,
+      );
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        value = Math.min(value, rows[i - 2]![j - 2]! + 1);
+      }
+      rows[i]![j] = value;
     }
   }
-  return row[b.length]!;
+  return rows[a.length]![b.length]!;
 }
 
 function escapeRegExp(value: string): string {
@@ -215,6 +225,21 @@ export function looksLikeStreetAddress(query: string): boolean {
   );
 }
 
+/** The street-address part of a message ("서울 마포구 양화로 160"), if any. */
+export function extractStreetAddress(text: string): string | undefined {
+  const hangul = text.match(
+    /(?:(?:서울|경기|인천|부산|대구|대전|광주|울산|세종)(?:특별시|광역시|특별자치시|도)?\s+)?(?:[가-힣]+구\s+)?(?:[가-힣]+동\s+)?[가-힣]+\d*(?:대로|로|길)\s*\d+(?:-\d+)?/,
+  );
+  if (hangul) return hangul[0].replace(/\s+/g, " ").trim();
+  const latin =
+    text.match(/\b\d+[\s,]+[a-z]+(?:-[a-z]+)*-(?:ro|gil|daero)\b/i) ??
+    text.match(/\b[a-z]+(?:-[a-z]+)*-(?:ro|gil|daero)\s+\d+/i);
+  return latin ? latin[0].trim() : undefined;
+}
+
+export const ROAD_LEVEL_HINT =
+  "Showing the street, not the exact house number; try a station or neighborhood name for a tighter search.";
+
 export const DISTRICT_ONLY_HINT =
   "Address search resolved only to the district; try a station or neighborhood name.";
 
@@ -224,11 +249,11 @@ export function isStationQuery(query: string): boolean {
 
 /**
  * Typo tolerance for place names: short words may be off by one letter,
- * words of 6+ letters (Hongdea, Gangnm) by two. Both sides are compared
+ * words of 8+ letters by two. Swaps count as one edit (Hongdea, Gangnm, Itaewn). Both sides are compared
  * after lowercasing, so Hangul never fuzzes against Latin.
  */
 function fuzzyLimit(token: string): number {
-  return token.length >= 6 ? 2 : 1;
+  return token.length >= 8 ? 2 : 1;
 }
 
 export function matchPlace(query: string): Place | undefined {
@@ -613,6 +638,18 @@ export function stripPlaceFromQuery(query: string, place: Place): string {
       " ",
     );
   }
+  // A misspelled place word ("Hongdea") must not survive as leftover text.
+  const names = place.names
+    .map((name) => normalizeSearch(name))
+    .filter((name) => name.length >= 4 && !/[가-힣]/.test(name));
+  rest = rest
+    .split(/\s+/)
+    .filter((token) => {
+      const t = normalizeSearch(token);
+      if (t.length < 4 || /\d/.test(t) || /[가-힣]/.test(t)) return true;
+      return !names.some((name) => levenshtein(t, name) <= fuzzyLimit(t));
+    })
+    .join(" ");
   return rest.replace(/\s+/g, " ").trim();
 }
 

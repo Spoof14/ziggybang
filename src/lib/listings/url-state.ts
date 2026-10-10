@@ -244,5 +244,7 @@ export function prefsForInitialState<T extends { uiCompact: boolean }>(
   saved: T | null,
 ): T | { uiCompact: boolean } | null {
   if (!saved) return null;
-  return hasAppUrlState(search) ? { uiCompact: saved.uiCompact } : saved;
+  // A bare load starts from defaults too; only the device-level UI choice survives.
+  void search;
+  return { uiCompact: saved.uiCompact };
 }

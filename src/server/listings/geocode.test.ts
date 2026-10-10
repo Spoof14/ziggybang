@@ -152,3 +152,37 @@ describe("street address geocoding", () => {
     expect(hit).toBe(yanghwaMapo);
   });
 });
+
+import { classifyOpenAiFailure } from "./ask";
+
+describe("road address selection", () => {
+  const road = (lat: number, lon: number, where: string) => ({
+    lat: String(lat),
+    lon: String(lon),
+    category: "highway",
+    type: "primary",
+    display_name: `양화로, ${where}, 마포구, 서울특별시, 대한민국`,
+    importance: 0.5,
+  });
+  it("prefers the road segment nearest the district center", () => {
+    const hits = [
+      road(37.5482, 126.9101, "합정동"),
+      road(37.545, 126.9061, "합정동"),
+      road(37.5494, 126.9136, "합정동"),
+      road(37.5568, 126.9239, "서교동"),
+    ];
+    const hit = pickNominatimHit(hits, "서울 마포구 양화로 160", {
+      allowRoads: true,
+    });
+    expect(hit?.lat).toBe("37.5494");
+  });
+});
+
+describe("OpenAI failure classification", () => {
+  it("separates quota, rate limit, auth, and other errors", () => {
+    expect(classifyOpenAiFailure(429, '{"error":{"code":"insufficient_quota"}}')).toBe("quota");
+    expect(classifyOpenAiFailure(429, '{"error":{"code":"rate_limit_exceeded"}}')).toBe("rate_limited");
+    expect(classifyOpenAiFailure(401, "")).toBe("auth");
+    expect(classifyOpenAiFailure(503, "")).toBe("error");
+  });
+});

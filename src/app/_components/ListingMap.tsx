@@ -25,7 +25,7 @@ import {
   type Map as LeafletMap,
 } from "leaflet";
 import { leafletBasemap } from "~/lib/geo/basemap";
-import { isUsableMapViewport } from "~/lib/geo/bounds";
+import { isUsableMapViewport, offsetLngByPx, panelOffsetPx } from "~/lib/geo/bounds";
 import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
 import { formatPrice, propertyTypeLabel } from "~/lib/listings/copy";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
@@ -107,10 +107,13 @@ function emitViewport(
   };
   if (!isUsableMapViewport(size, bounds)) return;
   const center = map.getCenter();
+  const zoom = map.getZoom();
+  // Report the focal point (see panelOffsetPx), so the URL lines up with the place.
+  const shift = panelOffsetPx(size.x, window.innerWidth);
   onViewport({
     ...bounds,
-    zoom: map.getZoom(),
-    center: { lat: center.lat, lng: center.lng },
+    zoom,
+    center: { lat: center.lat, lng: offsetLngByPx(center.lng, zoom, shift) },
     initial,
   });
 }
@@ -171,18 +174,17 @@ function MapEvents({
       // aim at the middle of the uncovered area so a radius circle is not
       // hidden underneath it. Phones use a top sheet, so no shift there.
       const size = map.getSize();
-      const panelCovers =
-        window.innerWidth >= 768 && size.x >= window.innerWidth * 0.8;
+      const shift = panelOffsetPx(size.x, window.innerWidth);
       let center = latLng(focus.lat, focus.lng);
-      if (panelCovers) {
+      if (shift) {
         const projected = map.project(center, focus.zoom);
-        center = map.unproject(
-          projected.subtract(leafletPoint(size.x * 0.2, 0)),
-          focus.zoom,
-        );
+        center = map.unproject(projected.subtract(leafletPoint(shift, 0)), focus.zoom);
       }
       map.setView(center, focus.zoom, { animate: true });
-      return;
+      // Belt and braces: if a throttled tab or a no-op move swallowed the
+      // moveend, still publish the final view so the URL cannot lag behind.
+      const settle = setTimeout(() => emitViewport(map, onViewport), 700);
+      return () => clearTimeout(settle);
     }
     const pad = 0.0008;
     map.flyToBounds(
@@ -196,7 +198,8 @@ function MapEvents({
         duration: 0.35,
       },
     );
-  }, [focus, map]);
+    return undefined;
+  }, [focus, map, onViewport]);
 
   useMapEvents({
     moveend: () => emitViewport(map, onViewport),
