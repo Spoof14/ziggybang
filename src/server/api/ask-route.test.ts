@@ -58,12 +58,10 @@ describe("listings.ask route (OpenAI mocked)", () => {
     new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(payload) } }] }), { status: 200 });
 
   it("interprets, searches live sources for the resolved area, and returns 10 validated picks", async () => {
+    // The deterministic parser understands this request, so the only model call is the ranking.
     fetchMock
-      .mockResolvedValueOnce(reply({ searchInput: "Hongdae", propertyTypes: ["oneroom"], maxRent: 70, preferences: ["quiet"] }))
       .mockResolvedValueOnce(
         reply({
-          summary: "Ten affordable studios.",
-          assumptions: [],
           picks: [
             ...listings(30).slice(0, 10).reverse().map((l) => ({ id: l.id, reason: `Rent ₩${l.rent}만` })),
             { id: "zigbang:oneroom:9999", reason: "invented" },

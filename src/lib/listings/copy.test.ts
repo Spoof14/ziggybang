@@ -39,7 +39,7 @@ describe("English listing copy", () => {
 
   it("translates Korean floor and room labels", () => {
     expect(formatFloor("3/5")).toBe("Floor 3 of 5");
-    expect(formatFloor("고/12")).toBe("Top floor of 12");
+    expect(formatFloor("고/12")).toBe("High floor of 12");
     expect(formatRoomType("분리형원룸")).toBe("Split studio");
   });
 

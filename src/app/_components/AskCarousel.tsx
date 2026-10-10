@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { activeSlideIndex, stepSlide, type AskPick } from "~/lib/listings/ask-picks";
+import { activeSlideIndex, stepSlide, visibleSlideRange, type AskPick } from "~/lib/listings/ask-picks";
+import { areaLabel } from "~/lib/listings/ask-quality";
 import { buildingAgeYears } from "~/lib/listings/building-age";
 import { formatFloor, propertyTypeLabel, salesTypeFilterLabel, sourceLabel } from "~/lib/listings/copy";
 import { englishAddressLine } from "~/lib/listings/english";
@@ -44,7 +45,7 @@ export function AskPickCard({
     formatFloor(listing.floor),
     builtLabel(listing),
   ].filter(Boolean);
-  const where = englishAddressLine(listing);
+  const where = areaLabel(listing) ?? englishAddressLine(listing);
   const kind = [
     propertyTypeLabel[listing.propertyType],
     listing.salesType ? salesTypeFilterLabel[listing.salesType] : null,
@@ -58,7 +59,7 @@ export function AskPickCard({
       aria-label={`${pick.rank} of ${total}: ${kind}${where ? `, ${where}` : ""}`}
       aria-current={highlighted ? "true" : undefined}
       data-pick-id={listing.id}
-      className={`flex w-[min(16.5rem,80%)] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border bg-slate-900 text-slate-100 shadow-lg ${
+      className={`flex w-[85%] shrink-0 snap-start sm:w-[min(16.5rem,80%)] flex-col overflow-hidden rounded-2xl border bg-slate-900 text-slate-100 shadow-lg ${
         highlighted ? "border-sky-400 ring-1 ring-sky-400" : "border-white/10"
       }`}
     >
@@ -67,7 +68,7 @@ export function AskPickCard({
           url={listing.thumbnail ?? listing.photos?.[0]}
           alt={listing.title ? `Photo: ${listing.title}` : `${kind} photo`}
           width={480}
-          className="h-32 w-full object-cover"
+          className="h-32 w-full object-cover [@media(max-height:520px)]:h-24"
         />
         <span className="absolute left-2 top-2 rounded-full bg-slate-950/85 px-2 py-0.5 text-[11px] font-semibold text-sky-300">
           #{pick.rank}
@@ -99,6 +100,7 @@ export function AskPickCard({
         >
           <span className="sr-only">Why this one: </span>
           {pick.reason}
+          {pick.similar ? <span className="ml-1 whitespace-nowrap text-slate-400">· +{pick.similar} similar</span> : null}
         </p>
         <div className="mt-auto flex gap-2 pt-2">
           <ListingPageLink
@@ -137,6 +139,7 @@ export function AskCarousel({
 }) {
   const scroller = useRef<HTMLUListElement>(null);
   const [active, setActive] = useState(0);
+  const [range, setRange] = useState({ first: 0, last: 0 });
   const [edges, setEdges] = useState({ start: true, end: false });
   const frame = useRef(0);
 
@@ -149,8 +152,10 @@ export function AskCarousel({
   const measure = useCallback(() => {
     const el = scroller.current;
     if (!el) return;
-    setActive(activeSlideIndex(el.scrollLeft, stride(), picks.length));
-    setEdges({ start: el.scrollLeft <= 2, end: el.scrollLeft + el.clientWidth >= el.scrollWidth - 2 });
+    const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
+    setActive(activeSlideIndex(el.scrollLeft, stride(), picks.length, atEnd));
+    setRange(visibleSlideRange(el.scrollLeft, el.clientWidth, stride(), picks.length, (el.children[0] as HTMLElement | undefined)?.offsetWidth));
+    setEdges({ start: el.scrollLeft <= 2, end: atEnd });
   }, [picks.length, stride]);
 
   useEffect(() => {
@@ -195,7 +200,9 @@ export function AskCarousel({
     <section role="region" aria-roledescription="carousel" aria-label={`Top ${picks.length} picks`}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-xs text-slate-400" aria-live="polite">
-          Pick {Math.min(active + 1, picks.length)} of {picks.length}
+          {range.last > range.first
+            ? `Showing ${range.first + 1}–${range.last + 1} of ${picks.length}`
+            : `Pick ${Math.min(active + 1, picks.length)} of ${picks.length}`}
         </p>
         <div className="flex gap-1.5">
           <button

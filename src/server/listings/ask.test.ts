@@ -14,8 +14,8 @@ function openAiReply(payload: Record<string, unknown>) {
   return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(payload) } }] }), { status: 200 });
 }
 
-async function ask(text: string, previous?: AskConstraints) {
-  return interpretAsk({ messages: [{ role: "user", content: text }], previous, viewport }, { resolvePlace });
+async function ask(text: string, previous?: AskConstraints, forceAi = true) {
+  return interpretAsk({ messages: [{ role: "user", content: text }], previous, viewport }, { resolvePlace, forceAi });
 }
 
 describe("interpretAsk with OpenAI", () => {
@@ -123,11 +123,75 @@ describe("interpretAsk with OpenAI", () => {
     expect(r.constraints.maxRent!).toBeLessThan(70);
   });
 
-  it("notes that room count is unsupported", async () => {
+  it("turns a room count into a best-effort constraint, not a size or type", async () => {
     fetchMock.mockResolvedValueOnce(openAiReply({ searchInput: "Hongdae", propertyTypes: ["villa"] }));
     const r = await ask("2 bedroom villa near Hongdae");
     if (r.status !== "ok") throw new Error("expected ok");
-    expect(r.assumptions.join(" ")).toContain("Room count isn't supported yet");
+    expect(r.constraints.rooms).toBe(2);
+    expect(r.constraints.areaBucketIds).toBeUndefined();
+  });
+
+  it("skips the model when the deterministic parser already understood the message", async () => {
+    const r = await ask("망원동 투룸 월세 80만원 이하", undefined, false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    if (r.status !== "ok") throw new Error("expected ok");
+    expect(r.fallbackReason).toBeUndefined();
+    expect(r.constraints).toMatchObject({ maxRent: 80, salesTypes: ["wolse"], rooms: 2 });
+    expect(r.constraints.place?.kind).toBe("place");
+  });
+
+  it("still asks the model about an area the place table doesn't know", async () => {
+    fetchMock.mockResolvedValueOnce(openAiReply({ searchInput: "Yeonhui", maxRent: 50 }));
+    const r = await ask("연희동 원룸 월세 50 이하", undefined, false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(r.status).toBe("ok");
+  });
+
+  describe("refine merges into the previous constraints", () => {
+    const previous: AskConstraints = {
+      place: { name: "망원동", lat: 37.556, lng: 126.91, radiusM: 800, kind: "place" },
+      salesTypes: ["wolse"],
+      maxRent: 80,
+      rooms: 2,
+    };
+    it("keeps rent cap, deal type, room count and place for 'only newer buildings' even if the model repeats the area", async () => {
+      fetchMock.mockResolvedValueOnce(openAiReply({ searchInput: "Mangwon", preferences: ["newer building"] }));
+      const r = await ask("only newer buildings", previous);
+      if (r.status !== "ok") throw new Error("expected ok");
+      expect(r.constraints).toMatchObject({ maxRent: 80, salesTypes: ["wolse"], rooms: 2 });
+      expect(r.constraints.place).toMatchObject({ name: "망원동", radiusM: 800 });
+      expect(r.constraints.preferences).toEqual(["newer building"]);
+    });
+    it("works without the model for the same follow-up", async () => {
+      const r = await ask("only newer buildings", previous, false);
+      expect(fetchMock).not.toHaveBeenCalled();
+      if (r.status !== "ok") throw new Error("expected ok");
+      expect(r.constraints).toMatchObject({ maxRent: 80, salesTypes: ["wolse"], rooms: 2 });
+      expect(r.constraints.preferences).toEqual(["newer building"]);
+    });
+    it("overrides only what the follow-up changes", async () => {
+      const jeonse = await ask("actually jeonse", previous, false);
+      if (jeonse.status !== "ok") throw new Error("expected ok");
+      expect(jeonse.constraints.salesTypes).toEqual(["jeonse"]);
+      expect(jeonse.constraints.rooms).toBe(2);
+      expect(jeonse.constraints.place?.name).toBe("망원동");
+      const cheaper = await ask("cheaper", previous, false);
+      if (cheaper.status !== "ok") throw new Error("expected ok");
+      expect(cheaper.constraints.maxRent!).toBeLessThan(80);
+      expect(cheaper.constraints.rooms).toBe(2);
+      const elevator = await ask("only with elevator", previous, false);
+      if (elevator.status !== "ok") throw new Error("expected ok");
+      expect(elevator.constraints.preferences).toEqual(["elevator"]);
+      expect(elevator.constraints.maxRent).toBe(80);
+    });
+    it("only an explicit new search in another area resets everything", async () => {
+      const r = await ask("find a jeonse apartment near Gangnam under 300 million", previous, false);
+      if (r.status !== "ok") throw new Error("expected ok");
+      expect(r.constraints.rooms).toBeUndefined();
+      expect(r.constraints.maxRent).toBeUndefined();
+      expect(r.constraints.maxDeposit).toBe(30000);
+      expect(r.constraints.place?.lat).toBeCloseTo(37.4979, 2);
+    });
   });
 
   it("reports rate limiting after one retry and falls back to the local parser", async () => {

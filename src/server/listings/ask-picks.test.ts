@@ -55,8 +55,6 @@ describe("computeAskPicks", () => {
     const list = homes(40);
     fetchMock.mockResolvedValueOnce(
       openAiReply({
-        summary: "Affordable studios around Hongdae.",
-        assumptions: ["Noise level isn't listed."],
         picks: [
           { id: "does-not-exist", reason: "ghost" },
           ...list.slice(0, 6).map((l) => ({ id: l.id, reason: `Because ${l.sourceId}` })),
@@ -73,12 +71,12 @@ describe("computeAskPicks", () => {
     expect(new Set(out.picks.map((p) => p.listing.id)).size).toBe(10);
     expect(out.picks.slice(0, 6).every((p) => p.reasonSource === "ai" && p.reason.startsWith("Because"))).toBe(true);
     expect(out.picks.slice(6).every((p) => p.reasonSource === "basic" && p.reason.length > 0)).toBe(true);
-    expect(out.summary).toBe("Affordable studios around Hongdae.");
-    expect(out.assumptions).toContain("Noise level isn't listed.");
-    // the AI only ever sees compact summaries of at most 50 candidates, never listing descriptions
+    // the summary is generated from the final constraints and picks, never taken from the model
+    expect(out.summary).toMatch(/^Top 10 studios near Hongdae, from 40 matches: rent ₩/);
+    // the AI only ever sees compact summaries of at most 30 candidates, never listing descriptions
     const sent = JSON.parse((fetchMock.mock.calls[0] as [string, { body: string }])[1].body) as { messages: Array<{ content: string }> };
     const payload = JSON.parse(sent.messages[1]!.content) as { candidates: unknown[] };
-    expect(payload.candidates.length).toBeLessThanOrEqual(50);
+    expect(payload.candidates.length).toBeLessThanOrEqual(30);
   });
 
   it("hard-filters before ranking: nothing outside the constraints reaches the AI or the user", async () => {
@@ -180,7 +178,7 @@ describe("runAskPicks caching", () => {
     vi.restoreAllMocks();
   });
 
-  it("serves identical requests from memory for 60s and dedupes concurrent ones", async () => {
+  it("serves identical requests from memory for 5 min and dedupes concurrent ones", async () => {
     const list = homes(30);
     const fetchMock = vi.fn(async () =>
       openAiReply({ picks: list.slice(0, 10).map((l) => ({ id: l.id, reason: "ok" })) }),
@@ -198,7 +196,7 @@ describe("runAskPicks caching", () => {
     const c = await runAskPicks({ messages, constraints }, deps);
     expect(c).toBe(a);
     expect(fetchCandidates).toHaveBeenCalledTimes(1);
-    t += 40_000;
+    t += 5 * 60_000;
     await runAskPicks({ messages, constraints }, deps);
     expect(fetchCandidates).toHaveBeenCalledTimes(2);
   });

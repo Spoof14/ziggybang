@@ -770,6 +770,11 @@ export default function MapApp() {
     setFloorFilter(undefined);
     setAgeFilter(undefined);
     setMaxBuildingAge(undefined);
+    // The search text drives the place circle, so clearing filters clears it and its radius too.
+    setSearchInput("");
+    setDebouncedQuery("");
+    setRadiusM(DEFAULT_RADIUS_M);
+    setManualCircle(null);
   };
 
   useEffect(() => {
@@ -1741,6 +1746,7 @@ export default function MapApp() {
         onClose={() => setAskOpen(false)}
         onToggleSave={onToggleSave}
         onApplyFilters={applySearchSnapshot}
+        onClearFilters={clearChipFilters}
         onShowPicks={showAskPicks}
       />
     </div>

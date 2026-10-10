@@ -1,12 +1,9 @@
 import {
   OFF_TOPIC_REPLY,
-  ROOM_COUNT_NOTE,
   composeAskIntent,
   emptyAskSnapshot,
   hasSearchIntent,
   interpretSearch,
-  isFreshAsk,
-  mentionsRoomCount,
   mergeSearchIntent,
   type SearchIntent,
   type SearchSnapshot,
@@ -30,6 +27,8 @@ import { normalizeBuildingAgeFilter } from "~/lib/listings/building-age";
 import { matchPlace, normalizeSearch } from "~/lib/listings/search";
 import { propertyTypes, salesTypes } from "~/lib/listings/types";
 import { type Place } from "~/lib/geo/places";
+import { distanceM } from "~/lib/geo/shape";
+import { detectRoomCount } from "~/lib/listings/ask-quality";
 import { geocodeKorea } from "./geocode";
 import { withTimeout } from "./http";
 import { callOpenAiJson, classifyOpenAiFailure, isOpenAiConfigured } from "./openai";
@@ -111,8 +110,8 @@ Return JSON with:
 - floorFilter: no-basement, min-2, or min-5 — only if they mentioned floors/basement
 - ageFilter: week or month — ONLY for "listed this week / this month / new listings / recently posted". "newest buildings", "new construction", "under 5 years old" are building age, NOT ageFilter.
 - maxBuildingAge: integer 5–39 from "less than 15 years old", "newer than 10 yrs", "under 10 years".
-There is no bedroom/room-count filter: ignore "2 bedroom", "투룸".
-Follow-up (cheaper, no basement, bigger, only with elevator): include only the changed fields. Use null only when they ask to clear a filter.`;
+Room counts are handled elsewhere; ignore "2 bedroom", "투룸" (do not turn them into a size or type).
+Follow-up (cheaper, no basement, bigger, only with elevator, newer): "Current constraints" are already applied and are kept automatically. Return ONLY what the new message changes or adds; do not repeat searchInput unless they name a different area. Use null only when they ask to clear a filter.`;
 
 type InterpretAi =
   | { ok: true; intent: SearchIntent; offTopic: boolean; preferences: string[] }
@@ -188,7 +187,7 @@ async function defaultResolvePlace(text: string): Promise<Place | null> {
   }
 }
 
-export type InterpretDeps = { resolvePlace?: PlaceResolver };
+export type InterpretDeps = { resolvePlace?: PlaceResolver; forceAi?: boolean };
 
 /** Resolve the area text into coordinates; falls back to the map view / central Seoul. */
 export async function resolveAskPlace(
@@ -254,40 +253,74 @@ function hasConstraintIntent(intent: SearchIntent): boolean {
   return hasSearchIntent(rest) || CONSTRAINT_FIELDS.some((key) => rest[key] !== undefined);
 }
 
+const NEW_SEARCH_WORDS = /\b(find|search|show me|looking for|i want|new search|instead|different area)\b|찾아|다시 검색/i;
+const UNRESOLVED_PLACE_HINT =
+  /[가-힣]{2,}(?:동|구|역|읍|면|로|길)(?![가-힣])|\b(?:near|in|around|close to|next to|by)\s+[A-Za-z가-힣]/i;
+
+/**
+ * The deterministic parser already understood the message well enough that the
+ * extra LLM round trip (~2 s) buys nothing: a catalog place or a follow-up that
+ * only changes known fields. Unknown place names still go to the model.
+ */
+export function localInterpretIsEnough(
+  text: string,
+  intent: SearchIntent,
+  prefs: string[],
+  rooms: number | undefined,
+  hasPrevious: boolean,
+): boolean {
+  const changed = hasConstraintIntent(intent) || prefs.length > 0 || rooms !== undefined;
+  if (!changed) return false;
+  if (intent.searchInput) return Boolean(matchPlace(intent.searchInput));
+  if (hasPrevious) return true;
+  // New search without a recognised place: only fine if the text names none.
+  return !UNRESOLVED_PLACE_HINT.test(text);
+}
+
 /**
  * Natural language (plus the previous constraints, for follow-ups) → grounded,
  * structured constraints with the place resolved to coordinates.
+ * A follow-up (`previous` set) MERGES into the previous constraints: it only
+ * adds or overrides what the message changes. Only an explicit new search
+ * naming a different area starts from scratch.
  */
 export async function interpretAsk(
-  input: {
-    messages: Message[];
-    previous?: AskConstraints;
-    viewport?: { lat: number; lng: number };
-    signal?: AbortSignal;
-  },
+  input: { messages: Message[]; previous?: AskConstraints; viewport?: { lat: number; lng: number }; signal?: AbortSignal },
   deps: InterpretDeps = {},
 ): Promise<AskInterpretResult> {
   const { messages, previous, viewport } = input;
   const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const current = constraintsToSnapshot(previous ?? {});
   const local = interpretSearch(lastUser, current);
+  const localPrefs = detectPreferences(lastUser);
+  const rooms = detectRoomCount(lastUser);
   const configured = isOpenAiConfigured();
-  const ai = configured ? await interpretWithOpenAi(messages, current, input.signal) : null;
+  const enough = localInterpretIsEnough(lastUser, local.intent, localPrefs, rooms, Boolean(previous));
+  const useAi = configured && (deps.forceAi === true || !enough);
+  // Resolve the place the parser found while the model is thinking; reused when they agree.
+  const resolver = deps.resolvePlace;
+  const localPlaceGuess = local.intent.searchInput?.trim();
+  const speculativePlace =
+    useAi && localPlaceGuess
+      ? resolveAskPlace(localPlaceGuess, undefined, previous?.place, viewport, [], resolver)
+      : null;
+  const ai = useAi ? await interpretWithOpenAi(messages, current, input.signal) : null;
   const fallbackReason: AskFallbackReason | undefined = !configured
     ? "unconfigured"
-    : ai && !ai.ok
-      ? ai.reason
-      : ai
-        ? undefined
-        : "error";
+    : !useAi
+      ? undefined
+      : ai && !ai.ok
+        ? ai.reason
+        : ai
+          ? undefined
+          : "error";
   const aiOk = ai?.ok ? ai : undefined;
-  const roomCount = mentionsRoomCount(lastUser);
 
   const intent: SearchIntent = aiOk
     ? composeAskIntent(
         aiOk.offTopic ? {} : aiOk.intent,
         local.intent,
-        isFreshAsk(lastUser, { ...aiOk.intent, searchInput: aiOk.intent.searchInput ?? local.intent.searchInput }),
+        false,
         lastUser,
       )
     : local.intent;
@@ -295,11 +328,9 @@ export async function interpretAsk(
   for (const key of ["minDeposit", "maxDeposit", "minRent", "maxRent"] as const) {
     if (intent[key] === undefined && local.intent[key] !== undefined) intent[key] = local.intent[key];
   }
-  const fresh = isFreshAsk(lastUser, intent);
-  const localPrefs = detectPreferences(lastUser);
   const preferences = groundPreferences(aiOk && !aiOk.offTopic ? aiOk.preferences : [], lastUser, localPrefs);
 
-  const stated = hasConstraintIntent(intent) || preferences.length > 0;
+  const stated = hasConstraintIntent(intent) || preferences.length > 0 || rooms !== undefined;
   if (!stated) {
     // A follow-up the model judged on-topic ("make it brighter") just informs ranking.
     if (previous && aiOk && !aiOk.offTopic) {
@@ -310,36 +341,53 @@ export async function interpretAsk(
         provider: "openai",
       };
     }
-    return {
-      status: "off_topic",
-      reply: roomCount ? `${ROOM_COUNT_NOTE} ${OFF_TOPIC_REPLY}` : OFF_TOPIC_REPLY,
-    };
+    return { status: "off_topic", reply: OFF_TOPIC_REPLY };
   }
 
+  // Follow-ups merge; a brand-new search (no previous, or an explicit "find …" in another area) resets.
+  const prevName = previous?.place?.kind === "place" ? previous.place.name : undefined;
+  const namesOtherArea =
+    Boolean(intent.searchInput) && (!prevName || normalizeSearch(intent.searchInput!) !== normalizeSearch(prevName));
+  const fresh = !previous || (namesOtherArea && NEW_SEARCH_WORDS.test(lastUser));
   const base = fresh ? emptyAskSnapshot({ radiusM: current.radiusM }) : current;
   const snapshot = mergeSearchIntent(base, { ...intent, viewMode: undefined, listingQuery: undefined });
   const assumptions: string[] = [];
   // A catalog station's default walk radius is not something the user said.
   const statedRadius =
     typeof intent.radiusM === "number" && EXPLICIT_DISTANCE.test(lastUser) ? snapshot.radiusM : undefined;
-  const place = await resolveAskPlace(
-    snapshot.searchInput,
-    statedRadius,
-    fresh && !snapshot.searchInput ? undefined : previous?.place,
-    viewport,
-    assumptions,
-    deps.resolvePlace,
-  );
+  const keepPrevPlace = fresh && !snapshot.searchInput ? undefined : previous?.place;
+  let place: AskPlace;
+  if (
+    speculativePlace &&
+    localPlaceGuess &&
+    normalizeSearch(localPlaceGuess) === normalizeSearch(snapshot.searchInput) &&
+    statedRadius === undefined
+  ) {
+    place = await speculativePlace;
+  } else {
+    place = await resolveAskPlace(snapshot.searchInput, statedRadius, keepPrevPlace, viewport, assumptions, resolver);
+  }
+  // Same spot as before under another spelling ("망원동" vs "Mangwon"): keep the earlier place and radius.
+  if (
+    previous?.place?.kind === "place" &&
+    place.kind === "place" &&
+    place.name !== previous.place.name &&
+    distanceM(place, previous.place) < 400
+  ) {
+    place = { ...previous.place, radiusM: statedRadius ?? previous.place.radiusM };
+  }
   const carried = fresh ? [] : (previous?.preferences ?? []);
   // A stated cap or size bucket already says it; don't also show "newer building" / "spacious".
   const redundant = new Set<string>();
   if (snapshot.maxBuildingAge) redundant.add(PREFERENCE_LABEL.newer!);
   if (snapshot.areaBucketIds.length) redundant.add(PREFERENCE_LABEL.spacious!);
   const merged = [...new Set([...carried, ...preferences])].filter((p) => !redundant.has(p)).slice(0, 5);
-  if (roomCount) assumptions.push(ROOM_COUNT_NOTE);
+  const constraints = snapshotToConstraints(snapshot, place, merged);
+  const nextRooms = rooms ?? (fresh ? undefined : previous?.rooms);
+  if (nextRooms) constraints.rooms = nextRooms;
   return {
     status: "ok",
-    constraints: snapshotToConstraints(snapshot, place, merged),
+    constraints,
     assumptions,
     provider: aiOk ? "openai" : "local",
     ...(fallbackReason ? { fallbackReason } : {}),

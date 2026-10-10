@@ -38,6 +38,7 @@ export async function callOpenAiJson(input: {
   messages: Array<{ role: "user" | "assistant"; content: string }>;
   timeoutMs: number;
   signal?: AbortSignal;
+  maxTokens?: number;
 }): Promise<OpenAiJson | null> {
   const key = env.OPENAI_API_KEY;
   if (!key) return null;
@@ -47,6 +48,7 @@ export async function callOpenAiJson(input: {
   const body = JSON.stringify({
     model: "gpt-4o-mini",
     temperature: 0.2,
+    ...(input.maxTokens ? { max_tokens: input.maxTokens } : {}),
     response_format: { type: "json_object" },
     messages: [{ role: "system", content: input.system }, ...input.messages],
   });
