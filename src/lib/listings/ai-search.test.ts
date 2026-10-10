@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeAskIntent, interpretSearch, mergeSearchIntent, type SearchSnapshot } from "./ai-search";
+import { composeAskIntent, groundIntent, interpretSearch, mergeSearchIntent, type SearchSnapshot } from "./ai-search";
 
 const current: SearchSnapshot = {
   searchInput: "",
@@ -21,7 +21,7 @@ describe("conversational listing search", () => {
     expect(result.snapshot.salesTypes).toEqual(["wolse"]);
     expect(result.snapshot.maxRent).toBe(80);
     expect(result.snapshot.maxDeposit).toBe(2000);
-    expect(result.snapshot.viewMode).toBe("list");
+    expect(result.snapshot.viewMode).toBe("map");
     expect(result.reply.toLowerCase()).toContain("hongdae");
   });
 
@@ -149,5 +149,120 @@ describe("conversational listing search", () => {
     expect(merged.maxDeposit).toBe(2000);
     expect(merged.maxRent).toBe(60);
     expect(merged.propertyTypes).toEqual(["oneroom"]);
+  });
+});
+
+describe("Ask only applies what the user stated", () => {
+  const base: SearchSnapshot = { ...current, viewMode: "map" };
+
+  it("does not add listing-date or view changes for 'newest buildings'", () => {
+    const result = interpretSearch("newest buildings under 5 years old near Seoul Station", base);
+    expect(result.snapshot.ageFilter).toBeUndefined();
+    expect(result.snapshot.maxBuildingAge).toBe(5);
+    expect(result.snapshot.viewMode).toBe("map");
+    expect(result.snapshot.searchInput.toLowerCase()).toBe("seoul station");
+  });
+
+  it("does not read 'under 200 million' as a size", () => {
+    const result = interpretSearch("jeonse villa in Mapo under 200 million", base);
+    expect(result.snapshot.areaBucketIds).toEqual([]);
+    expect(result.snapshot.maxDeposit).toBe(20_000);
+    expect(result.snapshot.salesTypes).toEqual(["jeonse"]);
+    expect(result.snapshot.listingQuery).toBeUndefined();
+  });
+
+  it("still switches view when asked to", () => {
+    expect(interpretSearch("studios near hongdae on the map", { ...base, viewMode: "list" }).snapshot.viewMode).toBe("map");
+    expect(interpretSearch("studios near hongdae as a list", base).snapshot.viewMode).toBe("list");
+  });
+
+  it("keeps the user's rent/jeonse choice on a fresh search", () => {
+    const result = interpretSearch("villa near Dangsan", { ...base, salesTypes: ["wolse"] });
+    expect(result.snapshot.salesTypes).toEqual(["wolse"]);
+  });
+
+  it("groundIntent drops unstated fields from a model answer", () => {
+    const grounded = groundIntent(
+      { ageFilter: "month", areaBucketIds: ["xs"], viewMode: "list", hasPhotos: true, maxRent: 1 },
+      "rent max 600k in Hongdae",
+    );
+    expect(grounded).toEqual({ maxRent: 60 });
+  });
+});
+
+describe("Ask number parsing", () => {
+  const rent = (text: string) => interpretSearch(text, current).snapshot;
+
+  it.each([
+    ["rent max 600k", 60],
+    ["monthly under 800k near hongdae", 80],
+    ["월세 50만원 이하 홍대", 50],
+    ["monthly under 1 million Gangnam", 100],
+    ["rent under 0.7 million near hongdae", 70],
+    ["rent 70만원 이하 near dangsan", 70],
+    ["monthly ₩600,000 max near hongdae", 60],
+  ])("%s → monthly %i만원", (text, expected) => {
+    expect(rent(text).maxRent).toBe(expected);
+  });
+
+  it.each([
+    ["deposit 5천만원 near hongdae", 5000],
+    ["보증금 5백만원 이하 홍대", 500],
+    ["deposit max 1억 near hongdae", 10_000],
+    ["jeonse under 200 million near mapo", 20_000],
+    ["deposit under 20 million near hongdae", 2000],
+  ])("%s → deposit %i만원", (text, expected) => {
+    expect(rent(text).maxDeposit).toBe(expected);
+  });
+
+  it("does not treat distances or ages as money", () => {
+    const result = rent("studio within 800m of hongdae, newer than 10 yrs");
+    expect(result.maxRent).toBeUndefined();
+    expect(result.maxDeposit).toBeUndefined();
+    expect(result.radiusM).toBe(800);
+    expect(result.maxBuildingAge).toBe(10);
+  });
+
+  it("keeps price and age words out of the search box", () => {
+    const result = rent("rent max 600k studio near Hongdae no basement newer than 10 yrs");
+    expect(result.searchInput).toBe("hongdae");
+    expect(result.listingQuery).toBeUndefined();
+    expect(result.floorFilter).toBe("no-basement");
+    expect(result.maxBuildingAge).toBe(10);
+    expect(result.maxRent).toBe(60);
+  });
+});
+
+describe("Ask room count and off-topic messages", () => {
+  it("says room count isn't supported and keeps the rest", () => {
+    const result = interpretSearch("2 bedroom villa near Hongdae", current);
+    expect(result.reply).toContain("Room count isn't supported yet");
+    expect(result.snapshot.propertyTypes).toEqual(["villa"]);
+    expect(result.snapshot.searchInput.toLowerCase()).toBe("hongdae");
+    const korean = interpretSearch("투룸 마포", current);
+    expect(korean.reply).toContain("Room count isn't supported yet");
+    expect(korean.snapshot.searchInput.toLowerCase()).toBe("mapo");
+  });
+
+  it.each(["what is the weather", "something nice", "hello", "tell me a joke"])(
+    "%s leaves filters and view untouched",
+    (text) => {
+      const busy: SearchSnapshot = {
+        ...current,
+        searchInput: "dangsan",
+        salesTypes: ["jeonse"],
+        maxDeposit: 5000,
+        viewMode: "map",
+      };
+      const result = interpretSearch(text, busy);
+      expect(result.noIntent).toBe(true);
+      expect(result.snapshot).toEqual(busy);
+      expect(result.reply).toMatch(/I can only help with finding rentals/);
+    },
+  );
+
+  it("still treats follow-ups as intent", () => {
+    const first = interpretSearch("studio near hongdae, rent under 80", current);
+    expect(interpretSearch("a bit cheaper", first.snapshot).noIntent).toBeUndefined();
   });
 });

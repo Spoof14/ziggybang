@@ -206,3 +206,51 @@ describe("manual radius and type aliases", () => {
     expect(parseAppUrl("?type=bogus").propertyTypes).toBeUndefined();
   });
 });
+
+describe("URL reflects the current view and radius", () => {
+  const view = { lat: 37.498, lng: 127.0276, zoom: 15 };
+  const common = {
+    searchInput: "gangnam",
+    viewMode: "map" as const,
+    sources: ["zigbang"] as ("zigbang" | "naver" | "peterpan")[],
+    propertyTypes: ["oneroom", "villa", "officetel", "apartment"] as (
+      | "oneroom"
+      | "villa"
+      | "officetel"
+      | "apartment"
+    )[],
+    salesTypes: ["jeonse", "wolse", "sale"] as ("jeonse" | "wolse" | "sale")[],
+    areaBucketIds: [],
+    listSort: "featured" as const,
+  };
+
+  it("writes the exact lat/lng/zoom it is given, including fractional zoom", () => {
+    const search = buildAppSearch({ ...common, radiusM: 1200, view: { ...view, zoom: 15.37 } });
+    expect(search).toContain("lat=37.4980");
+    expect(search).toContain("lng=127.0276");
+    expect(search).toContain("z=15.37");
+    const parsed = parseAppUrl(search);
+    expect(parsed.view).toEqual({ lat: 37.498, lng: 127.0276, zoom: 15.37 });
+  });
+
+  it("drops r, rlat and rlng once the radius is no longer active", () => {
+    const withRadius = buildAppSearch({ ...common, radiusM: 800, view });
+    expect(withRadius).toContain("r=800");
+    const cleared = buildAppSearch({ ...common, radiusM: 800, radiusActive: false, view });
+    expect(cleared).not.toContain("r=800");
+    expect(cleared).not.toContain("rlat");
+    expect(cleared).not.toContain("rlng");
+  });
+
+  it("keeps a manual circle even if radiusActive is false", () => {
+    const search = buildAppSearch({
+      ...common,
+      radiusM: 500,
+      radiusActive: false,
+      circleCenter: { lat: 37.5, lng: 127 },
+      view,
+    });
+    expect(search).toContain("r=500");
+    expect(search).toContain("rlat=37.50000");
+  });
+});

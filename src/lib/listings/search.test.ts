@@ -3,6 +3,7 @@ import { listingMatchesArea } from "./area";
 import {
   circleForPlaceSearch,
   listingMatchesQuery,
+  looksLikeStreetAddress,
   looksLikePlaceQuery,
   matchPlace,
   matchPlaceInAddress,
@@ -158,5 +159,36 @@ describe("area buckets", () => {
     const areaM2 = 8 * 3.3058;
     expect(listingMatchesArea(areaM2, ["s"], true)).toBe(true);
     expect(listingMatchesArea(areaM2, ["l"], true)).toBe(false);
+  });
+});
+
+describe("typo-tolerant place search", () => {
+  it.each([
+    ["Hongdea", "hongdae"],
+    ["gangnm", "gangnam"],
+    ["Dangsn station", "dangsan"],
+    ["hapjeung", "hapjeong"],
+  ])("%s finds %s", (typo, id) => {
+    expect(matchPlace(typo)?.id).toBe(id);
+  });
+
+  it.each(["studio", "monthly", "balcony", "basement", "newest buildings", "bedroom", "weather"])(
+    "does not invent a place for %s",
+    (text) => {
+      expect(matchPlace(text)).toBeUndefined();
+    },
+  );
+
+  it("finds Seoul Station inside a sentence", () => {
+    expect(matchPlace("newest buildings under 5 years old near Seoul Station")?.id).toBe(
+      "seoul-station",
+    );
+  });
+
+  it("recognizes street addresses", () => {
+    expect(looksLikeStreetAddress("서울 마포구 양화로 160")).toBe(true);
+    expect(looksLikeStreetAddress("160 Yanghwa-ro, Mapo-gu")).toBe(true);
+    expect(looksLikeStreetAddress("홍대")).toBe(false);
+    expect(looksLikeStreetAddress("studio near Hongdae")).toBe(false);
   });
 });

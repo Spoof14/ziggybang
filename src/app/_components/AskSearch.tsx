@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  ASK_FALLBACK_NOTICE,
   ASK_SUGGESTIONS,
   interpretSearch,
+  type AskFallbackReason,
   type SearchSnapshot,
 } from "~/lib/listings/ai-search";
 import { api } from "~/trpc/react";
@@ -37,7 +39,10 @@ export function AskSearch({
     staleTime: 60_000,
     enabled: open,
   });
-  const ask = api.listings.ask.useMutation();
+  const utils = api.useUtils();
+  const [fallback, setFallback] = useState<AskFallbackReason | null>(null);
+  /** Controller of the request in flight; also the synchronous submit lock. */
+  const inFlight = useRef<AbortController | null>(null);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
@@ -56,41 +61,73 @@ export function AskSearch({
     return () => clearInterval(timer);
   }, [pending]);
 
+  // Closing the dialog (button, backdrop, Escape in MapApp) cancels the request.
+  useEffect(() => {
+    if (open) return;
+    inFlight.current?.abort();
+  }, [open]);
+  useEffect(() => () => inFlight.current?.abort(), []);
+
   if (!open) return null;
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || pending) return;
+    if (!trimmed) return;
+    // One request at a time: a double click / Enter-then-click, or the same
+    // query again while it is still running, is ignored.
+    if (inFlight.current) return;
+    const controller = new AbortController();
+    inFlight.current = controller;
     setDraft("");
     const history: ChatMessage[] = [...messages, { role: "user", content: trimmed }];
     setMessages(history);
     setPending(true);
+    setFallback(null);
+    const finish = (
+      result: { snapshot: SearchSnapshot; reply: string; noIntent?: boolean },
+      used: "local" | "openai",
+      reason: AskFallbackReason | null,
+    ) => {
+      if (controller.signal.aborted) return;
+      // Off-topic / no-intent answers leave the map's filters untouched.
+      if (!result.noIntent) onApply(result.snapshot);
+      setProvider(used);
+      setFallback(reason);
+      setMessages([...history, { role: "assistant", content: result.reply }]);
+    };
     try {
       if (aiStatus.data?.openai) {
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        const timeout = new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error("timeout")), AI_TIMEOUT_MS);
-        });
-        const result = await Promise.race([
-          ask.mutateAsync({ messages: history, current }),
-          timeout,
-        ]).finally(() => clearTimeout(timer));
-        onApply(result.snapshot);
-        setProvider(result.provider);
-        setMessages([...history, { role: "assistant", content: result.reply }]);
+        const timer = setTimeout(() => controller.abort("timeout"), AI_TIMEOUT_MS);
+        try {
+          const result = await utils.client.listings.ask.mutate(
+            { messages: history, current },
+            { signal: controller.signal },
+          );
+          finish(result, result.provider, result.fallbackReason ?? null);
+        } finally {
+          clearTimeout(timer);
+        }
         return;
       }
-      const result = interpretSearch(trimmed, current);
-      onApply(result.snapshot);
-      setProvider("local");
-      setMessages([...history, { role: "assistant", content: result.reply }]);
+      finish(interpretSearch(trimmed, current), "local", null);
     } catch {
+      if (controller.signal.aborted && controller.signal.reason !== "timeout") {
+        // Cancelled by the user: apply nothing.
+        return;
+      }
+      const timedOut = controller.signal.reason === "timeout";
+      // Fall back to on-site search; the signal may be aborted by our own
+      // timeout, so apply without the aborted guard.
       const result = interpretSearch(trimmed, current);
-      onApply(result.snapshot);
+      if (!result.noIntent) onApply(result.snapshot);
       setProvider("local");
+      setFallback(timedOut ? "timeout" : "error");
       setMessages([...history, { role: "assistant", content: result.reply }]);
     } finally {
-      setPending(false);
+      if (inFlight.current === controller) {
+        inFlight.current = null;
+        setPending(false);
+      }
     }
   }
 
@@ -133,7 +170,8 @@ export function AskSearch({
                   key={suggestion}
                   type="button"
                   onClick={() => void send(suggestion)}
-                  className="block w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-slate-200 hover:bg-white/10"
+                  disabled={pending}
+                  className="block w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-slate-200 hover:bg-white/10 disabled:opacity-50"
                 >
                   {suggestion}
                 </button>
@@ -175,8 +213,15 @@ export function AskSearch({
               </span>
             </div>
           ) : messages.length ? (
-            <p className="text-[10px] text-slate-500">
-              {provider === "openai" ? "Answered with OpenAI" : "Answered with on-site search"}
+            <p
+              className={`text-[10px] ${fallback ? "text-amber-300" : "text-slate-500"}`}
+              role={fallback ? "status" : undefined}
+            >
+              {fallback
+                ? ASK_FALLBACK_NOTICE[fallback]
+                : provider === "openai"
+                  ? "Answered with OpenAI"
+                  : "Answered with on-site search"}
             </p>
           ) : null}
         </div>

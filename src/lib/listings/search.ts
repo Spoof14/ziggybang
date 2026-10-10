@@ -205,13 +205,44 @@ export function stripStationWords(query: string): string {
     .trim();
 }
 
+/** "양화로 160", "서울 마포구 양화로 160", "160 Yanghwa-ro": a street address, not a neighborhood. */
+export function looksLikeStreetAddress(query: string): boolean {
+  return (
+    /[가-힣]+(?:대로|로|길)\s*\d+(?:-\d+)?/.test(query) ||
+    /[가-힣]+\d*번?길\s*\d+/.test(query) ||
+    /\b\d+[\s,]+[a-z]+(?:-[a-z]+)*-(?:ro|gil|daero)\b/i.test(query) ||
+    /\b[a-z]+(?:-[a-z]+)*-(?:ro|gil|daero)\s+\d+/i.test(query)
+  );
+}
+
+export const DISTRICT_ONLY_HINT =
+  "Address search resolved only to the district; try a station or neighborhood name.";
+
 export function isStationQuery(query: string): boolean {
   return /station|subway|yeok|역/i.test(query);
 }
 
+/**
+ * Typo tolerance for place names: short words may be off by one letter,
+ * words of 6+ letters (Hongdea, Gangnm) by two. Both sides are compared
+ * after lowercasing, so Hangul never fuzzes against Latin.
+ */
+function fuzzyLimit(token: string): number {
+  return token.length >= 6 ? 2 : 1;
+}
+
 export function matchPlace(query: string): Place | undefined {
   const full = normalizeSearch(stripStationWords(query));
-  const tokens = full.split(" ").filter((token) => token.length >= 2);
+  const rawFull = ` ${normalizeSearch(query)} `;
+  const tokens = full
+    .split(" ")
+    .filter(
+      (token) =>
+        token.length >= 2 &&
+        !/\d/.test(token) &&
+        !PLACE_STOPWORDS.has(token) &&
+        !FILTER_TOKENS.has(token),
+    );
   if (!full) return undefined;
   let best: { place: Place; score: number } | undefined;
   for (const place of places) {
@@ -221,7 +252,10 @@ export function matchPlace(query: string): Place | undefined {
       const romanName = normalizeSearch(romanizeHangul(name));
       if (!normalizedName) continue;
       let score = 0;
-      if (full === normalizedName || full === romanName) {
+      if (normalizedName.length >= 3 && rawFull.includes(` ${normalizedName} `)) {
+        // The whole name appears as words ("seoul station" inside a sentence).
+        score = 5_000 + normalizedName.length * 10;
+      } else if (full === normalizedName || full === romanName) {
         score = 10_000 + normalizedName.length;
       } else if (
         normalizedName.length >= 3 &&
@@ -245,11 +279,14 @@ export function matchPlace(query: string): Place | undefined {
             (normalizedName.includes(token) || romanName.includes(romanToken))
           ) {
             score = Math.max(score, 400 + token.length + normalizedName.length);
-          } else if (token.length >= 4 && levenshtein(token, normalizedName) <= 1) {
+          } else if (
+            token.length >= 4 &&
+            levenshtein(token, normalizedName) <= fuzzyLimit(token)
+          ) {
             score = Math.max(score, 300);
           } else if (
             romanToken.length >= 4 &&
-            levenshtein(romanToken, romanName) <= 1
+            levenshtein(romanToken, romanName) <= fuzzyLimit(romanToken)
           ) {
             score = Math.max(score, 300);
           }
@@ -432,6 +469,46 @@ const PLACE_STOPWORDS = new Set(
     "are",
     "is",
     "be",
+    // Ask phrasing that is never a place name.
+    "newest",
+    "newer",
+    "building",
+    "buildings",
+    "yrs",
+    "yr",
+    "bedroom",
+    "bedrooms",
+    "bed",
+    "beds",
+    "투룸",
+    "쓰리룸",
+    "이하",
+    "이상",
+    "미만",
+    "이내",
+    "max",
+    "maximum",
+    "min",
+    "minimum",
+    "over",
+    "above",
+    "below",
+    "least",
+    "most",
+    "k",
+    "weather",
+    "what",
+    "whats",
+    "how",
+    "who",
+    "when",
+    "where",
+    "why",
+    "tell",
+    "joke",
+    "hello",
+    "hi",
+    "thanks",
   ].map(normalizeSearch),
 );
 
@@ -446,6 +523,17 @@ export function isListingFilterToken(token: string): boolean {
       variant !== "complex" &&
       variant !== "단지" &&
       FILTER_TOKENS.has(variant),
+  );
+}
+
+/** Words Ask may carry into the box to match listing titles. */
+export function isAskListingToken(token: string): boolean {
+  const normalized = normalizeSearch(token);
+  return (
+    normalized === "rooftop" ||
+    normalized === "옥탑" ||
+    normalized === "oktap" ||
+    isDescriptiveListingToken(token)
   );
 }
 
@@ -499,7 +587,7 @@ export function listingFilterQuery(query: string, place?: Place): string {
 function isPlaceQueryToken(token: string): boolean {
   const normalized = normalizeSearch(token);
   if (!normalized || PLACE_STOPWORDS.has(normalized)) return false;
-  if (!/\p{L}/u.test(normalized)) return false;
+  if (!/\p{L}/u.test(normalized) || /\d/.test(normalized)) return false;
   return !isListingFilterToken(normalized) && !isDescriptiveListingToken(normalized);
 }
 

@@ -26,7 +26,9 @@ import { describeActiveFilters, filterKeyOf, mapLayersForFilters } from "~/lib/l
 import { loadPrefs, savePrefs, type SavedPrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
 import { type PriceFilter } from "~/lib/listings/price";
 import {
+  DISTRICT_ONLY_HINT,
   circleForPlaceSearch,
+  looksLikeStreetAddress,
   isStationQuery,
   looksLikePlaceQuery,
   parseSearchQuery,
@@ -64,6 +66,7 @@ import { ListingMap } from "./ListingMap";
 import { ListingPanel } from "./ListingPanel";
 import { ListingPhoto } from "./ListingPhoto";
 import { AskSearch } from "./AskSearch";
+import { groupedHomesHint } from "~/lib/listings/order";
 import { ListingAgeDot } from "./ListingAgeDot";
 import { ListingPrice } from "./ListingPrice";
 import { BuildingAgeSlider } from "./BuildingAgeSlider";
@@ -343,6 +346,7 @@ export default function MapApp() {
       salesTypes,
       areaBucketIds,
       radiusM,
+      radiusActive: Boolean(circle),
       circleCenter: manualCircle && !polygon ? { lat: manualCircle.lat, lng: manualCircle.lng } : null,
       view: urlView,
       listSort,
@@ -362,6 +366,7 @@ export default function MapApp() {
     }
   }, [
     areaBucketIds,
+    circle,
     listSort,
     maxDeposit,
     maxRent,
@@ -383,18 +388,6 @@ export default function MapApp() {
     ageFilter,
     maxBuildingAge,
   ]);
-
-  useEffect(() => {
-    if (!prefsLoaded) return;
-    const timer = setTimeout(() => {
-      setUrlView({
-        lat: (bounds.south + bounds.north) / 2,
-        lng: (bounds.west + bounds.east) / 2,
-        zoom,
-      });
-    }, 1400);
-    return () => clearTimeout(timer);
-  }, [bounds, prefsLoaded, zoom]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -648,8 +641,30 @@ export default function MapApp() {
     waitingForFirst,
   ]);
 
-  const onViewport = useCallback((next: Bounds & { zoom: number }) => {
+  const onViewport = useCallback(
+    (
+      next: Bounds & {
+        zoom: number;
+        center?: { lat: number; lng: number };
+        initial?: boolean;
+      },
+    ) => {
     if (!isValidBounds(next)) return;
+    if (!next.initial) {
+      // The URL follows the map's real center/zoom the moment a move ends
+      // (user pan/zoom or a programmatic flyTo/fit), not a debounced echo of
+      // the previous bounds.
+      const view = {
+        lat: next.center?.lat ?? (next.south + next.north) / 2,
+        lng: next.center?.lng ?? (next.west + next.east) / 2,
+        zoom: Math.round(next.zoom * 100) / 100,
+      };
+      setUrlView((current) =>
+        current.lat === view.lat && current.lng === view.lng && current.zoom === view.zoom
+          ? current
+          : view,
+      );
+    }
     if (viewportTimer.current) clearTimeout(viewportTimer.current);
     viewportTimer.current = setTimeout(() => {
       const key = viewportKey(next);
@@ -663,7 +678,9 @@ export default function MapApp() {
       });
       setZoom(Math.round(next.zoom));
     }, 280);
-  }, []);
+  },
+  [],
+  );
 
   const onSelectFromMap = useCallback((listing: MapListing) => {
     setSelected(listing);
@@ -763,12 +780,9 @@ export default function MapApp() {
       salesTypes,
       areaBucketIds,
       radiusM,
+      radiusActive: Boolean(circle),
       circleCenter: manualCircle && !polygon ? { lat: manualCircle.lat, lng: manualCircle.lng } : null,
-      view: {
-        lat: (bounds.south + bounds.north) / 2,
-        lng: (bounds.west + bounds.east) / 2,
-        zoom,
-      },
+      view: urlView,
       listSort,
       minDeposit,
       maxDeposit,
@@ -790,7 +804,8 @@ export default function MapApp() {
     window.setTimeout(() => setShareHint(null), 1600);
   }, [
     areaBucketIds,
-    bounds,
+    circle,
+    urlView,
     floorFilter,
     ageFilter,
     maxBuildingAge,
@@ -807,7 +822,6 @@ export default function MapApp() {
     searchInput,
     sources,
     viewMode,
-    zoom,
     foreignerOk,
     hasPhotos,
   ]);
@@ -910,6 +924,10 @@ export default function MapApp() {
     ? visible.clusters.reduce((sum, cluster) => sum + cluster.count, 0)
     : visible.listings.length;
 
+  const groupedHomes = visible.clusters.reduce((sum, cluster) => sum + cluster.count, 0);
+  // Order the default list around what the user is looking at: the radius
+  // center when a place/circle is active, otherwise the map view center.
+  const listCenter = circle ? { lat: circle.lat, lng: circle.lng } : urlView;
   const showList = viewMode === "list" || viewMode === "saved" || viewMode === "best";
   const carouselListings = useMemo(() => {
     const items = visible.listings.slice(0, 24);
@@ -1026,7 +1044,16 @@ export default function MapApp() {
         .join(" · ");
 
   const placeLabel = place ? (place.names[1] ?? place.names[0]) : null;
-  const areaHint = place
+  const districtOnlyAddress =
+    Boolean(place?.districtOnly) ||
+    (looksLikeStreetAddress(debouncedQuery) &&
+      Boolean(geoToken) &&
+      geocodeQuery.isFetched &&
+      !geocodeQuery.data &&
+      Boolean(parsedSearch.place));
+  const areaHint = districtOnlyAddress
+    ? DISTRICT_ONLY_HINT
+    : place
     ? circle
       ? `${placeLabel} · ${formatRadius(circle.radiusM)}`
       : placeLabel
@@ -1515,6 +1542,8 @@ export default function MapApp() {
                     visible.stats.peterpan
               }
               sort={listSort}
+              center={listCenter}
+              groupedCount={viewMode === "saved" ? 0 : groupedHomes}
               savedIds={savedHomes.map((item) => item.id)}
               canLoadMore={
                 (viewMode === "list" || viewMode === "best") &&
@@ -1541,6 +1570,8 @@ export default function MapApp() {
                   ? "No saved homes yet. Tap the heart on a listing to keep it here."
                   : viewMode === "best" && zoom < 14 && !circle && !polygon
                     ? "Search Hongdae, Dangsan station, or zoom in so Best has homes to rank."
+                    : listListings.length === 0 && groupedHomesHint(groupedHomes)
+                      ? groupedHomesHint(groupedHomes)
                     : zoom < 15 && listListings.length === 0
                       ? "Zoom in to load individual homes. The map shows how many listings are in each area."
                     : hasPhotos

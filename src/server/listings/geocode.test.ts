@@ -120,3 +120,35 @@ describe("geocodeKorea catalog", () => {
     expect(place?.lat).toBeCloseTo(37.64, 1);
   });
 });
+
+describe("street address geocoding", () => {
+  const yanghwaMapo: NominatimHit = {
+    lat: "37.5574153",
+    lon: "126.9258487",
+    category: "highway",
+    type: "residential",
+    addresstype: "road",
+    name: "양화로",
+    display_name: "양화로, 신촌, 동교동, 서교동, 마포구, 서울특별시, 04051, 대한민국",
+    importance: 0.05,
+    place_rank: 26,
+  };
+  const yanghwaYeongdeungpo: NominatimHit = {
+    ...yanghwaMapo,
+    lat: "37.5260",
+    lon: "126.8990",
+    display_name: "양화로, 당산동, 영등포구, 서울특별시, 대한민국",
+    importance: 0.06,
+  };
+
+  it("ignores roads for neighborhood searches", () => {
+    expect(pickNominatimHit([yanghwaMapo], "양화")).toBeUndefined();
+  });
+
+  it("accepts a road for an address and prefers the district that was typed", () => {
+    const hit = pickNominatimHit([yanghwaYeongdeungpo, yanghwaMapo], "서울 마포구 양화로 160", {
+      allowRoads: true,
+    });
+    expect(hit).toBe(yanghwaMapo);
+  });
+});

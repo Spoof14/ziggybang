@@ -9,6 +9,7 @@ import {
 import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import { type ListSort } from "~/lib/listings/prefs";
+import { sortByDistanceTo } from "~/lib/listings/order";
 import { type RankedListing } from "~/lib/listings/recommend";
 import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
@@ -46,6 +47,8 @@ export function ListingList({
   truncated,
   totalCount,
   sort,
+  center,
+  groupedCount,
   savedIds,
   canLoadMore,
   loadingMore,
@@ -66,6 +69,10 @@ export function ListingList({
   truncated?: boolean;
   totalCount?: number;
   sort: ListSort;
+  /** Map center used to order "Featured" nearest-first. */
+  center?: { lat: number; lng: number };
+  /** Homes shown only as map clusters (not individually listable here). */
+  groupedCount?: number;
   savedIds: string[];
   canLoadMore?: boolean;
   loadingMore?: boolean;
@@ -82,10 +89,10 @@ export function ListingList({
 }) {
   const sorted = useMemo(() => {
     if (ranked?.length) return ranked.map((item) => item.listing);
+    if (sort === "featured") return sortByDistanceTo(listings, center);
     const items = listings.slice();
-    if (sort === "featured") return items;
     return items.sort((a, b) => sortValue(a, sort) - sortValue(b, sort));
-  }, [listings, ranked, sort]);
+  }, [listings, ranked, sort, center]);
   const reasonsById = useMemo(() => {
     const next = new Map<string, RankedListing>();
     for (const item of ranked ?? []) next.set(item.listing.id, item);
@@ -133,7 +140,9 @@ export function ListingList({
     ? "Loading homes…"
     : truncated && totalCount && totalCount > sorted.length
       ? `${sorted.length.toLocaleString("en-US")} of ${totalCount.toLocaleString("en-US")} homes`
-      : `${sorted.length.toLocaleString("en-US")} homes`;
+      : sorted.length === 0 && groupedCount
+        ? `0 homes listed · ${groupedCount.toLocaleString("en-US")} grouped on the map`
+        : `${sorted.length.toLocaleString("en-US")} homes`;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-950">
