@@ -81,3 +81,22 @@ export function padBoundsByMeters(bounds: Bounds, meters: number): Bounds {
     east: Math.min(180, bounds.east + lngPad),
   };
 }
+
+/**
+ * On desktop the filter panel covers the left part of a full-width map, so a
+ * searched place is parked this many pixels east of the map's own center to
+ * sit in the middle of the uncovered area. The URL stores the place point,
+ * not the raw map center, so lat/lng match what the user searched.
+ */
+export function panelOffsetPx(
+  mapWidthPx: number,
+  windowWidthPx: number,
+): number {
+  const panelCovers = windowWidthPx >= 768 && mapWidthPx >= windowWidthPx * 0.8;
+  return panelCovers ? mapWidthPx * 0.2 : 0;
+}
+
+/** Longitude moved by `px` screen pixels (east positive) at a zoom level (Web Mercator). */
+export function offsetLngByPx(lng: number, zoom: number, px: number): number {
+  return lng + (px * 360) / (256 * 2 ** zoom);
+}

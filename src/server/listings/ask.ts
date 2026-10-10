@@ -106,12 +106,19 @@ export function isOpenAiConfigured() {
  * We retry once after the server's Retry-After (capped at 2s), then fall back
  * to on-site search and tell the client why.
  */
-const OPENAI_TIMEOUT_MS = 12_000;
+const OPENAI_TIMEOUT_MS = 20_000;
 const MAX_RETRY_AFTER_MS = 2_000;
 
 type OpenAiResult =
   | { ok: true; intent: SearchIntent; offTopic: boolean }
   | { ok: false; reason: AskFallbackReason };
+
+/** 429 means either a per-minute limit (retry later) or an exhausted quota (it will not recover). */
+export function classifyOpenAiFailure(status: number, body: string): AskFallbackReason {
+  if (status === 429) return /insufficient_quota|exceeded your current quota|billing/i.test(body) ? "quota" : "rate_limited";
+  if (status === 401 || status === 403) return "auth";
+  return "error";
+}
 
 function retryDelayMs(response: Response): number {
   const header = Number(response.headers.get("retry-after"));
@@ -172,13 +179,13 @@ async function interpretWithOpenAi(
       await new Promise((resolve) => setTimeout(resolve, retryDelayMs(response!)));
     }
     if (!response) return { ok: false, reason: "error" };
-    if (response.status === 429) {
-      console.warn("[ask] OpenAI rate limited (429); using on-site search");
-      return { ok: false, reason: "rate_limited" };
-    }
     if (!response.ok) {
-      console.warn(`[ask] OpenAI returned ${response.status}; using on-site search`);
-      return { ok: false, reason: "error" };
+      const detail = await response.text().catch(() => "");
+      const reason = classifyOpenAiFailure(response.status, detail);
+      console.warn(
+        `[ask] OpenAI ${response.status} (${reason}): ${detail.slice(0, 300)}; using on-site search`,
+      );
+      return { ok: false, reason };
     }
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
@@ -192,6 +199,7 @@ async function interpretWithOpenAi(
       offTopic: parsed.offTopic === true,
     };
   } catch (error) {
+    console.warn(`[ask] OpenAI call failed: ${error instanceof Error ? error.name : "unknown"}`);
     const aborted = error instanceof Error && error.name === "AbortError";
     return { ok: false, reason: aborted ? "timeout" : "error" };
   } finally {

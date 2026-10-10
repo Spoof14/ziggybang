@@ -49,3 +49,19 @@ describe("bounds", () => {
     expect(padded.north).toBeGreaterThan(seoul.north);
   });
 });
+
+import { offsetLngByPx, panelOffsetPx } from "./bounds";
+
+describe("panel offset for the URL focal point", () => {
+  it("shifts only on wide screens with a full-width map", () => {
+    expect(panelOffsetPx(1400, 1400)).toBe(280);
+    expect(panelOffsetPx(390, 390)).toBe(0);
+    expect(panelOffsetPx(700, 1400)).toBe(0);
+  });
+  it("round-trips: shifting the map center west then reporting east restores the place", () => {
+    const lng = 126.9236;
+    const centered = offsetLngByPx(lng, 16, -280);
+    expect(centered).toBeLessThan(lng);
+    expect(offsetLngByPx(centered, 16, 280)).toBeCloseTo(lng, 9);
+  });
+});

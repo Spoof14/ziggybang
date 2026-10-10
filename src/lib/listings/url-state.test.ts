@@ -135,9 +135,9 @@ describe("shareable search URLs", () => {
 
 describe("prefsForInitialState", () => {
   const saved = { uiCompact: true, viewMode: "list", maxDeposit: 500 };
-  it("uses stored prefs when the URL has no app params", () => {
-    expect(prefsForInitialState("", saved)).toBe(saved);
-    expect(prefsForInitialState("?utm_source=x", saved)).toBe(saved);
+  it("a bare load starts from defaults: only the compact-UI choice survives", () => {
+    expect(prefsForInitialState("", saved)).toEqual({ uiCompact: true });
+    expect(prefsForInitialState("?utm_source=x", saved)).toEqual({ uiCompact: true });
   });
   it("lets the URL win: stored filters/view mode are dropped", () => {
     expect(prefsForInitialState("?lat=37.5&lng=127&z=13", saved)).toEqual({
