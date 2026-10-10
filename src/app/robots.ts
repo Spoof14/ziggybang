@@ -1,11 +1,12 @@
 import { type MetadataRoute } from "next";
 
-const SITE_URL = "https://ziggybang.vercel.app";
+import { siteUrl } from "~/lib/site-url";
 
 export default function robots(): MetadataRoute.Robots {
+  const site = siteUrl();
   return {
     rules: [{ userAgent: "*", allow: "/", disallow: ["/api/"] }],
-    sitemap: `${SITE_URL}/sitemap.xml`,
-    host: SITE_URL,
+    sitemap: `${site}/sitemap.xml`,
+    host: site,
   };
 }

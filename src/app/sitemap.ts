@@ -1,11 +1,13 @@
 import { type MetadataRoute } from "next";
 
-const SITE_URL = "https://ziggybang.vercel.app";
+import { siteUrl } from "~/lib/site-url";
 
+// Listing pages are dynamic and expire quickly, so they are deliberately not
+// enumerated; only the stable home entry is listed.
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: `${SITE_URL}/`,
+      url: `${siteUrl()}/`,
       changeFrequency: "daily",
       priority: 1,
     },
