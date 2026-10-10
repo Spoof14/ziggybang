@@ -80,7 +80,7 @@ const NAVER_HIDE_KEY = "ziggybang:hide-naver-error";
 const TYPE_CHIP_ON: Record<PropertyType, string> = {
   oneroom: "bg-orange-500 text-slate-950",
   villa: "bg-amber-300 text-slate-950",
-  officetel: "bg-violet-500 text-white",
+  officetel: "bg-violet-300 text-slate-950",
   apartment: "bg-sky-400 text-slate-950",
 };
 

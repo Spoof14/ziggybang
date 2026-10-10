@@ -96,6 +96,8 @@ body {
 
 .leaflet-control-attribution a {
   color: #e2e8f0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .listing-cluster {
@@ -169,4 +171,11 @@ body {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Price inputs: example values must read as hints, not entered text. */
+.price-input::placeholder {
+  color: #7c8ba1;
+  -webkit-text-fill-color: #7c8ba1;
+  font-style: italic;
 }
