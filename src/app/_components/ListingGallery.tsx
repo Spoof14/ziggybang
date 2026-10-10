@@ -213,6 +213,8 @@ export function ListingGallery({
               <img
                 src={src}
                 alt={`${alt} thumbnail ${photoIndex + 1}`}
+                loading="lazy"
+                decoding="async"
                 className="h-full w-full object-cover"
               />
             </button>
