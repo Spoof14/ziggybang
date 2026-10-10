@@ -148,3 +148,61 @@ describe("prefsForInitialState", () => {
     expect(prefsForInitialState("?view=list", null)).toBeNull();
   });
 });
+
+describe("manual radius and type aliases", () => {
+  const base = {
+    searchInput: "",
+    viewMode: "map" as const,
+    sources: ["zigbang", "naver", "peterpan"] as ("zigbang" | "naver" | "peterpan")[],
+    propertyTypes: ["oneroom", "villa", "officetel", "apartment"] as (
+      | "oneroom"
+      | "villa"
+      | "officetel"
+      | "apartment"
+    )[],
+    salesTypes: ["jeonse", "wolse", "sale"] as ("jeonse" | "wolse" | "sale")[],
+    areaBucketIds: [],
+    radiusM: 1200,
+    view: { lat: 37.565, lng: 126.98, zoom: 14 },
+    listSort: "featured" as const,
+  };
+
+  it("persists a manual radius center and radius, even at the default size", () => {
+    const search = buildAppSearch({
+      ...base,
+      circleCenter: { lat: 37.55612, lng: 126.92345 },
+    });
+    expect(search).toContain("r=1200");
+    expect(search).toContain("rlat=37.55612");
+    expect(search).toContain("rlng=126.92345");
+    const parsed = parseAppUrl(search);
+    expect(parsed.circleCenter).toEqual({ lat: 37.55612, lng: 126.92345 });
+    expect(parsed.radiusM).toBe(1200);
+  });
+
+  it("omits radius params when there is no manual circle", () => {
+    const search = buildAppSearch({ ...base, circleCenter: null });
+    expect(search).not.toContain("rlat");
+    expect(search).not.toContain("r=");
+  });
+
+  it("ignores a half-specified or invalid circle center", () => {
+    expect(parseAppUrl("?rlat=37.5").circleCenter).toBeUndefined();
+    expect(parseAppUrl("?rlat=abc&rlng=127").circleCenter).toBeUndefined();
+    expect(parseAppUrl("?rlat=200&rlng=127").circleCenter).toBeUndefined();
+  });
+
+  it("accepts property type aliases", () => {
+    expect(parseAppUrl("?type=apt").propertyTypes).toEqual(["apartment"]);
+    expect(parseAppUrl("?type=Studio,one-room").propertyTypes).toEqual(["oneroom"]);
+    expect(parseAppUrl("?type=apt,villa,bogus,apartment").propertyTypes).toEqual([
+      "apartment",
+      "villa",
+    ]);
+    expect(parseAppUrl("?type=oneroom,officetel").propertyTypes).toEqual([
+      "oneroom",
+      "officetel",
+    ]);
+    expect(parseAppUrl("?type=bogus").propertyTypes).toBeUndefined();
+  });
+});

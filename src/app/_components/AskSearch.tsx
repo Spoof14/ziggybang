@@ -8,6 +8,9 @@ import {
 } from "~/lib/listings/ai-search";
 import { api } from "~/trpc/react";
 
+/** After this long we stop waiting on the AI and use on-site search instead. */
+const AI_TIMEOUT_MS = 25_000;
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -28,6 +31,7 @@ export function AskSearch({
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const [provider, setProvider] = useState<"local" | "openai">("local");
+  const [elapsed, setElapsed] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
   const aiStatus = api.listings.aiStatus.useQuery(undefined, {
     staleTime: 60_000,
@@ -38,6 +42,19 @@ export function AskSearch({
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
   }, [messages, pending]);
+
+  useEffect(() => {
+    if (!pending) {
+      setElapsed(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const timer = setInterval(
+      () => setElapsed(Math.floor((Date.now() - startedAt) / 1000)),
+      1000,
+    );
+    return () => clearInterval(timer);
+  }, [pending]);
 
   if (!open) return null;
 
@@ -50,7 +67,14 @@ export function AskSearch({
     setPending(true);
     try {
       if (aiStatus.data?.openai) {
-        const result = await ask.mutateAsync({ messages: history, current });
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("timeout")), AI_TIMEOUT_MS);
+        });
+        const result = await Promise.race([
+          ask.mutateAsync({ messages: history, current }),
+          timeout,
+        ]).finally(() => clearTimeout(timer));
         onApply(result.snapshot);
         setProvider(result.provider);
         setMessages([...history, { role: "assistant", content: result.reply }]);
@@ -130,7 +154,26 @@ export function AskSearch({
             ))
           )}
           {pending ? (
-            <p className="text-xs text-slate-400">Searching filters…</p>
+            <div role="status" aria-live="polite" className="flex items-start gap-2 text-xs text-slate-300">
+              <span className="mt-0.5 flex shrink-0 gap-1" aria-hidden="true">
+                {[0, 150, 300].map((delay) => (
+                  <span
+                    key={delay}
+                    className="h-1.5 w-1.5 animate-bounce rounded-full bg-sky-400"
+                    style={{ animationDelay: `${delay}ms` }}
+                  />
+                ))}
+              </span>
+              <span>
+                {aiStatus.data?.openai
+                  ? elapsed < 5
+                    ? "Searching filters…"
+                    : elapsed < 12
+                      ? `Still working (${elapsed}s)… the AI is reading your request.`
+                      : `Taking longer than usual (${elapsed}s). Will fall back to on-site search at ${AI_TIMEOUT_MS / 1000}s.`
+                  : "Searching filters…"}
+              </span>
+            </div>
           ) : messages.length ? (
             <p className="text-[10px] text-slate-500">
               {provider === "openai" ? "Answered with OpenAI" : "Answered with on-site search"}

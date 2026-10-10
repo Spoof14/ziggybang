@@ -20,6 +20,8 @@ import {
   DivIcon,
   DomEvent,
   DomUtil,
+  latLng,
+  point as leafletPoint,
   type Map as LeafletMap,
 } from "leaflet";
 import { leafletBasemap } from "~/lib/geo/basemap";
@@ -155,7 +157,21 @@ function MapEvents({
   useEffect(() => {
     if (!focus) return;
     if (focus.zoom) {
-      map.setView([focus.lat, focus.lng], focus.zoom, { animate: true });
+      // On desktop the filter panel covers the left 40% of a full-width map;
+      // aim at the middle of the uncovered area so a radius circle is not
+      // hidden underneath it. Phones use a top sheet, so no shift there.
+      const size = map.getSize();
+      const panelCovers =
+        window.innerWidth >= 768 && size.x >= window.innerWidth * 0.8;
+      let center = latLng(focus.lat, focus.lng);
+      if (panelCovers) {
+        const projected = map.project(center, focus.zoom);
+        center = map.unproject(
+          projected.subtract(leafletPoint(size.x * 0.2, 0)),
+          focus.zoom,
+        );
+      }
+      map.setView(center, focus.zoom, { animate: true });
       return;
     }
     const pad = 0.0008;
@@ -476,6 +492,7 @@ export function ListingMap({
   onMapClick: (point: LatLng) => void;
   onFinishDraw: () => void;
 }) {
+  const [tileErrors, setTileErrors] = useState(0);
   const clusterLayer = useMemo(
     () => (
       <ClusterLayer
@@ -499,6 +516,7 @@ export function ListingMap({
   );
 
   return (
+    <div className="relative h-full w-full">
     <MapContainer
       center={SEOUL}
       zoom={13}
@@ -513,6 +531,10 @@ export function ListingMap({
         url={BASEMAP.url}
         subdomains={BASEMAP.subdomains}
         maxZoom={BASEMAP.maxZoom}
+        eventHandlers={{
+          tileerror: () => setTileErrors((count) => count + 1),
+          tileload: () => setTileErrors(0),
+        }}
       />
       <MetroLayer />
       <LocateMeControl />
@@ -550,5 +572,14 @@ export function ListingMap({
       {clusterLayer}
       {markerLayer}
     </MapContainer>
+    {tileErrors >= 4 ? (
+      <p
+        role="status"
+        className="pointer-events-none absolute inset-x-0 top-1/2 z-[500] mx-auto w-fit max-w-[80%] -translate-y-1/2 rounded-full bg-slate-950/85 px-3 py-1.5 text-center text-xs text-slate-200 shadow-lg"
+      >
+        Map tiles are slow to load. Check your connection; pins still work.
+      </p>
+    ) : null}
+    </div>
   );
 }

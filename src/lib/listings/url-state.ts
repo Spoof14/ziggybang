@@ -20,6 +20,8 @@ export type AppUrlState = {
   salesTypes?: SalesType[];
   areaBucketIds?: AreaBucketId[];
   radiusM?: number;
+  /** Manually dropped radius center (rlat/rlng); radius itself is `radiusM`. */
+  circleCenter?: { lat: number; lng: number };
   view?: { lat: number; lng: number; zoom: number };
   listSort?: ListSort;
   foreignerOk?: boolean;
@@ -41,6 +43,43 @@ function csv<T extends string>(value: string | null, allowed: readonly T[]): T[]
     .filter((item): item is T => (allowed as readonly string[]).includes(item));
 }
 
+/**
+ * Friendly spellings people put in shared links (`type=apt`). Canonical
+ * values always win; unknown tokens are dropped.
+ */
+export const PROPERTY_TYPE_ALIASES: Record<string, PropertyType> = {
+  apt: "apartment",
+  apts: "apartment",
+  apartments: "apartment",
+  flat: "apartment",
+  studio: "oneroom",
+  studios: "oneroom",
+  "one-room": "oneroom",
+  one_room: "oneroom",
+  "1room": "oneroom",
+  "1-room": "oneroom",
+  room: "oneroom",
+  oneroom: "oneroom",
+  villas: "villa",
+  "multi-family": "villa",
+  townhouse: "villa",
+  officetels: "officetel",
+  "office-tel": "officetel",
+};
+
+export function parsePropertyTypes(value: string | null): PropertyType[] {
+  if (!value) return [];
+  const out: PropertyType[] = [];
+  for (const raw of value.split(",")) {
+    const key = raw.trim().toLowerCase();
+    const type = (propertyTypes as readonly string[]).includes(key)
+      ? (key as PropertyType)
+      : PROPERTY_TYPE_ALIASES[key];
+    if (type && !out.includes(type)) out.push(type);
+  }
+  return out;
+}
+
 export function parseAppUrl(search: string): AppUrlState {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const viewMode = params.get("view");
@@ -49,6 +88,10 @@ export function parseAppUrl(search: string): AppUrlState {
   const lng = Number(params.get("lng"));
   const zoom = Number(params.get("z"));
   const radiusM = Number(params.get("r"));
+  const rlatRaw = params.get("rlat");
+  const rlngRaw = params.get("rlng");
+  const rlat = rlatRaw == null || rlatRaw.trim() === "" ? NaN : Number(rlatRaw);
+  const rlng = rlngRaw == null || rlngRaw.trim() === "" ? NaN : Number(rlngRaw);
   const next: AppUrlState = {};
   const q = params.get("q");
   if (q) next.searchInput = q;
@@ -57,7 +100,7 @@ export function parseAppUrl(search: string): AppUrlState {
   }
   const nextSources = csv(params.get("src"), sources);
   if (nextSources.length) next.sources = nextSources;
-  const nextTypes = csv(params.get("type"), propertyTypes);
+  const nextTypes = parsePropertyTypes(params.get("type"));
   if (nextTypes.length) next.propertyTypes = nextTypes;
   const nextSales = csv(params.get("sale"), salesTypes);
   if (nextSales.length) next.salesTypes = nextSales;
@@ -65,6 +108,14 @@ export function parseAppUrl(search: string): AppUrlState {
   if (nextAreas.length) next.areaBucketIds = nextAreas;
   if (Number.isFinite(radiusM) && radiusM >= 50) {
     next.radiusM = Math.min(3000, Math.max(250, radiusM));
+  }
+  if (
+    Number.isFinite(rlat) &&
+    Number.isFinite(rlng) &&
+    Math.abs(rlat) <= 90 &&
+    Math.abs(rlng) <= 180
+  ) {
+    next.circleCenter = { lat: rlat, lng: rlng };
   }
   if (Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(zoom)) {
     next.view = {
@@ -115,6 +166,8 @@ export function buildAppSearch(state: {
   salesTypes: SalesType[];
   areaBucketIds: AreaBucketId[];
   radiusM: number;
+  /** Manually placed radius center, persisted so shared links reproduce it. */
+  circleCenter?: { lat: number; lng: number } | null;
   view: { lat: number; lng: number; zoom: number };
   listSort: ListSort;
   foreignerOk?: boolean;
@@ -136,7 +189,13 @@ export function buildAppSearch(state: {
     params.set("sale", state.salesTypes.join(","));
   }
   if (state.areaBucketIds.length) params.set("size", state.areaBucketIds.join(","));
-  if (state.radiusM !== 1200) params.set("r", String(state.radiusM));
+  if (state.radiusM !== 1200 || state.circleCenter) {
+    params.set("r", String(state.radiusM));
+  }
+  if (state.circleCenter) {
+    params.set("rlat", state.circleCenter.lat.toFixed(5));
+    params.set("rlng", state.circleCenter.lng.toFixed(5));
+  }
   params.set("lat", state.view.lat.toFixed(4));
   params.set("lng", state.view.lng.toFixed(4));
   params.set("z", String(Math.round(state.view.zoom)));
@@ -160,7 +219,7 @@ export function buildAppSearch(state: {
 
 export function hasAppUrlState(search: string): boolean {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  return ["q", "view", "src", "type", "sale", "size", "r", "lat", "lng", "z", "sort", "ok", "pics", "floor", "age", "maxage", "dmin", "dmax", "rmin", "rmax"].some(
+  return ["q", "view", "src", "type", "sale", "size", "r", "rlat", "rlng", "lat", "lng", "z", "sort", "ok", "pics", "floor", "age", "maxage", "dmin", "dmax", "rmin", "rmax"].some(
     (key) => params.has(key),
   );
 }
