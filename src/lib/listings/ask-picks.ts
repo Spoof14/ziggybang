@@ -24,9 +24,9 @@ import {
 
 export const ASK_PICK_COUNT = 10;
 /** Compact candidate summaries sent to the AI. */
-export const ASK_MAX_CANDIDATES = 50;
+export const ASK_MAX_CANDIDATES = 40;
 /** Below this many hard-filtered candidates the search radius is widened once. */
-export const ASK_MIN_CANDIDATES = 18;
+export const ASK_MIN_CANDIDATES = 12;
 export const DEFAULT_ASK_SALES: SalesType[] = ["jeonse", "wolse"];
 export const SEOUL_CENTER = { lat: 37.5665, lng: 126.978 };
 
@@ -93,6 +93,7 @@ export type AskPicksResult =
       widened: boolean;
       sourceErrors: string[];
       elapsedMs: number;
+      timingsMs?: { fetch: number; rank: number };
     }
   | {
       status: "empty";
@@ -289,6 +290,8 @@ const PREFERENCE_KEYWORDS: Record<string, RegExp> = {
   furnished: /\b(furnished|full[- ]option)\b|풀옵션/i,
   parking: /\bparking\b|주차/i,
   sunny: /\b(sunny|bright|south[- ]facing|natural light)\b|남향|채광|햇빛/i,
+  newer: /\b(newer|newest|new(?:ly)?[- ]built|new building|modern)\b|신축/i,
+  spacious: /\b(spacious|roomy|big|bigger|large|larger)\b|넓/i,
 };
 
 /** Soft wishes the text states, in canonical words. */
@@ -316,6 +319,9 @@ export function listingTags(listing: MapListing): string[] {
   const text = `${l.title ?? ""} ${l.description ?? ""}`;
   if (/조용|한적|\bquiet\b/i.test(text)) tags.push("quiet");
   if (/(반려|애완)/.test(text) && !/(반려|애완)[^\n.,]{0,10}(불가|금지|x\b|X\b|안)/.test(text)) tags.push("pet");
+  const year = builtYear(l);
+  if (year != null && new Date().getFullYear() - year <= 10) tags.push("newer");
+  if (l.areaM2 != null && l.areaM2 >= 33) tags.push("spacious");
   if (/남향|채광|\bsunny\b/i.test(text) || (l.direction && /^(S|SE|SW)$/i.test(l.direction))) tags.push("sunny");
   return tags;
 }
@@ -517,9 +523,11 @@ export type CompactCandidate = {
   id: string;
   type: string;
   deal: string;
-  depositManwon?: number;
-  rentManwon?: number;
-  manageManwon?: number;
+  /** Pre-formatted KRW, e.g. "₩80 million". Quote these as-is. */
+  deposit?: string;
+  monthlyRent?: string;
+  maintenanceFee?: string;
+  salePrice?: string;
   m2?: number;
   floor?: string;
   builtYear?: number;
@@ -544,9 +552,11 @@ export function compactCandidate(
     id: listing.id,
     type: propertyTypeLabel[listing.propertyType].toLowerCase(),
     deal: listing.salesType ?? "unknown",
-    depositManwon: listing.salesType === "sale" ? listing.price : listing.deposit,
-    rentManwon: listing.rent,
-    manageManwon: listing.manageCost,
+    deposit: listing.salesType === "sale" ? undefined : (formatKrwFromManwon(listing.deposit) ?? undefined),
+    monthlyRent:
+      listing.salesType === "wolse" && listing.rent != null ? (formatKrwFromManwon(listing.rent) ?? undefined) : undefined,
+    maintenanceFee: listing.manageCost ? (formatKrwFromManwon(listing.manageCost) ?? undefined) : undefined,
+    salePrice: listing.salesType === "sale" ? (formatKrwFromManwon(listing.price) ?? undefined) : undefined,
     m2: listing.areaM2,
     floor: listing.floor,
     builtYear: year,
@@ -697,6 +707,8 @@ export const PREFERENCE_LABEL: Record<string, string> = {
   furnished: "furnished",
   parking: "parking",
   sunny: "sunny",
+  newer: "newer building",
+  spacious: "spacious",
 };
 
 export function constraintsToSnapshot(

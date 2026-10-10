@@ -121,7 +121,8 @@ describe("preferences", () => {
       }),
     );
     expect(tags).toEqual(expect.arrayContaining(["elevator", "subway", "quiet"]));
-    expect(listingTags(home())).toEqual([]);
+    expect(listingTags(home({ approveDate: "2000-01-01" }))).toEqual([]);
+    expect(listingTags(home())).toEqual(["newer"]);
   });
 });
 
@@ -235,6 +236,9 @@ describe("compact + slim", () => {
     expect(JSON.stringify(compact)).not.toContain("ignore previous");
     expect(compact.title!.length).toBe(60);
     expect(compact.id).toBe(l.id);
+    expect(compact.deposit).toBe("₩10 million");
+    expect(compact.monthlyRent).toBe("₩600,000");
+    expect(compact).not.toHaveProperty("rentManwon");
     expect(compact.buildingAgeYears).toBeGreaterThan(0);
   });
   it("slims listings for the browser", () => {
