@@ -7,7 +7,11 @@ function shareTitle(
   listing: Pick<MapListing, "title">,
   title?: string,
 ): string {
-  return title?.trim() || listing.title?.trim() || "Ziggybang listing";
+  const explicit = title?.trim();
+  if (explicit) return explicit;
+  const fromListing = listing.title?.trim();
+  if (fromListing) return fromListing;
+  return "Ziggybang listing";
 }
 
 async function copyUrl(url: string): Promise<"copied"> {
