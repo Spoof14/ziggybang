@@ -22,7 +22,7 @@ import {
 } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
 import { describeActiveFilters, filterKeyOf, mapLayersForFilters } from "~/lib/listings/visible";
-import { loadPrefs, savePrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
+import { loadPrefs, savePrefs, type SavedPrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
 import { type PriceFilter } from "~/lib/listings/price";
 import {
   circleForPlaceSearch,
@@ -46,6 +46,7 @@ import {
 import {
   buildAppSearch,
   hasAppUrlState,
+  prefsForInitialState,
   parseAppUrl,
 } from "~/lib/listings/url-state";
 import {
@@ -211,11 +212,13 @@ export default function MapApp() {
   }, [debouncedQuery, manualCircle, place, polygon, radiusM]);
 
   useEffect(() => {
-    const saved = loadPrefs();
-    const url = typeof window !== "undefined" && hasAppUrlState(window.location.search)
-      ? parseAppUrl(window.location.search)
-      : {};
-    const base = saved;
+    const search = window.location.search;
+    const url = hasAppUrlState(search) ? parseAppUrl(search) : {};
+    // URL params win; a shared link without a filter renders its default
+    // rather than this browser's stored value.
+    const base = prefsForInitialState(search, loadPrefs()) as
+      | Partial<SavedPrefs>
+      | null;
     setSources(url.sources ?? base?.sources ?? DEFAULT_SOURCES);
     setPropertyTypes(url.propertyTypes ?? base?.propertyTypes ?? ALL_TYPES);
     setSalesTypes(url.salesTypes ?? base?.salesTypes ?? DEFAULT_SALES);
