@@ -191,6 +191,28 @@ describe("fallback scoring", () => {
   });
 });
 
+describe("assembling AI picks", () => {
+  const ai = (ids: string[]) => ({ picks: ids.map((id) => ({ id, reason: "Fine" })), assumptions: [], dropped: 0 });
+  it("keeps semi-basement / rooftop AI picks behind normal homes unless nothing else is left", () => {
+    const bad = home({ floor: "반지하/2", lat: mangwon.lat + 0.0001 });
+    const goods = Array.from({ length: 3 }, (_, i) => home({ lat: mangwon.lat + 0.001 * (i + 2) }));
+    const ranked = fallbackRank([bad, ...goods], { place: mangwon }, center, 3000);
+    const picks = assemblePicks(ai([bad.id, ...goods.map((g) => g.id)]), ranked, 4, { avoidBadFloors: true });
+    expect(picks.map((p) => p.listing.id).slice(0, 3)).toEqual(goods.map((g) => g.id));
+    expect(picks[3]!.listing.id).toBe(bad.id);
+    expect(assemblePicks(ai([bad.id]), ranked, 1, { avoidBadFloors: true })[0]!.listing.id).not.toBe(bad.id);
+  });
+  it("for cheap requests keeps our score order, not the model's", () => {
+    const cheapHome = home({ rent: 35, deposit: 300 });
+    const dearHome = home({ rent: 60, deposit: 8000 });
+    const ranked = fallbackRank([dearHome, cheapHome], { place: mangwon, preferences: ["low cost"] }, center, 800, "cheap");
+    const picks = assemblePicks(ai([dearHome.id, cheapHome.id]), ranked, 2, { orderByScore: true });
+    expect(picks[0]!.listing.id).toBe(cheapHome.id);
+    const model = assemblePicks(ai([dearHome.id, cheapHome.id]), ranked, 2);
+    expect(model[0]!.listing.id).toBe(dearHome.id);
+  });
+});
+
 describe("what the AI sees and may say", () => {
   it("omits fields the listing lacks and uses English floor + size words", () => {
     const naver = home({ source: "naver", approveDate: undefined, address: undefined, floor: "옥탑방/4", areaM2: 14 });
