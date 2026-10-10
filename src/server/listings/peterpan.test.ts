@@ -36,6 +36,23 @@ describe("peterpan mappers", () => {
     });
   });
 
+  it("uses exclusive size and ignores supplied common area", () => {
+    const exclusive = houseToListing({
+      hidx: 1,
+      info: { real_size: 21.44, supplied_size: 40.54 },
+      type: { contract_type: "월세", building_type: "오피스텔" },
+      location: { coordinate: { latitude: "37.5", longitude: "127.0" } },
+    });
+    const sharedOnly = houseToListing({
+      hidx: 2,
+      info: { supplied_size: 40.54 },
+      type: { contract_type: "월세", building_type: "오피스텔" },
+      location: { coordinate: { latitude: "37.5", longitude: "127.0" } },
+    });
+    expect(exclusive?.areaM2).toBe(21.44);
+    expect(sharedOnly?.areaM2).toBeUndefined();
+  });
+
   it("treats 단기임대 as monthly rent", () => {
     expect(mapPeterpanSalesType("단기임대")).toBe("wolse");
     expect(mapPeterpanPropertyType("원/투룸")).toBe("oneroom");

@@ -288,7 +288,7 @@ export function ListingDetailView({
               {firstMonth ? (
                 <Fact label="Move-in cash" value={firstMonth} wide />
               ) : null}
-              {area ? <Fact label="Size" value={area} /> : null}
+              {area ? <Fact label="Exclusive area" value={area} /> : null}
               {floor ? <Fact label="Floor" value={floor} /> : null}
               {roomType ? <Fact label="Layout" value={roomType} /> : null}
               {listing.bathrooms ? (

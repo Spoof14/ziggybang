@@ -1,6 +1,6 @@
 import { boundsCenter, containsPoint, expandBounds, padBoundsByMeters } from "~/lib/geo/bounds";
 import { distanceM } from "~/lib/geo/shape";
-import { areaBuckets, isAllAreaBuckets, type AreaBucketId } from "~/lib/listings/area";
+import { areaBuckets, exclusiveAreaM2, isAllAreaBuckets, type AreaBucketId } from "~/lib/listings/area";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import {
   type Bounds,
@@ -526,7 +526,7 @@ export function articleToListing(article: NaverArticle): MapListing | null {
     deposit: warrant ?? (deal && deal > 0 ? deal : undefined),
     price: deal,
   });
-  const area = Number(article.area2 ?? article.spc2 ?? article.area1 ?? article.spc1);
+  const area = exclusiveAreaM2(undefined, article.area2 ?? article.spc2);
   const price = salesType === "sale" ? deal : undefined;
   const deposit = warrant ?? (salesType === "sale" ? undefined : parseNaverManwon(article.prc));
   const title = article.articleName ?? article.atclNm ?? article.buildingName;
@@ -966,7 +966,10 @@ export function mapNaverArticleDetail(
   const propertyType = mapNaverPropertyType(
     payload.realEstateTypeCode ?? payload.realEstateTypeName,
   );
-  const area = payload.articleSpace?.exclusiveSpace ?? payload.articleSpace?.supplySpace;
+  const area = exclusiveAreaM2({
+    exclusiveSpace: payload.articleSpace?.exclusiveSpace,
+    supplySpace: payload.articleSpace?.supplySpace,
+  });
   const floor =
     payload.articleFloor?.correspondingFloorCount != null &&
     payload.articleFloor.totalFloorCount != null

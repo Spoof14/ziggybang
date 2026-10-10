@@ -104,6 +104,19 @@ describe("naver mappers", () => {
     });
   });
 
+  it("does not treat Naver supply area as the listing size", () => {
+    const listing = articleToListing({
+      articleNo: "1",
+      realEstateTypeCode: "OR",
+      tradeTypeCode: "B2",
+      latitude: "37.5",
+      longitude: "127.0",
+      area1: 36.92,
+      spc1: 36.92,
+    });
+    expect(listing?.areaM2).toBeUndefined();
+  });
+
   it("maps new.land cluster markers from an array payload", () => {
     const clusters = extractClusters([
       { latitude: 37.55, longitude: 126.91, count: 4, markerId: "abc" },
@@ -348,6 +361,22 @@ describe("naver mappers", () => {
     });
     expect(listing?.photos?.[0]).toContain("/plan.jpg");
     expect(listing?.photos?.length).toBe(2);
+  });
+
+  it("omits size when a Naver detail only has supply space", () => {
+    const listing = mapNaverArticleDetail(
+      {
+        articleNo: "2",
+        articleName: "Officetel",
+        latitudeNum: 37.5,
+        longitudeNum: 127.0,
+        realEstateTypeCode: "OR",
+        tradeTypeCode: "B2",
+        articleSpace: { supplySpace: 40.54 },
+      },
+      "2",
+    );
+    expect(listing?.areaM2).toBeUndefined();
   });
 
   it("reads nested article-detail coordinates when the top-level pin is missing", () => {
