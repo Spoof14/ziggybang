@@ -1,6 +1,5 @@
 import { areaBuckets, type AreaBucketId } from "./area";
 import { type AgeFilter } from "./age";
-import { normalizeBuildingAgeFilter } from "./building-age";
 import { type FloorFilter } from "./floor";
 import { type ListSort, type ViewMode } from "./prefs";
 import { normalizePriceFilter, type PriceFilter } from "./price";
