@@ -68,7 +68,7 @@ export function AskPickCard({
           url={listing.thumbnail ?? listing.photos?.[0]}
           alt={listing.title ? `Photo: ${listing.title}` : `${kind} photo`}
           width={480}
-          className="h-32 w-full object-cover"
+          className="h-32 w-full object-cover [@media(max-height:520px)]:h-24"
         />
         <span className="absolute left-2 top-2 rounded-full bg-slate-950/85 px-2 py-0.5 text-[11px] font-semibold text-sky-300">
           #{pick.rank}

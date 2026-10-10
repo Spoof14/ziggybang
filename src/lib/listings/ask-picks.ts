@@ -529,8 +529,20 @@ function genericReason(
           : hit === "quiet"
             ? "Listing mentions a quiet setting"
             : hit === "cheap"
-              ? "Among the cheapest once deposit is counted"
-              : `Matches “${hit}”`,
+              ? ["Low rent plus deposit cost", "Among the cheapest once deposit is counted"][v(2)]!
+              : hit === "newer"
+                ? `Newer building${builtYear(l) ? ` (${builtYear(l)})` : ""}`
+                : hit === "spacious"
+                  ? `Roomy at ${l.areaM2} m²`
+                  : hit === "pet"
+                    ? "Listing welcomes pets"
+                    : hit === "parking"
+                      ? "Parking available"
+                      : hit === "furnished"
+                        ? "Comes with many options"
+                        : hit === "sunny"
+                          ? "Sunny / south-facing"
+                          : `Matches “${hit}”`,
     ]);
   }
   const photos = photoCount(l);

@@ -308,7 +308,7 @@ export function AskSearch({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2 sm:space-y-3 sm:px-4 sm:py-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2 sm:gap-3 sm:px-4 sm:py-3">
           {!hasResult && !pending && !error ? (
             <div className="space-y-2">
               <p className="text-sm text-slate-300">
@@ -355,7 +355,8 @@ export function AskSearch({
           ) : null}
 
           {hasResult || (pending && constraints) ? (
-            <div className="space-y-2">
+            // On short screens (zoomed in) the cards come first, details after.
+            <div className="space-y-2 [@media(max-height:520px)]:order-2">
               {result &&
               !(pending && phase === "searching" && !picks.length) ? (
                 <div>
@@ -511,7 +512,7 @@ export function AskSearch({
 
           {picks.length ? (
             <div
-              className={pending ? "pointer-events-none opacity-50" : undefined}
+              className={`[@media(max-height:520px)]:order-1 ${pending ? "pointer-events-none opacity-50" : ""}`}
               aria-busy={pending}
             >
               <AskCarousel
