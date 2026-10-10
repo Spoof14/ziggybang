@@ -83,6 +83,14 @@ describe("interpretAsk with OpenAI", () => {
     expect(r.constraints.preferences).toEqual(["quiet", "close to subway"]);
   });
 
+  it("does not invent a building-age cap for a vague 'newer building'", async () => {
+    fetchMock.mockResolvedValueOnce(openAiReply({ searchInput: "Gangnam", propertyTypes: ["officetel"], maxBuildingAge: 10 }));
+    const r = await ask("spacious officetel near Gangnam station, newer building, elevator");
+    if (r.status !== "ok") throw new Error("expected ok");
+    expect(r.constraints.maxBuildingAge).toBeUndefined();
+    expect(r.constraints.preferences).toEqual(expect.arrayContaining(["newer building", "elevator", "spacious"]));
+  });
+
   it("declines off-topic messages", async () => {
     fetchMock.mockResolvedValueOnce(openAiReply({ offTopic: true }));
     const r = await ask("what is the weather");

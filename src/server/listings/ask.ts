@@ -331,7 +331,11 @@ export async function interpretAsk(
     deps.resolvePlace,
   );
   const carried = fresh ? [] : (previous?.preferences ?? []);
-  const merged = [...new Set([...carried, ...preferences])].slice(0, 5);
+  // A stated cap or size bucket already says it; don't also show "newer building" / "spacious".
+  const redundant = new Set<string>();
+  if (snapshot.maxBuildingAge) redundant.add(PREFERENCE_LABEL.newer!);
+  if (snapshot.areaBucketIds.length) redundant.add(PREFERENCE_LABEL.spacious!);
+  const merged = [...new Set([...carried, ...preferences])].filter((p) => !redundant.has(p)).slice(0, 5);
   if (roomCount) assumptions.push(ROOM_COUNT_NOTE);
   return {
     status: "ok",

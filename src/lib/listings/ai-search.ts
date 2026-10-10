@@ -623,7 +623,8 @@ export function groundIntent(intent: SearchIntent, fullText: string): SearchInte
   else if (intent.ageFilter === null && clear) out.ageFilter = null;
 
   const builtLocal = parseMaxBuildingAge(text);
-  if (typeof intent.maxBuildingAge === "number" && BUILDING_AGE_WORDS.test(text)) {
+  // "newer building" with no number is a preference, not a cap the model may invent.
+  if (typeof intent.maxBuildingAge === "number" && BUILDING_AGE_WORDS.test(text) && (HAS_NUMBER.test(text) || builtLocal)) {
     out.maxBuildingAge = builtLocal ?? intent.maxBuildingAge;
   } else if (builtLocal) out.maxBuildingAge = builtLocal;
   else if (intent.maxBuildingAge === null && clear) out.maxBuildingAge = null;
