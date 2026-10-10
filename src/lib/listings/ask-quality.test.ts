@@ -8,6 +8,7 @@ import {
   effectiveMonthlyManwon,
   floorKind,
   listingRooms,
+  nearGroups,
   reasonIsGrounded,
   sizeClass,
 } from "./ask-quality";
@@ -139,6 +140,13 @@ describe("duplicates", () => {
     expect(items).toHaveLength(3);
     expect([...groupSize.values()]).toEqual([6]);
   });
+  it("treats rounding differences in the same building as the same unit group", () => {
+    const a = naver({ areaM2: 29.99, deposit: 24192, rent: 17 });
+    const b = naver({ areaM2: 29.27, deposit: 24192, rent: 18 });
+    const other = naver({ areaM2: 46, deposit: 24192, rent: 17 });
+    expect(nearGroups([a, b, other]).get(b.id)).toBe(a.id);
+    expect(nearGroups([a, b, other]).get(other.id)).toBe(other.id);
+  });
   it("keeps the copy with a photo", () => {
     const withPhoto = naver({ thumbnail: "https://landthumb-phinf.pstatic.net/x.jpg" });
     const { items } = collapseDuplicates([{ listing: naver() }, { listing: withPhoto }]);
@@ -149,7 +157,7 @@ describe("duplicates", () => {
     const others = Array.from({ length: 9 }, (_, i) => home({ rent: 60 + i }));
     const ranked = fallbackRank([...sameComplex, ...others], { place: mangwon }, center, 3000);
     const prepared = prepareRanked(ranked);
-    const picks = assemblePicks(null, prepared.ranked, 10, prepared.groupSize);
+    const picks = assemblePicks(null, prepared.ranked, 10, prepared);
     const fromComplex = picks.filter((p) => p.listing.source === "naver");
     expect(fromComplex.length).toBeLessThanOrEqual(2);
     expect(fromComplex.some((p) => (p.similar ?? 0) >= 3)).toBe(true);
@@ -157,7 +165,7 @@ describe("duplicates", () => {
   });
   it("diversify pushes extras behind everyone else", () => {
     const a = [naver({ floor: "1/21" }), naver({ floor: "2/21" }), naver({ floor: "3/21" }), home()].map((listing) => ({ listing }));
-    const out = diversify(a, 2).map((x) => x.listing.source);
+    const out = diversify(a, nearGroups(a.map((x) => x.listing)), 2).map((x) => x.listing.source);
     expect(out).toEqual(["naver", "naver", "zigbang", "naver"]);
   });
 });

@@ -88,66 +88,84 @@ export function sizeClass(m2?: number): SizeClass | undefined {
 
 // --------------------------------------------------------------- duplicates
 
-function money(v: number | undefined | null): string {
-  return v == null ? "" : String(v);
+function sameNumber(a: number | undefined, b: number | undefined, tolerance: number): boolean {
+  if (a == null || b == null) return a == null && b == null;
+  return Math.abs(a - b) <= tolerance;
 }
 
-/** Same building / price / size, any floor. */
-export function nearDuplicateKey(l: MapListing): string {
-  return [
-    l.propertyType,
-    l.lat.toFixed(4),
-    l.lng.toFixed(4),
-    l.salesType ?? "",
-    money(l.deposit),
-    money(l.rent),
-    money(l.price),
-    l.areaM2 == null ? "" : Math.round(l.areaM2),
-  ].join("|");
+/**
+ * Same complex (within 15 m), same deal and type, and the same price/size give
+ * or take a rounding (area ±1.5 m², rent ±₩10,000, deposit ±3%).
+ */
+export function isNearDuplicate(a: MapListing, b: MapListing): boolean {
+  if (a.propertyType !== b.propertyType || a.salesType !== b.salesType) return false;
+  if (distanceM(a, b) > 15) return false;
+  if (!sameNumber(a.areaM2, b.areaM2, 1.5)) return false;
+  if (!sameNumber(a.rent, b.rent, 1) || !sameNumber(a.price, b.price, (a.price ?? 0) * 0.03)) return false;
+  return sameNumber(a.deposit, b.deposit, Math.max(a.deposit ?? 0, b.deposit ?? 0) * 0.03);
 }
 
-/** Near-duplicate plus the same floor text: the same unit listed again. */
-export function exactDuplicateKey(l: MapListing): string {
-  return `${nearDuplicateKey(l)}|${(l.floor ?? "").replace(/\s+/g, "")}`;
+function floorKey(l: MapListing): string {
+  return formatFloor(l.floor) ?? "";
+}
+
+/** id → id of the first listing of its near-duplicate group. */
+export function nearGroups(listings: MapListing[]): Map<string, string> {
+  const leaders: MapListing[] = [];
+  const groups = new Map<string, string>();
+  for (const l of listings) {
+    const leader = leaders.find((candidate) => isNearDuplicate(candidate, l));
+    if (leader) groups.set(l.id, leader.id);
+    else {
+      leaders.push(l);
+      groups.set(l.id, l.id);
+    }
+  }
+  return groups;
 }
 
 export const MAX_NEAR_DUPLICATES = 2;
 
 /**
- * Collapse exact repeats (same complex, price, size and floor text) into one
- * entry, keeping the better one (photo first, then input order). Order of the
- * survivors follows the input. `similarOf` counts every dropped or capped
- * sibling per near-duplicate group so a card can say "+N similar".
+ * Collapse exact repeats (near-duplicates with the same floor text) into one
+ * entry, keeping the better one (photo first, then input order). Survivors keep
+ * input order. `groupSize` counts every member per near-duplicate group so a
+ * card can say "+N similar".
  */
 export function collapseDuplicates<T extends { listing: MapListing }>(
   items: T[],
-): { items: T[]; groupSize: Map<string, number> } {
+): { items: T[]; groups: Map<string, string>; groupSize: Map<string, number> } {
+  const groups = nearGroups(items.map((i) => i.listing));
   const groupSize = new Map<string, number>();
-  const byExact = new Map<string, number>();
+  const byUnit = new Map<string, number>();
   const out: T[] = [];
   for (const item of items) {
-    const near = nearDuplicateKey(item.listing);
-    groupSize.set(near, (groupSize.get(near) ?? 0) + 1);
-    const exact = exactDuplicateKey(item.listing);
-    const seenAt = byExact.get(exact);
+    const group = groups.get(item.listing.id)!;
+    groupSize.set(group, (groupSize.get(group) ?? 0) + 1);
+    const unit = `${group}|${floorKey(item.listing)}`;
+    const seenAt = byUnit.get(unit);
     if (seenAt == null) {
-      byExact.set(exact, out.length);
+      byUnit.set(unit, out.length);
       out.push(item);
       continue;
     }
     const kept = out[seenAt]!;
     if (!hasAnyPhoto(kept.listing) && hasAnyPhoto(item.listing)) out[seenAt] = item;
   }
-  return { items: out, groupSize };
+  return { items: out, groups, groupSize };
 }
 
 /** Keep at most `cap` per near-duplicate group; the rest follow after everyone else. */
-export function diversify<T extends { listing: MapListing }>(items: T[], cap = MAX_NEAR_DUPLICATES): T[] {
+export function diversify<T extends { listing: MapListing }>(
+  items: T[],
+  groups: ReadonlyMap<string, string>,
+  cap = MAX_NEAR_DUPLICATES,
+): T[] {
   const counts = new Map<string, number>();
   const first: T[] = [];
   const rest: T[] = [];
   for (const item of items) {
-    const key = nearDuplicateKey(item.listing);
+    const key = groups.get(item.listing.id) ?? item.listing.id;
     const n = counts.get(key) ?? 0;
     counts.set(key, n + 1);
     (n < cap ? first : rest).push(item);

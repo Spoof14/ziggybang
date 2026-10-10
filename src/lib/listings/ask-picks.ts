@@ -19,7 +19,6 @@ import {
   hasAnyPhoto,
   areaLabel,
   listingRooms,
-  nearDuplicateKey,
   reasonIsGrounded,
   roomsLabel,
   sizeClass,
@@ -539,7 +538,7 @@ function genericReason(
   phrases.sort((a, b) => b[0] - a[0]);
   const top = phrases.slice(0, 3).map(([, text]) => text);
   if (!top.length) return `Fits your constraints, ${meters} m from ${where}`;
-  return top.join(v(2) ? " · " : "; ");
+  return top.join(" · ");
 }
 
 /** Messages the user typed mention these → don't penalise basement / rooftop units. */
@@ -565,6 +564,10 @@ export function fallbackRank(
   const wantsNew = prefKeys.includes("newer") || NEW_WORDS.test(requestText);
   const wantsBig = prefKeys.includes("spacious") || BIG_WORDS.test(requestText);
   const allowsBasement = asksForBasementOrRooftop(requestText);
+  const deposits = candidates
+    .map((l) => (l.salesType === "sale" ? undefined : l.deposit))
+    .filter((v): v is number => v != null)
+    .sort((a, b) => a - b);
   const effective = candidates
     .map((l) => effectiveMonthlyManwon(l))
     .filter((v): v is number => v != null)
@@ -586,7 +589,13 @@ export function fallbackRank(
     const tags = listingTags(l);
     const hits = prefKeys.filter((k) => tags.includes(k) || (k === "cheap" && cost != null && percentile(effective, cost) < 0.35));
     const parts = {
-      price: cost == null ? 0.3 : 1 - percentile(effective, cost),
+      price:
+        cost == null
+          ? 0.3
+          : cheap && l.deposit != null && l.salesType === "wolse"
+            ? // "Cheap" is low monthly total AND low money up front.
+              0.6 * (1 - percentile(effective, cost)) + 0.4 * (1 - percentile(deposits, l.deposit))
+            : 1 - percentile(effective, cost),
       dist: Math.max(0, 1 - dist / Math.max(radiusM, 1)),
       age: age == null ? 0.4 : Math.max(0, 1 - Math.min(Math.max(age, 0), 30) / 30),
       size: l.areaM2 == null ? 0.3 : Math.min(1, l.areaM2 / 40),
@@ -612,12 +621,16 @@ export function fallbackRank(
 }
 
 /** Collapse repeats, then cap near-duplicates, keeping the score order. */
-export function prepareRanked(ranked: ScoredCandidate[]): {
-  ranked: ScoredCandidate[];
-  groupSize: Map<string, number>;
-} {
-  const { items, groupSize } = collapseDuplicates(ranked);
-  return { ranked: diversify(items, MAX_NEAR_DUPLICATES), groupSize };
+export type DuplicateInfo = {
+  /** listing id → id of its near-duplicate group */
+  groups: ReadonlyMap<string, string>;
+  /** group id → how many listings it had before collapsing */
+  groupSize: ReadonlyMap<string, number>;
+};
+
+export function prepareRanked(ranked: ScoredCandidate[]): { ranked: ScoredCandidate[] } & DuplicateInfo {
+  const { items, groups, groupSize } = collapseDuplicates(ranked);
+  return { ranked: diversify(items, groups, MAX_NEAR_DUPLICATES), groups, groupSize };
 }
 
 // ---------------------------------------------------------------- AI summaries
@@ -751,14 +764,16 @@ export function assemblePicks(
   ai: ValidatedAiRanking | null,
   ranked: ScoredCandidate[],
   target = ASK_PICK_COUNT,
-  groupSize: ReadonlyMap<string, number> = new Map(),
+  dupes: Partial<DuplicateInfo> = {},
 ): AskPick[] {
+  const groups = dupes.groups ?? new Map<string, string>();
+  const groupOf = (l: MapListing) => groups.get(l.id) ?? l.id;
   const byId = new Map(ranked.map((r) => [r.listing.id, r]));
   const out: AskPick[] = [];
   const used = new Set<string>();
   const perGroup = new Map<string, number>();
   const take = (item: ScoredCandidate, reason?: string) => {
-    const key = nearDuplicateKey(item.listing);
+    const key = groupOf(item.listing);
     perGroup.set(key, (perGroup.get(key) ?? 0) + 1);
     used.add(item.listing.id);
     out.push({
@@ -769,7 +784,7 @@ export function assemblePicks(
       distanceM: Math.round(item.distanceM),
     });
   };
-  const roomFor = (item: ScoredCandidate) => (perGroup.get(nearDuplicateKey(item.listing)) ?? 0) < MAX_NEAR_DUPLICATES;
+  const roomFor = (item: ScoredCandidate) => (perGroup.get(groupOf(item.listing)) ?? 0) < MAX_NEAR_DUPLICATES;
   for (const pick of ai?.picks ?? []) {
     const found = byId.get(pick.id);
     if (!found || used.has(pick.id) || !roomFor(found)) continue;
@@ -785,17 +800,12 @@ export function assemblePicks(
     if (out.length >= target) break;
     if (!used.has(item.listing.id)) take(item);
   }
-  const shown = new Map<string, number>();
-  for (const pick of out) {
-    const key = nearDuplicateKey(pick.listing);
-    shown.set(key, (shown.get(key) ?? 0) + 1);
-  }
   const noted = new Set<string>();
   for (const pick of out) {
-    const key = nearDuplicateKey(pick.listing);
+    const key = groupOf(pick.listing);
     if (noted.has(key)) continue;
     noted.add(key);
-    const extra = (groupSize.get(key) ?? 0) - (shown.get(key) ?? 0);
+    const extra = (dupes.groupSize?.get(key) ?? 0) - (perGroup.get(key) ?? 0);
     if (extra > 0) pick.similar = extra;
   }
   return out.slice(0, target).map((pick, index) => ({ ...pick, rank: index + 1 }));

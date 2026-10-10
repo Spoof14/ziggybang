@@ -40,6 +40,9 @@ type Message = { role: "user" | "assistant"; content: string };
 const SOURCES: Source[] = ["zigbang", "naver", "peterpan"];
 const FETCH_BUDGET_MS = 9_000;
 const WIDEN_BUDGET_MS = 6_000;
+/** After this long, answer with what the faster sources returned if it is already plenty. */
+const SOFT_FETCH_MS = 4_000;
+const SOFT_MIN_LISTINGS = 40;
 /** Do not start a second fetch if the first one already used this much. */
 const WIDEN_ONLY_BEFORE_MS = 11_000;
 const RANK_TIMEOUT_MS = 9_000;
@@ -78,23 +81,38 @@ export const fetchLiveCandidates: CandidateFetch = async (c, radiusM, budgetMs) 
     ageFilter: c.ageFilter,
     maxBuildingAge: c.maxBuildingAge,
   };
-  const results = await Promise.allSettled(
-    SOURCES.map((source) =>
-      withTimeout(getMapData({ ...base, sources: [source] }), budgetMs, source),
-    ),
-  );
   const listings: MapListing[] = [];
   const errors: string[] = [];
-  results.forEach((result, index) => {
-    const source = SOURCES[index]!;
-    if (result.status === "fulfilled") {
-      listings.push(...result.value.listings);
-      for (const error of result.value.errors) errors.push(`${error.source}: ${error.message}`.slice(0, 120));
-    } else {
-      errors.push(`${source}: ${result.reason instanceof Error ? result.reason.message : "failed"}`.slice(0, 120));
+  const startedAt = Date.now();
+  const pending = new Set<Source>(SOURCES);
+  await new Promise<void>((resolve) => {
+    const finish = () => {
+      clearTimeout(softTimer);
+      resolve();
+    };
+    // A slow source must not hold the answer hostage once the others delivered plenty.
+    const trySoftFinish = () => {
+      if (pending.size > 0 && listings.length >= SOFT_MIN_LISTINGS) finish();
+    };
+    const softTimer = setTimeout(trySoftFinish, SOFT_FETCH_MS);
+    for (const source of SOURCES) {
+      withTimeout(getMapData({ ...base, sources: [source] }), budgetMs, source)
+        .then((value) => {
+          listings.push(...value.listings);
+          for (const error of value.errors) errors.push(`${error.source}: ${error.message}`.slice(0, 120));
+        })
+        .catch((reason: unknown) => {
+          errors.push(`${source}: ${reason instanceof Error ? reason.message : "failed"}`.slice(0, 120));
+        })
+        .finally(() => {
+          pending.delete(source);
+          if (pending.size === 0) finish();
+          else if (Date.now() - startedAt >= SOFT_FETCH_MS) trySoftFinish();
+        });
     }
   });
-  return { listings, errors };
+  for (const source of pending) errors.push(`${source}: skipped (slow)`);
+  return { listings: [...listings], errors: [...errors] };
 };
 
 const RANK_PROMPT = `You are the picker behind Ziggybang's "Ask" for Korean rentals. From "candidates" (already sorted by our fit score, best first), choose the best homes and write a short reason for each.
@@ -314,7 +332,7 @@ export async function computeAskPicks(
     }
   }
 
-  const assembled = assemblePicks(ai, ranked, target, prepared.groupSize);
+  const assembled = assemblePicks(ai, ranked, target, prepared);
   const summary = basicSummary(assembled.map((p) => p.listing), filtered.listings.length, c);
   const picks = assembled.map((pick) => ({ ...pick, listing: slimListing(pick.listing) }));
   if (assembled.some((p) => floorKind(p.listing.floor) !== "normal") && !asksForBasementOrRooftop(requestText)) {
