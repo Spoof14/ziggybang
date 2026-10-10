@@ -29,6 +29,7 @@ import { ListingGallery } from "./ListingGallery";
 import { ListingLocationCard } from "./ListingLocationCard";
 import { ListingPageLink } from "./ListingPageLink";
 import { ListingPrice } from "./ListingPrice";
+import { ListingShareButton } from "./ListingShareButton";
 
 async function copyText(value: string) {
   try {
@@ -120,6 +121,11 @@ export function ListingPanel({
               {saved ? "♥" : "♡"}
             </button>
           ) : null}
+          <ListingShareButton
+            listing={detail}
+            title={englishTitle}
+            className="inline-flex items-center justify-center rounded-full bg-white/10 px-2 py-1 text-sm text-slate-200 hover:bg-white/20"
+          />
           <button
             type="button"
             onClick={onClose}
