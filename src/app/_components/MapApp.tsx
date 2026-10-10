@@ -63,10 +63,11 @@ import {
   type Source,
 } from "~/lib/listings/types";
 import { ListingList } from "./ListingList";
-import { ListingMap } from "./ListingMap";
+import { ListingMap, type MapFocus } from "./ListingMap";
 import { ListingPanel } from "./ListingPanel";
 import { ListingPhoto } from "./ListingPhoto";
 import { AskSearch } from "./AskSearch";
+import { type AskPick } from "~/lib/listings/ask-picks";
 import { groupedHomesHint } from "~/lib/listings/order";
 import { ListingAgeDot } from "./ListingAgeDot";
 import { ListingPrice } from "./ListingPrice";
@@ -153,12 +154,10 @@ export default function MapApp() {
   const [listScrollId, setListScrollId] = useState<string | undefined>();
   const [listScrollAt, setListScrollAt] = useState(0);
   useHistoryOverlay({ selected, setSelected });
-  const [focus, setFocus] = useState<{
-    lat: number;
-    lng: number;
-    zoom?: number;
-    token: number;
-  } | null>(null);
+  const [focus, setFocus] = useState<MapFocus | null>(null);
+  /** Ask picks plotted on the map instead of the live results (explicit, reversible). */
+  const [askPins, setAskPins] = useState<MapListing[] | null>(null);
+  const [askHighlight, setAskHighlight] = useState<string | null>(null);
   const [dismissedNaver, setDismissedNaver] = useState(false);
   const [uiCompact, setUiCompact] = useState(false);
   const [shareHint, setShareHint] = useState<string | null>(null);
@@ -570,7 +569,7 @@ export default function MapApp() {
     [naverQuery.data, peterpanQuery.data, sources, zigbangQuery.data],
   );
 
-  const visible = useMemo(() => {
+  const liveVisible = useMemo(() => {
     const layers = mapLayersForFilters(data.listings, data.clusters, {
       propertyTypes: propertyTypes.length ? propertyTypes : ALL_TYPES,
       salesTypes: salesTypes.length ? salesTypes : ALL_SALES,
@@ -614,6 +613,19 @@ export default function MapApp() {
     foreignerOk,
     hasPhotos,
   ]);
+
+  const visible = useMemo(
+    () =>
+      askPins
+        ? {
+            clusters: [],
+            listings: askPins,
+            stats: { ...liveVisible.stats, returned: askPins.length, truncated: false },
+            errors: liveVisible.errors,
+          }
+        : liveVisible,
+    [askPins, liveVisible],
+  );
 
   const waitingForFirst =
     (sources.includes("zigbang") && zigbangQuery.isLoading) ||
@@ -842,7 +854,43 @@ export default function MapApp() {
     }
   }, []);
 
+  const showAskPicks = useCallback((picks: AskPick[], focusId?: string) => {
+    const listings = picks.map((pick) => pick.listing);
+    if (!listings.length) return;
+    setAskPins(listings);
+    setSelected(null);
+    setViewMode((mode) => (mode === "saved" ? "map" : mode));
+    const target = focusId ? listings.find((item) => item.id === focusId) : undefined;
+    setAskHighlight(target?.id ?? null);
+    if (target) {
+      setFocus({ lat: target.lat, lng: target.lng, zoom: 17, token: Date.now() });
+      return;
+    }
+    const lats = listings.map((item) => item.lat);
+    const lngs = listings.map((item) => item.lng);
+    const bounds = {
+      south: Math.min(...lats),
+      west: Math.min(...lngs),
+      north: Math.max(...lats),
+      east: Math.max(...lngs),
+    };
+    setFocus({
+      lat: (bounds.south + bounds.north) / 2,
+      lng: (bounds.west + bounds.east) / 2,
+      bounds,
+      token: Date.now(),
+    });
+  }, []);
+
+  const exitAskPins = useCallback(() => {
+    setAskPins(null);
+    setAskHighlight(null);
+  }, []);
+
   const applySearchSnapshot = useCallback((snapshot: SearchSnapshot) => {
+    // Applying Ask's constraints as filters ends the "only the picks" view.
+    setAskPins(null);
+    setAskHighlight(null);
     const searchBox = [snapshot.searchInput.trim(), snapshot.listingQuery?.trim()]
       .filter(Boolean)
       .join(" ");
@@ -1513,7 +1561,7 @@ export default function MapApp() {
           <ListingMap
             clusters={visible.clusters}
             listings={visible.clusters.length ? [] : visible.listings}
-            selectedId={selected?.id}
+            selectedId={selected?.id ?? askHighlight ?? undefined}
             focus={focus}
             circle={circle}
             polygon={polygon}
@@ -1659,11 +1707,41 @@ export default function MapApp() {
           </div>
         ) : null}
       </div>
+      {askPins ? (
+        <div
+          role="status"
+          className="pointer-events-auto absolute right-3 z-[1150] flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 rounded-2xl border border-sky-400/40 bg-slate-950/95 px-3 py-2 text-xs text-slate-100 shadow-xl top-[var(--ask-top)] max-md:left-3 md:left-[calc(var(--desktop-panel)+1.25rem)] md:right-auto md:top-3"
+          style={{ ["--ask-top" as string]: `${headerHeight + 8}px` }}
+        >
+          <span>
+            Showing your {askPins.length} Ask pick{askPins.length === 1 ? "" : "s"} on the map
+          </span>
+          <button
+            type="button"
+            onClick={() => setAskOpen(true)}
+            className="rounded-full bg-sky-400 px-2.5 py-1 font-medium text-slate-950 hover:bg-sky-300"
+          >
+            Back to picks
+          </button>
+          <button
+            type="button"
+            onClick={exitAskPins}
+            className="rounded-full bg-white/10 px-2.5 py-1 text-slate-200 hover:bg-white/20"
+          >
+            Show all homes
+          </button>
+        </div>
+      ) : null}
       <AskSearch
         open={askOpen}
-        current={searchSnapshot}
+        viewport={{ lat: urlView.lat, lng: urlView.lng }}
+        currentSnapshot={searchSnapshot}
+        savedIds={savedHomes.map((item) => item.id)}
+        highlightedId={askHighlight ?? undefined}
         onClose={() => setAskOpen(false)}
-        onApply={applySearchSnapshot}
+        onToggleSave={onToggleSave}
+        onApplyFilters={applySearchSnapshot}
+        onShowPicks={showAskPicks}
       />
     </div>
   );

@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { getListingDetail, getMapData } from "~/server/listings/aggregate";
-import { askListings, isOpenAiConfigured } from "~/server/listings/ask";
+import { interpretAsk } from "~/server/listings/ask";
+import { isOpenAiConfigured } from "~/server/listings/openai";
+import { runAskPicks } from "~/server/listings/ask-picks";
+import { SEOUL_CENTER, type AskConstraints, type AskPicksResult } from "~/lib/listings/ask-picks";
 import { geocodeKorea } from "~/server/listings/geocode";
 import { inspectListingPhotos } from "~/server/listings/vision";
 import { translateListingNotes } from "~/server/listings/translate";
@@ -25,24 +28,42 @@ const propertyTypeSchema = z.enum([
 const salesTypeSchema = z.enum(["jeonse", "wolse", "sale"]);
 const floorFilterSchema = z.enum(floorFilters);
 const ageFilterSchema = z.enum(ageFilters);
-const snapshotSchema = z.object({
-  searchInput: z.string().max(120),
-  propertyTypes: z.array(propertyTypeSchema).min(1),
-  salesTypes: z.array(salesTypeSchema).min(1),
-  areaBucketIds: z.array(z.enum(["xs", "s", "m", "l"])),
-  radiusM: z.number().min(250).max(3000),
-  viewMode: z.enum(["map", "list", "saved", "best"]),
+const areaBucketSchema = z.enum(["xs", "s", "m", "l"]);
+const constraintsSchema = z.object({
+  place: z
+    .object({
+      name: z.string().min(1).max(60),
+      lat: z.number().min(33).max(39),
+      lng: z.number().min(124).max(132),
+      radiusM: z.number().min(250).max(3000),
+      kind: z.enum(["place", "viewport"]),
+    })
+    .optional(),
+  propertyTypes: z.array(propertyTypeSchema).max(4).optional(),
+  salesTypes: z.array(salesTypeSchema).max(3).optional(),
+  areaBucketIds: z.array(areaBucketSchema).max(4).optional(),
+  floorFilter: floorFilterSchema.optional(),
+  ageFilter: ageFilterSchema.optional(),
+  maxBuildingAge: z.number().int().min(5).max(39).optional(),
+  foreignerOk: z.boolean().optional(),
+  hasPhotos: z.boolean().optional(),
+  preferences: z.array(z.string().min(1).max(40)).max(5).optional(),
   minDeposit: z.number().min(0).max(1_000_000).optional(),
   maxDeposit: z.number().min(0).max(1_000_000).optional(),
   minRent: z.number().min(0).max(50_000).optional(),
   maxRent: z.number().min(0).max(50_000).optional(),
-  foreignerOk: z.boolean().optional(),
-  hasPhotos: z.boolean().optional(),
-  floorFilter: floorFilterSchema.optional(),
-  ageFilter: ageFilterSchema.optional(),
-  listingQuery: z.string().max(80).optional(),
-  maxBuildingAge: z.number().int().min(5).max(39).optional(),
 });
+const messagesSchema = z
+  .array(
+    z.object({
+      role: z.enum(["user", "assistant"]),
+      content: z.string().min(1).max(1500),
+    }),
+  )
+  .min(1)
+  .max(12);
+const viewportSchema = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) });
+const fallbackReasonSchema = z.enum(["rate_limited", "quota", "auth", "timeout", "error", "unconfigured"]);
 
 export const listingsRouter = createTRPCRouter({
   getMap: publicProcedure
@@ -101,22 +122,58 @@ export const listingsRouter = createTRPCRouter({
 
   aiStatus: publicProcedure.query(() => ({ openai: isOpenAiConfigured() })),
 
+  /** Step 1 of Ask: natural language → grounded constraints (place resolved to coordinates). */
+  askInterpret: publicProcedure
+    .input(
+      z.object({
+        messages: messagesSchema,
+        previous: constraintsSchema.optional(),
+        viewport: viewportSchema.optional(),
+      }),
+    )
+    .mutation(({ input, signal }) => interpretAsk({ ...input, signal })),
+
+  /**
+   * Ask: ten AI-selected listings. Without `constraints` it interprets the
+   * message first; with them it ranks exactly those (chip edits re-run this).
+   */
   ask: publicProcedure
     .input(
       z.object({
-        messages: z
-          .array(
-            z.object({
-              role: z.enum(["user", "assistant"]),
-              content: z.string().min(1).max(1500),
-            }),
-          )
-          .min(1)
-          .max(12),
-        current: snapshotSchema,
+        messages: messagesSchema,
+        constraints: constraintsSchema.optional(),
+        viewport: viewportSchema.optional(),
+        skipAi: fallbackReasonSchema.optional(),
       }),
     )
-    .mutation(({ input }) => askListings(input.messages, input.current)),
+    .mutation(async ({ input, signal }): Promise<AskPicksResult> => {
+      let constraints: AskConstraints | undefined = input.constraints;
+      let assumptions: string[] = [];
+      let skipAi = input.skipAi;
+      if (!constraints) {
+        const interpreted = await interpretAsk({
+          messages: input.messages,
+          viewport: input.viewport,
+          signal,
+        });
+        if (interpreted.status === "off_topic") return interpreted;
+        constraints = interpreted.constraints;
+        assumptions = interpreted.assumptions;
+        skipAi = skipAi ?? interpreted.fallbackReason;
+      }
+      if (!constraints.place) {
+        constraints = {
+          ...constraints,
+          place: {
+            name: "current map view",
+            ...(input.viewport ?? SEOUL_CENTER),
+            radiusM: 1500,
+            kind: "viewport",
+          },
+        };
+      }
+      return runAskPicks({ messages: input.messages, constraints, skipAi, assumptions, signal });
+    }),
 
   inspectPhotos: publicProcedure
     .input(

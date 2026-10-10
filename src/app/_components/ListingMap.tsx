@@ -31,6 +31,15 @@ import { formatPrice, propertyTypeLabel } from "~/lib/listings/copy";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
 import { MetroLayer } from "./MetroLayer";
 
+export type MapFocus = {
+  lat: number;
+  lng: number;
+  zoom?: number;
+  /** Fit these bounds instead of centering on one point (e.g. a set of Ask picks). */
+  bounds?: { south: number; west: number; north: number; east: number };
+  token: number;
+};
+
 const SEOUL: [number, number] = [37.5665, 126.978];
 const USER_ZOOM = 16;
 const BASEMAP = leafletBasemap();
@@ -134,7 +143,7 @@ function MapEvents({
     center?: { lat: number; lng: number };
     initial?: boolean;
   }) => void;
-  focus: { lat: number; lng: number; zoom?: number; token: number } | null;
+  focus: MapFocus | null;
   tool: "pan" | "radius" | "draw";
   onMapClick: (point: LatLng) => void;
   onFinishDraw: () => void;
@@ -169,6 +178,24 @@ function MapEvents({
 
   useEffect(() => {
     if (!focus) return;
+    if (focus.bounds) {
+      const size = map.getSize();
+      const shift = panelOffsetPx(size.x, window.innerWidth);
+      map.flyToBounds(
+        [
+          [focus.bounds.south, focus.bounds.west],
+          [focus.bounds.north, focus.bounds.east],
+        ],
+        {
+          maxZoom: 16,
+          paddingTopLeft: [shift * 2 + 24, 72],
+          paddingBottomRight: [24, 120],
+          duration: 0.5,
+        },
+      );
+      const settle = setTimeout(() => emitViewport(map, onViewport), 900);
+      return () => clearTimeout(settle);
+    }
     if (focus.zoom) {
       // On desktop the filter panel covers the left 40% of a full-width map;
       // aim at the middle of the uncovered area so a radius circle is not
@@ -488,7 +515,7 @@ export function ListingMap({
   clusters: MapCluster[];
   listings: MapListing[];
   selectedId?: string;
-  focus: { lat: number; lng: number; zoom?: number; token: number } | null;
+  focus: MapFocus | null;
   circle: CircleFilter | null;
   polygon: LatLng[] | null;
   draftPoints: LatLng[];
