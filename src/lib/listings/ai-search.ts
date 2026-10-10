@@ -17,6 +17,8 @@ import {
   type PriceFilter,
 } from "./price";
 import {
+  isAskListingToken,
+  isListingFilterToken,
   isStationQuery,
   listingFilterQuery,
   matchPlace,
@@ -69,6 +71,8 @@ export type InterpretedSearch = {
   intent: SearchIntent;
   snapshot: SearchSnapshot;
   reply: string;
+  /** Message had nothing a rental search can act on; filters were left alone. */
+  noIntent?: boolean;
 };
 
 type MoneyKind = "deposit" | "rent";
@@ -88,17 +92,30 @@ function round10(value: number) {
   return Math.round(value / 10) * 10 || value;
 }
 
-function parseManwonToken(amount: number, unit: string | undefined): number | undefined {
+/**
+ * Convert "amount + unit" to 만원 (the unit every filter uses).
+ * 600k → 60, 50만원 → 50, 5백만원 → 500, 5천만원 → 5000, 1 million → 100,
+ * 1.5억 → 15000, ₩600,000 → 60.
+ */
+export function parseManwonToken(amount: number, unit: string | undefined): number | undefined {
   if (!Number.isFinite(amount) || amount < 0) return undefined;
   const suffix = (unit ?? "").toLowerCase().replace(/\s+/g, "");
   if (suffix === "억") return Math.round(amount * 10_000);
+  if (suffix === "천만원" || suffix === "천만" || suffix === "천") {
+    return Math.round(amount * 1000);
+  }
+  if (suffix === "백만원" || suffix === "백만" || suffix === "백") {
+    return Math.round(amount * 100);
+  }
   if (suffix === "만" || suffix === "만원" || suffix === "만원이하" || suffix === "만워") {
     return Math.round(amount);
   }
-  if (suffix === "million" || suffix === "mil" || suffix === "m") {
+  if (suffix === "million" || suffix === "mil" || /^m(?:won|krw)$/.test(suffix)) {
     return Math.round(amount * 100);
   }
-  if (suffix === "k") return Math.round((amount * 1000) / 10_000);
+  if (suffix === "k" || suffix === "kwon" || suffix === "kkrw") {
+    return Math.round((amount * 1000) / 10_000);
+  }
   if (suffix === "원" || suffix === "krw" || suffix === "won") {
     return Math.round(amount / 10_000);
   }
@@ -106,17 +123,26 @@ function parseManwonToken(amount: number, unit: string | undefined): number | un
   return Math.round(amount);
 }
 
+const MONEY_RE =
+  /₩?\s*(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*(억|천\s*만\s*원?|백\s*만\s*원?|만\s*원|만|million|mil\b|m\s*(?:won|krw)\b|k\s*(?:won|krw)?\b|원|krw|won)?/gi;
+
 function extractMoney(text: string): MoneyHit[] {
   const hits: MoneyHit[] = [];
-  const re =
-    /₩?\s*(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*(억|만원|만\s*원|만|million|mil\b|m\b|k\b|원|krw|won)?/gi;
+  const re = new RegExp(MONEY_RE.source, MONEY_RE.flags);
   let match: RegExpExecArray | null;
   while ((match = re.exec(text))) {
     const raw = match[0] ?? "";
-    const after = text.slice(match.index + raw.length, match.index + raw.length + 12);
-    if (/\s*(pyeong|py\b|m²|m2|sqm|meters?|minute|min\b|km|m\b|years?|yrs?|year old)\b/i.test(after)) {
+    const after = text.slice(match.index + raw.length, match.index + raw.length + 14);
+    // A bare number followed by a non-money unit is a distance, area or age.
+    if (
+      !match[2] &&
+      /^\s*(?:pyeong|py\b|평|m²|m2|sqm|square|meters?|metres?|m\b|minutes?|min\b|km|years?|yrs?|y\b|년|층|f\b|floors?|bed|bedrooms?|rooms?|룸|%)/i.test(
+        after,
+      )
+    ) {
       continue;
     }
+    if (match[2] && /^\s*(?:years?|yrs?|년)/i.test(after)) continue;
     const amount = Number((match[1] ?? "").replace(/,/g, ""));
     const manwon = parseManwonToken(amount, match[2]);
     if (manwon == null || manwon <= 0) continue;
@@ -160,7 +186,8 @@ function classifyKind(text: string, hit: MoneyHit): MoneyKind {
 }
 
 function classifyBound(text: string, hit: MoneyHit): MoneyBound {
-  const { left } = leftRight(text, hit);
+  const { left, right } = leftRight(text, hit);
+  if (/^\s*(?:이상|or more|and (?:up|above|over)|\+|minimum)/i.test(right)) return "min";
   if (
     /min(?:imum)?|at least|over|above|more than|from|starting|≥|>=|이상|최소/i.test(
       left,
@@ -262,7 +289,9 @@ function parseSalesTypes(text: string, price: PriceFilter): SalesType[] | undefi
 }
 
 function parseAreaBuckets(text: string): AreaBucketId[] | undefined {
-  if (/tiny|compact|very small|under 20|xs\b|< ?6 py/i.test(text)) return ["xs"];
+  if (/tiny|compact|very small|under 20\s*(?:m²|m2|sqm|square)|\bxs\b|< ?6 py/i.test(text)) {
+    return ["xs"];
+  }
   if (/small studio|6-?10 py|20-?33/i.test(text)) return ["s"];
   if (/family|spacious|large|50\+|15\+ py/i.test(text)) return ["l"];
   if (/10-?15 py|33-?50/i.test(text)) return ["m"];
@@ -415,14 +444,19 @@ export function isFreshAsk(text: string, intent: SearchIntent): boolean {
   return /\b(find|search|show me|looking for|i want|near)\b/i.test(text);
 }
 
-export function emptyAskSnapshot(current: Pick<SearchSnapshot, "radiusM">): SearchSnapshot {
+export function emptyAskSnapshot(
+  current: Pick<SearchSnapshot, "radiusM"> &
+    Partial<Pick<SearchSnapshot, "viewMode" | "salesTypes">>,
+): SearchSnapshot {
   return {
     searchInput: "",
     propertyTypes: ALL_TYPES,
-    salesTypes: ["jeonse", "wolse"],
+    // A fresh search drops old filters, but not the user's rent/jeonse choice
+    // or their current view: neither was part of what they just asked for.
+    salesTypes: current.salesTypes?.length ? current.salesTypes : ["jeonse", "wolse"],
     areaBucketIds: [],
     radiusM: current.radiusM || 1200,
-    viewMode: "list",
+    viewMode: current.viewMode ?? "list",
   };
 }
 
@@ -445,20 +479,219 @@ function usableLocalListingQuery(query?: string | null): string | null | undefin
   return query.trim();
 }
 
-/** Prefer OpenAI's structured filters. Only fill place / building age if the model omitted them. */
-export function composeAskIntent(ai: SearchIntent, local: SearchIntent, fresh: boolean): SearchIntent {
+export type AskFallbackReason = "rate_limited" | "timeout" | "error";
+
+/** Small UI notice shown when on-site search answered instead of the AI. */
+export const ASK_FALLBACK_NOTICE: Record<AskFallbackReason, string> = {
+  rate_limited: "Using basic search — AI is busy",
+  timeout: "Using basic search — AI took too long",
+  error: "Using basic search — AI is unavailable",
+};
+
+export const OFF_TOPIC_REPLY =
+  "I can only help with finding rentals. Try a neighborhood or station, a budget, or a type, like “studio near Hongdae under ₩700,000”. Your filters are unchanged.";
+export const ROOM_COUNT_NOTE =
+  "Room count isn't supported yet, so I didn't filter by bedrooms.";
+
+/** True when the message asks for a bedroom / room count (we have no such filter). */
+export function mentionsRoomCount(text: string): boolean {
+  return /\b(?:\d+|one|two|three|four|1|2|3)[\s-]*(?:bed(?:room)?s?|br|rooms?)\b|\b(?:studio|1|one)[\s-]*bed\b|투룸|쓰리룸|2룸|3룸|방\s*[2-4]\s*개|방\s*(?:두|세|네)\s*개/i.test(
+    text,
+  );
+}
+
+const CLEAR_WORDS =
+  /\b(clear|reset|remove|any|anywhere|no (?:price|budget|limit|filter)s?|ignore|don'?t care|doesn'?t matter|include)\b|상관없|무관|제한\s*없/i;
+const SIZE_WORDS =
+  /\b(tiny|compact|small|smaller|large|larger|big|bigger|spacious|family|xs)\b|\d+(?:\.\d+)?\s*(?:pyeong|py\b|평|m²|m2|sqm|square)|\bsize\b|평수|넓|좁/i;
+const RADIUS_WORDS =
+  /\b(near|nearby|around|close to|within|walk(?:ing)?|radius|station|subway)\b|\d\s*(?:km|m\b|meters?)|근처|도보|역\b|반경/i;
+const VIEW_WORDS = {
+  map: /\b(on the map|map view|show (?:me )?the map)\b|지도/i,
+  list: /\b(list view|as a list|show (?:me )?(?:a |the )?list|list them)\b|목록/i,
+  best:
+    /recommend|best value|good value|best (?:homes?|places?|apartments?|studios?)|nicest|good photos|for me\b|추천/i,
+};
+const PHOTO_WORDS = /\b(photos?|pictures?|pics?)\b|사진/i;
+const FOREIGNER_WORDS = /foreigner|외국인/i;
+const FLOOR_WORDS = /\b(floors?|basement|semi-?basement|\d+\s*f\+?|high floors?|ground)\b|반지하|지하|고층|저층|층/i;
+const BUILDING_AGE_WORDS = /\b(years?|yrs?|built|newer|newest|old|new build(?:ing)?s?|age)\b|년|신축|준공/i;
+const HAS_NUMBER = /\d|억|만원|천만|백만|million|\b(?:one|two|three|four|five|ten|hundred|thousand)\b/i;
+
+function dropNull<T>(value: T | null | undefined, allowClear: boolean): T | null | undefined {
+  return value === null && !allowClear ? undefined : value;
+}
+
+const PLACE_NOISE =
+  /^(?:near|nearby|around|close|years?|yrs?|old|older|newer|newest|good|great|nice|value|homes?|places?|rent|monthly|under|over|max|min|less|than|in|at|the|a|an|bedrooms?|beds?|투룸|쓰리룸|이하|이상|만원|k|million)$/i;
+
+function cleanPlaceText(value: string | null | undefined): string | null | undefined {
+  if (value == null) return value;
+  const kept = value
+    .split(/\s+/)
+    .filter((token) => token && !/\d/.test(token))
+    .filter((token) => {
+      const normalized = normalizeSearch(token);
+      return normalized && !isListingFilterToken(normalized) && !PLACE_NOISE.test(normalized);
+    });
+  if (kept.length > 4) return undefined;
+  return kept.join(" ").trim() || undefined;
+}
+
+/**
+ * Drop every field the user's message gives no evidence for. The model (or
+ * a loose regex) sometimes volunteers filters — a listing-date window for
+ * "newest", a size bucket for "under 200 million" — and those silently
+ * narrow results. Explicit nulls ("clear the budget") only survive when
+ * the text asks for a clear.
+ */
+export function groundIntent(intent: SearchIntent, text: string): SearchIntent {
+  const clear = CLEAR_WORDS.test(text);
+  const out: SearchIntent = {};
+  const place = cleanPlaceText(intent.searchInput);
+  if (place !== undefined) out.searchInput = place;
+  else if (intent.searchInput === null && clear) out.searchInput = null;
+
+  if (intent.listingQuery === null) {
+    if (clear) out.listingQuery = null;
+  } else if (intent.listingQuery) {
+    const haystack = ` ${normalizeSearch(text)} `;
+    const tokens = intent.listingQuery
+      .split(/\s+/)
+      .filter(
+        (token) =>
+          haystack.includes(` ${normalizeSearch(token)} `) &&
+          isAskListingToken(token),
+      );
+    if (tokens.length) out.listingQuery = tokens.join(" ");
+  }
+
+  const typeEvidence = parsePropertyTypes(text);
+  const types = dropNull(intent.propertyTypes, clear);
+  if (types === null) out.propertyTypes = null;
+  else if (types && typeEvidence) {
+    const kept = types.filter((type) => typeEvidence.includes(type));
+    if (kept.length) out.propertyTypes = kept;
+  }
+
+  const priceEvidence = parsePriceIntent(text);
+  const salesEvidence = parseSalesTypes(text, priceEvidence);
+  const sales = dropNull(intent.salesTypes, clear);
+  if (sales === null) out.salesTypes = null;
+  else if (sales && salesEvidence) {
+    const kept = sales.filter((type) => salesEvidence.includes(type));
+    if (kept.length) out.salesTypes = kept;
+  }
+
+  const areas = dropNull(intent.areaBucketIds, clear);
+  if (areas === null) out.areaBucketIds = null;
+  else if (areas && SIZE_WORDS.test(text)) out.areaBucketIds = areas;
+
+  if (typeof intent.radiusM === "number" && RADIUS_WORDS.test(text)) {
+    out.radiusM = intent.radiusM;
+  } else if (intent.radiusM === null && clear) out.radiusM = null;
+
+  const view = intent.viewMode;
+  if (view === "map" && VIEW_WORDS.map.test(text)) out.viewMode = "map";
+  else if (view === "list" && VIEW_WORDS.list.test(text)) out.viewMode = "list";
+  else if (view === "best" && VIEW_WORDS.best.test(text)) out.viewMode = "best";
+
+  // Money: our own parser is authoritative for numbers (600k, 만원, 백만…),
+  // so a model value only survives when the parser found nothing to
+  // contradict and the text really contains a number.
+  const hasMoney = HAS_NUMBER.test(text);
+  const localMoney = [
+    priceEvidence.minDeposit,
+    priceEvidence.maxDeposit,
+    priceEvidence.minRent,
+    priceEvidence.maxRent,
+  ].some((value) => value != null);
+  for (const key of ["minDeposit", "maxDeposit", "minRent", "maxRent"] as const) {
+    const value = intent[key];
+    if (value === null) {
+      if (clear) out[key] = null;
+    } else if (typeof value === "number") {
+      if (localMoney) {
+        if (priceEvidence[key] != null) out[key] = priceEvidence[key];
+      } else if (hasMoney) out[key] = value;
+    } else if (localMoney && priceEvidence[key] != null) {
+      out[key] = priceEvidence[key];
+    }
+  }
+
+  if (typeof intent.foreignerOk === "boolean" && FOREIGNER_WORDS.test(text)) {
+    out.foreignerOk = intent.foreignerOk;
+  } else if (intent.foreignerOk === null && clear) out.foreignerOk = null;
+  if (typeof intent.hasPhotos === "boolean" && PHOTO_WORDS.test(text)) {
+    out.hasPhotos = intent.hasPhotos;
+  } else if (intent.hasPhotos === null && clear) out.hasPhotos = null;
+
+  const floorEvidence = parseFloorFilter(text).floorFilter;
+  if (intent.floorFilter && FLOOR_WORDS.test(text)) out.floorFilter = intent.floorFilter;
+  else if (floorEvidence) out.floorFilter = floorEvidence;
+  else if (intent.floorFilter === null && clear) out.floorFilter = null;
+
+  // Listing recency (week/month) only when the user said so; "newest
+  // buildings" is building age, not "listed this month".
+  const recency = parseAgeFilter(text).ageFilter;
+  if (intent.ageFilter && recency === intent.ageFilter) out.ageFilter = recency;
+  else if (intent.ageFilter === null && clear) out.ageFilter = null;
+
+  const builtLocal = parseMaxBuildingAge(text);
+  if (typeof intent.maxBuildingAge === "number" && BUILDING_AGE_WORDS.test(text)) {
+    out.maxBuildingAge = builtLocal ?? intent.maxBuildingAge;
+  } else if (builtLocal) out.maxBuildingAge = builtLocal;
+  else if (intent.maxBuildingAge === null && clear) out.maxBuildingAge = null;
+  return out;
+}
+
+/** Does the intent change anything a rental search can act on? */
+export function hasSearchIntent(intent: SearchIntent): boolean {
+  return (
+    intent.searchInput !== undefined ||
+    intent.listingQuery !== undefined ||
+    intent.propertyTypes !== undefined ||
+    intent.salesTypes !== undefined ||
+    intent.areaBucketIds !== undefined ||
+    intent.minDeposit !== undefined ||
+    intent.maxDeposit !== undefined ||
+    intent.minRent !== undefined ||
+    intent.maxRent !== undefined ||
+    intent.foreignerOk !== undefined ||
+    intent.hasPhotos !== undefined ||
+    intent.floorFilter !== undefined ||
+    intent.ageFilter !== undefined ||
+    intent.maxBuildingAge !== undefined ||
+    intent.viewMode !== undefined
+  );
+}
+
+/**
+ * Prefer OpenAI's structured filters, grounded against the message so only
+ * what the user stated is applied. Fill place / building age from the local
+ * parser when the model omitted them.
+ */
+export function composeAskIntent(
+  ai: SearchIntent,
+  local: SearchIntent,
+  fresh: boolean,
+  text?: string,
+): SearchIntent {
+  const grounded = text === undefined ? ai : groundIntent(ai, text);
   return {
-    ...ai,
-    searchInput: ai.searchInput === undefined ? local.searchInput : ai.searchInput,
+    ...grounded,
+    searchInput:
+      grounded.searchInput === undefined ? local.searchInput : grounded.searchInput,
+    radiusM: grounded.radiusM === undefined ? local.radiusM : grounded.radiusM,
     maxBuildingAge:
-      ai.maxBuildingAge === undefined ? local.maxBuildingAge : ai.maxBuildingAge,
-    viewMode: ai.viewMode ?? local.viewMode ?? "list",
+      grounded.maxBuildingAge === undefined ? local.maxBuildingAge : grounded.maxBuildingAge,
+    viewMode: grounded.viewMode ?? local.viewMode,
     listingQuery:
-      ai.listingQuery === undefined
+      grounded.listingQuery === undefined
         ? fresh
-          ? (usableLocalListingQuery(local.listingQuery) ?? null)
+          ? (usableLocalListingQuery(local.listingQuery) ?? undefined)
           : undefined
-        : ai.listingQuery,
+        : grounded.listingQuery,
   };
 }
 
@@ -473,14 +706,22 @@ export function interpretSearch(
   if (place) {
     const geoLeftover = unrefinedPlaceLeftover(text, place);
     if (isStationQuery(text)) {
-      intent.searchInput = `${place.names[0]} station`;
+      const base = place.names[0] ?? place.id;
+      intent.searchInput = /station|역/i.test(base) ? base : `${base} station`;
     } else if (geoLeftover && geoLeftover.split(/\s+/).length <= 2) {
       intent.searchInput = `${place.names[0]} ${geoLeftover}`;
     } else {
       intent.searchInput = place.names[0] ?? place.id;
     }
   }
-  const leftover = followUp ? undefined : listingFilterQuery(text, place) || undefined;
+  // The search box is for place names; only amenity words (pet, furnished…)
+  // may ride along to match listing titles. Type/rent words are filters.
+  const leftover = followUp
+    ? undefined
+    : listingFilterQuery(text, place)
+        .split(/\s+/)
+        .filter((token) => isAskListingToken(token))
+        .join(" ") || undefined;
   if (leftover) intent.listingQuery = leftover;
 
   const maxBuildingAge = followUp ? undefined : parseMaxBuildingAge(text);
@@ -505,15 +746,10 @@ export function interpretSearch(
   const areas = parseAreaBuckets(text);
   if (areas) intent.areaBucketIds = areas;
   const radiusM = parseRadius(text) ?? (place ? (place.radiusM ?? undefined) : undefined);
-  if (radiusM) intent.radiusM = radiusM;
-  if (/\bon the map\b|\bmap view\b/i.test(text)) intent.viewMode = "map";
-  else if (
-    /recommend|best value|good value|best (?:homes?|places?|apartments?|studios?)|nicest|good photos|for me\b/i.test(
-      text,
-    )
-  ) {
-    intent.viewMode = "best";
-  } else intent.viewMode = "list";
+  if (radiusM && (Boolean(place) || RADIUS_WORDS.test(text))) intent.radiusM = radiusM;
+  if (VIEW_WORDS.map.test(text)) intent.viewMode = "map";
+  else if (VIEW_WORDS.best.test(text)) intent.viewMode = "best";
+  else if (VIEW_WORDS.list.test(text)) intent.viewMode = "list";
 
   if (/clear (the )?(price|budget|deposit|rent)|any budget|no price/i.test(text)) {
     intent.minDeposit = null;
@@ -554,11 +790,24 @@ export function interpretSearch(
     intent.ageFilter = null;
   }
 
+  const roomCount = mentionsRoomCount(text);
+  if (!hasSearchIntent(intent)) {
+    // Off-topic or too vague to act on: leave every filter and the view alone.
+    return {
+      intent: {},
+      snapshot: current,
+      reply: roomCount ? `${ROOM_COUNT_NOTE} ${OFF_TOPIC_REPLY}` : OFF_TOPIC_REPLY,
+      noIntent: true,
+    };
+  }
+
   const snapshot = mergeSearchIntent(
     followUp || !isFreshAsk(text, intent) ? current : emptyAskSnapshot(current),
     intent,
   );
-  const reply = describeSearchSnapshot(snapshot);
+  const reply = [describeSearchSnapshot(snapshot), roomCount ? ROOM_COUNT_NOTE : null]
+    .filter(Boolean)
+    .join(" ");
   return { intent, snapshot, reply };
 }
 

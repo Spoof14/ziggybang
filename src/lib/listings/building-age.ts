@@ -74,6 +74,21 @@ export function parseMaxBuildingAge(text: string, now = new Date()): number | un
       }).maxBuildingAge;
     }
   }
+  const korean = text.match(/(\d{1,2})\s*년\s*(?:이내|이하|미만|된)/);
+  const newer =
+    text.match(
+      /(?:newer than|younger than|less than|fewer than|under|within|max(?:imum)?|up to|<=?)\s*(\d{1,2})\s*(?:years?|yrs?|y)\b/i,
+    ) ??
+    text.match(/(\d{1,2})\s*(?:years?|yrs?)\s*(?:old\s*)?(?:or\s+)?(?:newer|younger|or less)\b/i);
+  const early = korean?.[1] ?? newer?.[1];
+  if (early) {
+    const years = Number(early);
+    if (Number.isFinite(years) && years > 0) {
+      return normalizeBuildingAgeFilter({
+        maxBuildingAge: Math.max(MAX_BUILDING_AGE_MIN, years),
+      }).maxBuildingAge;
+    }
+  }
   const match = text.match(
     /(?:(?:less than|under|up to|no more than|max(?:imum)?|within|younger than|no older than)\s+)?(\d{1,2})\s*(?:years?|yrs?)\s*old\b/i,
   ) ?? text.match(

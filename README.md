@@ -102,3 +102,13 @@ not change the map.
 `bun run test` runs the Vitest unit tests for geohash tiling, clustering, source mapping, English copy, and aggregation. Naver is asserted to fail soft if the host is unreachable. `src/server/listings/live.test.ts` is a live Zigbang smoke test that needs network access and can be flaky; CI excludes it (`bun run test --exclude src/server/listings/live.test.ts`).
 
 CI (`.github/workflows/ci.yml`) runs lint, `tsc`, build, and tests with Bun on every PR and push to `main`.
+
+## Ask: behavior notes and known limits
+
+- **Only stated constraints apply.** Model output is grounded against the user's message (`groundIntent`): listing-date window, size bucket, radius, view mode, etc. are dropped unless the text supports them. Money is always parsed by our own parser (`600k`, `50만원`, `5천만원`, `5백만원`, `1 million`, `1억`, `₩600,000`), which overrides model numbers.
+- **Search box is for place names only.** Amenity words (pet, furnished, rooftop…) may ride along to match listing titles; type/rent/age words become filters instead.
+- **Off-topic or vague messages** ("what is the weather", "something nice") leave all filters and the view untouched and reply with a "can only help with finding rentals" hint.
+- **Room count isn't supported** (the listing data has no reliable room-count field, only a free-text `roomType`). Ask says so in its reply instead of silently dropping "2 bedroom" / "투룸".
+- **Rate limits.** Ziggybang has no rate limiting of its own on Ask. The only limit is OpenAI's per-key requests/tokens-per-minute for `gpt-4o-mini` (low usage tiers allow just a few requests per minute). On HTTP 429 the server retries once after `Retry-After` (capped at 2 s), then falls back to on-site search and the dialog shows "Using basic search — AI is busy". Timeouts (12 s server, 25 s client) and other errors show a matching notice. Raise the OpenAI tier/limits if this shows up in practice.
+- **Address search.** Street addresses (`서울 마포구 양화로 160`) are geocoded through OpenStreetMap Nominatim at road level (no house numbers in OSM for most of Korea) with a 400 m circle. If Nominatim has nothing, the district is used and the UI says so. Kakao/Naver geocoding would give house-number precision but needs API keys (none configured).
+- **List vs. map clusters.** At zoom < 15 the map shows server clusters that include Naver's grouped inventory, which has no individual homes to list. The list therefore can be empty while clusters show; the list now says "Zoom in to load individual homes".

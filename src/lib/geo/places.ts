@@ -5,6 +5,8 @@ export type Place = {
   lng: number;
   zoom: number;
   radiusM?: number;
+  /** A street address resolved only to its district; no exact point. */
+  districtOnly?: boolean;
 };
 
 export const places: Place[] = [
@@ -17,6 +19,7 @@ export const places: Place[] = [
   { id: "seongsu", names: ["seongsu", "성수", "seongdong", "성동"], lat: 37.544, lng: 127.056, zoom: 15 },
   { id: "konkuk", names: ["konkuk", "건대", "건대입구", "gundae", "화양동"], lat: 37.54, lng: 127.07, zoom: 15 },
   { id: "gwangjin", names: ["gwangjin", "광진", "광진구", "gwangjin-gu"], lat: 37.538, lng: 127.082, zoom: 14 },
+  { id: "seoul-station", names: ["seoul station", "seoulyeok", "서울역"], lat: 37.5547, lng: 126.9707, zoom: 16, radiusM: 800 },
   { id: "hongdae", names: ["hongdae", "hongik", "홍대", "홍익", "서교", "seogyo", "hongdae station", "홍대입구역", "hongik university station"], lat: 37.556, lng: 126.923, zoom: 16, radiusM: 800 },
   { id: "hapjeong", names: ["hapjeong", "합정", "망원", "mangwon", "hapjeong station", "합정역"], lat: 37.549, lng: 126.914, zoom: 16, radiusM: 800 },
   { id: "dangsan", names: ["dangsan", "당산", "당산동", "당산역", "dangsan station"], lat: 37.5346, lng: 126.9025, zoom: 16, radiusM: 800 },

@@ -92,7 +92,10 @@ function emitViewport(
     north: number;
     east: number;
     zoom: number;
+    center?: { lat: number; lng: number };
+    initial?: boolean;
   }) => void,
+  initial = false,
 ) {
   const size = map.getSize();
   const leafletBounds = map.getBounds();
@@ -103,9 +106,12 @@ function emitViewport(
     east: leafletBounds.getEast(),
   };
   if (!isUsableMapViewport(size, bounds)) return;
+  const center = map.getCenter();
   onViewport({
     ...bounds,
     zoom: map.getZoom(),
+    center: { lat: center.lat, lng: center.lng },
+    initial,
   });
 }
 
@@ -122,6 +128,8 @@ function MapEvents({
     north: number;
     east: number;
     zoom: number;
+    center?: { lat: number; lng: number };
+    initial?: boolean;
   }) => void;
   focus: { lat: number; lng: number; zoom?: number; token: number } | null;
   tool: "pan" | "radius" | "draw";
@@ -131,7 +139,9 @@ function MapEvents({
   const map = useMap();
 
   useEffect(() => {
-    emitViewport(map, onViewport);
+    // Marked initial: the map has not yet moved to the URL / place view, so
+    // MapApp must not write this default position into the URL.
+    emitViewport(map, onViewport, true);
   }, [map, onViewport]);
 
   useEffect(() => {
@@ -486,6 +496,8 @@ export function ListingMap({
     north: number;
     east: number;
     zoom: number;
+    center?: { lat: number; lng: number };
+    initial?: boolean;
   }) => void;
   onSelectListing: (listing: MapListing) => void;
   onSelectCluster: (cluster: MapCluster) => void;

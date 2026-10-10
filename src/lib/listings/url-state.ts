@@ -121,7 +121,7 @@ export function parseAppUrl(search: string): AppUrlState {
     next.view = {
       lat,
       lng,
-      zoom: Math.min(18, Math.max(7, zoom)),
+      zoom: Math.min(18, Math.max(7, Math.round(zoom * 100) / 100)),
     };
   }
   if (sort && LIST_SORTS.includes(sort as ListSort)) {
@@ -166,6 +166,12 @@ export function buildAppSearch(state: {
   salesTypes: SalesType[];
   areaBucketIds: AreaBucketId[];
   radiusM: number;
+  /**
+   * Whether a radius is actually in use (place circle or manual circle). When
+   * false, `r`/`rlat`/`rlng` are left out so a stale radius from an earlier
+   * search does not linger in the URL.
+   */
+  radiusActive?: boolean;
   /** Manually placed radius center, persisted so shared links reproduce it. */
   circleCenter?: { lat: number; lng: number } | null;
   view: { lat: number; lng: number; zoom: number };
@@ -189,7 +195,8 @@ export function buildAppSearch(state: {
     params.set("sale", state.salesTypes.join(","));
   }
   if (state.areaBucketIds.length) params.set("size", state.areaBucketIds.join(","));
-  if (state.radiusM !== 1200 || state.circleCenter) {
+  const radiusActive = state.radiusActive !== false || Boolean(state.circleCenter);
+  if (radiusActive && (state.radiusM !== 1200 || state.circleCenter)) {
     params.set("r", String(state.radiusM));
   }
   if (state.circleCenter) {
@@ -198,7 +205,9 @@ export function buildAppSearch(state: {
   }
   params.set("lat", state.view.lat.toFixed(4));
   params.set("lng", state.view.lng.toFixed(4));
-  params.set("z", String(Math.round(state.view.zoom)));
+  // Keep fractional zoom (fitBounds/flyTo land between levels) so the URL
+  // reproduces the exact view; two decimals is well below visual precision.
+  params.set("z", String(Math.round(state.view.zoom * 100) / 100));
   if (state.listSort !== "featured") params.set("sort", state.listSort);
   if (state.foreignerOk) params.set("ok", "1");
   if (state.hasPhotos) params.set("pics", "1");

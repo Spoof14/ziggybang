@@ -38,7 +38,7 @@ describe("listings router", () => {
     expect(result.snapshot.propertyTypes).toEqual(["oneroom"]);
     expect(result.snapshot.maxRent).toBe(80);
     expect(result.snapshot.maxDeposit).toBe(2000);
-    expect(result.snapshot.viewMode).toBe("list");
+    expect(result.snapshot.viewMode).toBe("map");
   });
 
   it("returns English landlord notes without calling OpenAI", async () => {
