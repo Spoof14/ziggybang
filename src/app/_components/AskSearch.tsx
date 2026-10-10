@@ -28,12 +28,11 @@ import { AskCarousel } from "./AskCarousel";
 /** Hard client-side ceiling for one Ask (interpret + search + rank). */
 const ASK_TIMEOUT_MS = 45_000;
 
-type Phase = "interpreting" | "searching";
+type Phase = "searching";
 
-function progressText(phase: Phase, elapsed: number, where?: string): string {
-  if (phase === "interpreting") return "Understanding your request…";
+function progressText(_phase: Phase, elapsed: number, where?: string): string {
   const area = where ? ` near ${where}` : "";
-  if (elapsed < 5) return `Searching Zigbang, Peterpan and Naver${area}…`;
+  if (elapsed < 3) return `Searching Zigbang, Peterpan and Naver${area}…`;
   if (elapsed < 12) return "Ranking the best matches…";
   return `Still working (${elapsed}s) — live listing sites can be slow.`;
 }
@@ -69,6 +68,7 @@ export function AskSearch({
   const [constraints, setConstraints] = useState<AskConstraints | null>(null);
   const [result, setResult] = useState<AskStoredResult | null>(null);
   const [draft, setDraft] = useState("");
+  const [runKey, setRunKey] = useState(0);
   const [phase, setPhase] = useState<Phase | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
@@ -162,40 +162,30 @@ export function AskSearch({
       ? [...messages, { role: "user" as const, content: text }].slice(-8)
       : messages;
     try {
-      let working = options.edited ?? null;
-      let skipAi: AskFallbackReason | undefined;
-      if (text) {
-        setPhase("interpreting");
-        const interpreted = await utils.client.listings.askInterpret.mutate(
-          {
-            messages: history,
-            previous: result ? (constraints ?? undefined) : undefined,
-            viewport,
-          },
-          { signal: controller.signal },
-        );
-        if (!live()) return;
-        if (interpreted.status === "off_topic") {
-          setNotice(interpreted.reply);
-          setDraft("");
-          return;
-        }
-        working = interpreted.constraints;
-        skipAi = interpreted.fallbackReason;
-      }
-      if (!working) return;
-      setConstraints(working);
+      // One round trip: the server interprets (merging into the previous
+      // constraints for a refine) and ranks. Chip edits send constraints.
       setPhase("searching");
+      if (options.edited) setConstraints(options.edited);
       const answer = await utils.client.listings.ask.mutate(
-        { messages: history, constraints: working, viewport, skipAi },
+        text
+          ? {
+              messages: history,
+              previous: result ? (constraints ?? undefined) : undefined,
+              viewport,
+            }
+          : { messages: history, constraints: options.edited, viewport },
         { signal: controller.signal },
       );
       if (!live()) return;
+      if (answer.status === "off_topic" && text) {
+        setDraft("");
+      }
       if (answer.status === "off_topic") {
         setNotice(answer.reply);
         return;
       }
       setResult(answer);
+      setRunKey((n) => n + 1);
       setConstraints(answer.constraints);
       setMessages([
         ...history,
@@ -501,6 +491,7 @@ export function AskSearch({
               aria-busy={pending}
             >
               <AskCarousel
+                key={runKey}
                 picks={picks}
                 savedIds={new Set(savedIds)}
                 highlightedId={highlightedId}

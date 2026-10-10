@@ -42,6 +42,7 @@ const constraintsSchema = z.object({
   propertyTypes: z.array(propertyTypeSchema).max(4).optional(),
   salesTypes: z.array(salesTypeSchema).max(3).optional(),
   areaBucketIds: z.array(areaBucketSchema).max(4).optional(),
+  rooms: z.number().int().min(2).max(4).optional(),
   floorFilter: floorFilterSchema.optional(),
   ageFilter: ageFilterSchema.optional(),
   maxBuildingAge: z.number().int().min(5).max(39).optional(),
@@ -134,28 +135,35 @@ export const listingsRouter = createTRPCRouter({
     .mutation(({ input, signal }) => interpretAsk({ ...input, signal })),
 
   /**
-   * Ask: ten AI-selected listings. Without `constraints` it interprets the
-   * message first; with them it ranks exactly those (chip edits re-run this).
+   * Ask: ten selected listings in ONE round trip. With `constraints` it ranks
+   * exactly those (chip edits). Otherwise it interprets the message first —
+   * merging into `previous` for a refine — using the deterministic parser and
+   * only calling the model when that is not enough.
    */
   ask: publicProcedure
     .input(
       z.object({
         messages: messagesSchema,
         constraints: constraintsSchema.optional(),
+        previous: constraintsSchema.optional(),
         viewport: viewportSchema.optional(),
         skipAi: fallbackReasonSchema.optional(),
       }),
     )
     .mutation(async ({ input, signal }): Promise<AskPicksResult> => {
+      const started = Date.now();
       let constraints: AskConstraints | undefined = input.constraints;
       let assumptions: string[] = [];
       let skipAi = input.skipAi;
+      let interpretMs = 0;
       if (!constraints) {
         const interpreted = await interpretAsk({
           messages: input.messages,
+          previous: input.previous,
           viewport: input.viewport,
           signal,
         });
+        interpretMs = Date.now() - started;
         if (interpreted.status === "off_topic") return interpreted;
         constraints = interpreted.constraints;
         assumptions = interpreted.assumptions;
@@ -172,7 +180,22 @@ export const listingsRouter = createTRPCRouter({
           },
         };
       }
-      return runAskPicks({ messages: input.messages, constraints, skipAi, assumptions, signal });
+      const result = await runAskPicks({
+        messages: input.messages,
+        constraints,
+        skipAi,
+        assumptions,
+        fromText: !input.constraints,
+        signal,
+      });
+      if (result.status === "off_topic") return result;
+      return {
+        ...result,
+        elapsedMs: Date.now() - started,
+        ...(result.status === "ok" && result.timingsMs
+          ? { timingsMs: { ...result.timingsMs, interpret: interpretMs } }
+          : {}),
+      };
     }),
 
   inspectPhotos: publicProcedure

@@ -8,12 +8,27 @@ import { type SearchSnapshot } from "./ai-search";
 import { ageFilterLabel, type AgeFilter } from "./age";
 import { areaBuckets, toPyeong, type AreaBucketId } from "./area";
 import { buildingAgeYears, describeBuildingAgeFilter } from "./building-age";
-import { formatKrwFromManwon, propertyTypeLabel, salesTypeLabel } from "./copy";
+import { formatFloor, formatKrwFromManwon, propertyTypeLabel, salesTypeLabel } from "./copy";
+import {
+  BASEMENT_OR_ROOFTOP_WORDS,
+  CHEAP_WORDS,
+  collapseDuplicates,
+  diversify,
+  effectiveMonthlyManwon,
+  floorKind,
+  hasAnyPhoto,
+  areaLabel,
+  listingRooms,
+  nearDuplicateKey,
+  reasonIsGrounded,
+  roomsLabel,
+  sizeClass,
+  MAX_NEAR_DUPLICATES,
+} from "./ask-quality";
 import { filterListings, isNaverClusterListing } from "./filter";
 import { floorFilterLabel, type FloorFilter } from "./floor";
 import { listingHasPhotos } from "./photo";
 import { normalizePriceFilter, type PriceFilter } from "./price";
-import { monthlyCostManwon } from "./recommend";
 import {
   propertyTypes as ALL_PROPERTY_TYPES,
   type ListingDetail,
@@ -24,7 +39,7 @@ import {
 
 export const ASK_PICK_COUNT = 10;
 /** Compact candidate summaries sent to the AI. */
-export const ASK_MAX_CANDIDATES = 40;
+export const ASK_MAX_CANDIDATES = 30;
 /** Below this many hard-filtered candidates the search radius is widened once. */
 export const ASK_MIN_CANDIDATES = 12;
 export const DEFAULT_ASK_SALES: SalesType[] = ["jeonse", "wolse"];
@@ -46,6 +61,8 @@ export type AskConstraints = {
   /** Undefined = jeonse + monthly rent. */
   salesTypes?: SalesType[];
   areaBucketIds?: AreaBucketId[];
+  /** Best-effort room count (2 = two-room); the data rarely states it. */
+  rooms?: number;
   floorFilter?: FloorFilter;
   ageFilter?: AgeFilter;
   maxBuildingAge?: number;
@@ -61,6 +78,8 @@ export type AskPick = {
   reason: string;
   reasonSource: "ai" | "basic";
   distanceM?: number;
+  /** Other listings of the same complex/price/size that were folded into or left out of this pick. */
+  similar?: number;
 };
 
 export type AskFallbackReason =
@@ -93,7 +112,7 @@ export type AskPicksResult =
       widened: boolean;
       sourceErrors: string[];
       elapsedMs: number;
-      timingsMs?: { fetch: number; rank: number };
+      timingsMs?: { interpret?: number; fetch: number; rank: number };
     }
   | {
       status: "empty";
@@ -186,6 +205,7 @@ export function constraintChips(c: AskConstraints): AskChip[] {
         .join(" or "),
     });
   }
+  if (c.rooms) chips.push({ key: "rooms", label: roomsLabel(c.rooms) });
   if (c.floorFilter) chips.push({ key: "floor", label: floorFilterLabel[c.floorFilter] });
   const built = describeBuildingAgeFilter(c.maxBuildingAge);
   if (built) chips.push({ key: "builtAge", label: built });
@@ -204,6 +224,7 @@ export function removeConstraint(c: AskConstraints, key: string): AskConstraints
     case "sales": delete next.salesTypes; break;
     case "minDeposit": case "maxDeposit": case "minRent": case "maxRent": delete next[key]; break;
     case "size": delete next.areaBucketIds; break;
+    case "rooms": delete next.rooms; break;
     case "floor": delete next.floorFilter; break;
     case "builtAge": delete next.maxBuildingAge; break;
     case "listed": delete next.ageFilter; break;
@@ -245,6 +266,7 @@ export function emptySuggestions(c: AskConstraints): AskSuggestion[] {
   }
   const droppable: Array<[string, string, boolean]> = [
     ["builtAge", "Allow older buildings", c.maxBuildingAge != null],
+    ["rooms", "Ignore the room count", Boolean(c.rooms)],
     ["floor", "Drop the floor requirement", Boolean(c.floorFilter)],
     ["size", "Allow any size", Boolean(c.areaBucketIds?.length)],
     ["foreigner", "Include landlords who don't mention foreigners", Boolean(c.foreignerOk)],
@@ -268,6 +290,7 @@ export function sanitizeConstraints(raw: AskConstraints): AskConstraints {
   if (raw.propertyTypes?.length) next.propertyTypes = raw.propertyTypes;
   if (raw.salesTypes?.length) next.salesTypes = raw.salesTypes;
   if (raw.areaBucketIds?.length) next.areaBucketIds = raw.areaBucketIds;
+  if (raw.rooms && raw.rooms >= 2 && raw.rooms <= 4) next.rooms = Math.round(raw.rooms);
   if (raw.floorFilter) next.floorFilter = raw.floorFilter;
   if (raw.ageFilter) next.ageFilter = raw.ageFilter;
   if (raw.maxBuildingAge) next.maxBuildingAge = raw.maxBuildingAge;
@@ -291,6 +314,7 @@ const PREFERENCE_KEYWORDS: Record<string, RegExp> = {
   parking: /\bparking\b|주차/i,
   sunny: /\b(sunny|bright|south[- ]facing|natural light)\b|남향|채광|햇빛/i,
   newer: /\b(newer|newest|new(?:ly)?[- ]built|new building|modern)\b|신축/i,
+  cheap: /\b(cheap(?:er|est)?|affordable|budget|low[- ]cost|inexpensive)\b|저렴|싼|가성비/i,
   spacious: /\b(spacious|roomy|big|bigger|large|larger)\b|넓/i,
 };
 
@@ -353,7 +377,26 @@ export type HardFilterResult = { listings: MapListing[]; relaxed: boolean };
  * first; when that leaves too few, they are admitted back (price and deal
  * type stay strict) and `relaxed` says so.
  */
+function applyRooms(listings: MapListing[], rooms: number | undefined, minWanted: number): MapListing[] {
+  if (!rooms) return listings;
+  const known = listings.filter((l) => listingRooms(l) === rooms);
+  if (known.length >= minWanted) return known;
+  // Not enough that state it: keep the ones that say nothing, never the ones that say otherwise.
+  return [...known, ...listings.filter((l) => listingRooms(l) === undefined)];
+}
+
 export function hardFilterCandidates(
+  listings: MapListing[],
+  c: AskConstraints,
+  radiusM?: number,
+  minWanted = ASK_PICK_COUNT,
+): HardFilterResult {
+  const base = hardFilterStep(listings, c, radiusM, minWanted);
+  if (!c.rooms) return base;
+  return { ...base, listings: applyRooms(base.listings, c.rooms, minWanted) };
+}
+
+function hardFilterStep(
   listings: MapListing[],
   c: AskConstraints,
   radiusM?: number,
@@ -409,7 +452,6 @@ export type ScoredCandidate = {
   reason: string;
 };
 
-const CHEAP_WORDS = /\b(cheap|cheapest|affordable|budget|low[- ]cost|inexpensive|save)\b|저렴|싼|가성비/i;
 const NEW_WORDS = /\b(new|newer|newest|modern|recent(?:ly built)?)\b|신축|새건물/i;
 const BIG_WORDS = /\b(big|bigger|large|larger|spacious|roomy|wide)\b|넓/i;
 const CLOSE_WORDS = /\b(close|closest|nearest|walking distance|walkable|center)\b|가까|도보/i;
@@ -433,6 +475,13 @@ export function builtYear(l: MapListing): number | undefined {
   return y >= 1900 && y <= 2100 ? y : undefined;
 }
 
+/** Stable small hash so phrasing varies between cards but not between runs. */
+function pickVariant(id: string, n: number): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i += 1) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h % n;
+}
+
 function genericReason(
   l: MapListing,
   parts: { price: number; dist: number; age: number; size: number; photos: number; prefs: number },
@@ -440,16 +489,28 @@ function genericReason(
   dist: number,
   prefHits: string[],
 ): string {
+  const v = (n: number) => pickVariant(l.id, n);
   const phrases: Array<[number, string]> = [];
-  const monthly = formatKrwFromManwon(l.salesType === "jeonse" ? l.deposit : l.rent);
-  if (monthly && parts.price >= 0.6) {
-    phrases.push([parts.price, l.salesType === "jeonse" ? `Lower jeonse deposit (${monthly})` : `Lower monthly cost (${monthly}/mo)`]);
+  const money = formatKrwFromManwon(l.salesType === "jeonse" ? l.deposit : l.rent);
+  if (money && parts.price >= 0.6) {
+    phrases.push([
+      parts.price,
+      l.salesType === "jeonse"
+        ? [`Jeonse deposit is on the low side (${money})`, `Only ${money} jeonse`, `${money} deposit, cheaper than most`][v(3)]!
+        : [`Lower monthly cost (${money}/mo)`, `Rent of ${money}/mo is below most options`, `${money}/mo keeps costs down`][v(3)]!,
+    ]);
   }
   const where = c.place?.kind === "place" ? displayPlace(c.place.name) : "the center";
-  if (parts.dist >= 0.5) phrases.push([parts.dist * 0.9, `${Math.round(dist / 10) * 10} m from ${where}`]);
+  const meters = Math.round(dist / 10) * 10;
+  if (parts.dist >= 0.5) {
+    phrases.push([parts.dist * 0.9, [`${meters} m from ${where}`, `Close to ${where} (${meters} m)`, `About ${meters} m to ${where}`][v(3)]!]);
+  }
   const year = builtYear(l);
-  if (year && parts.age >= 0.6) phrases.push([parts.age * 0.8, `Built ${year}`]);
-  if (l.areaM2 && parts.size >= 0.5) phrases.push([parts.size * 0.7, `${l.areaM2} m² (${toPyeong(l.areaM2).toFixed(1)} pyeong)`]);
+  if (year && parts.age >= 0.6) phrases.push([parts.age * 0.8, [`Built ${year}`, `Newer building (${year})`][v(2)]!]);
+  const size = sizeClass(l.areaM2);
+  if (l.areaM2 && parts.size >= 0.5 && size) {
+    phrases.push([parts.size * 0.7, [`${l.areaM2} m² (${toPyeong(l.areaM2).toFixed(1)} pyeong)`, `${size[0]!.toUpperCase()}${size.slice(1)} at ${l.areaM2} m²`][v(2)]!]);
+  }
   for (const hit of prefHits) {
     phrases.push([
       1,
@@ -459,17 +520,28 @@ function genericReason(
           ? "Has an elevator"
           : hit === "quiet"
             ? "Listing mentions a quiet setting"
-            : `Matches “${hit}”`,
+            : hit === "cheap"
+              ? "Among the cheapest once deposit is counted"
+              : `Matches “${hit}”`,
     ]);
   }
   const photos = photoCount(l);
   if (photos >= 4) phrases.push([parts.photos * 0.5, `${photos} photos`]);
   phrases.sort((a, b) => b[0] - a[0]);
   const top = phrases.slice(0, 3).map(([, text]) => text);
-  if (!top.length) return `Fits your constraints, ${Math.round(dist / 10) * 10} m from ${where}`;
-  return top.join(" · ");
+  if (!top.length) return `Fits your constraints, ${meters} m from ${where}`;
+  return top.join(v(2) ? " · " : "; ");
 }
 
+/** Messages the user typed mention these → don't penalise basement / rooftop units. */
+export function asksForBasementOrRooftop(text: string): boolean {
+  return BASEMENT_OR_ROOFTOP_WORDS.test(text);
+}
+
+/**
+ * Score every candidate 0..1 without AI. `requestText` is only the latest user
+ * message; stated wishes also arrive as `preferences`, so removing a chip changes ranking.
+ */
 export function fallbackRank(
   candidates: MapListing[],
   c: AskConstraints,
@@ -479,32 +551,40 @@ export function fallbackRank(
   now = new Date(),
 ): ScoredCandidate[] {
   if (!candidates.length) return [];
-  const monthly = candidates.map((l) => monthlyCostManwon(l)).filter((v): v is number => v != null).sort((a, b) => a - b);
   const prefKeys = (c.preferences ?? []).map(preferenceKey).filter((k): k is string => Boolean(k));
+  const cheap = prefKeys.includes("cheap") || CHEAP_WORDS.test(requestText);
+  const wantsNew = prefKeys.includes("newer") || NEW_WORDS.test(requestText);
+  const wantsBig = prefKeys.includes("spacious") || BIG_WORDS.test(requestText);
+  const allowsBasement = asksForBasementOrRooftop(requestText);
+  const effective = candidates
+    .map((l) => effectiveMonthlyManwon(l))
+    .filter((v): v is number => v != null)
+    .sort((a, b) => a - b);
   const weights = {
-    price: CHEAP_WORDS.test(requestText) ? 0.45 : 0.3,
+    price: cheap ? 0.5 : 0.3,
     dist: CLOSE_WORDS.test(requestText) ? 0.35 : 0.25,
-    age: NEW_WORDS.test(requestText) ? 0.3 : 0.15,
-    size: BIG_WORDS.test(requestText) ? 0.25 : 0.1,
+    age: wantsNew ? 0.3 : 0.15,
+    size: wantsBig ? 0.25 : 0.1,
     photos: 0.1,
-    prefs: prefKeys.length ? 0.2 : 0,
+    prefs: prefKeys.filter((k) => k !== "cheap" && k !== "newer" && k !== "spacious").length ? 0.2 : 0,
   };
+  const scoringPrefs = prefKeys.filter((k) => k !== "cheap" && k !== "newer" && k !== "spacious");
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
   const scored = candidates.map((l) => {
-    const cost = monthlyCostManwon(l);
+    const cost = effectiveMonthlyManwon(l);
     const dist = distanceM(l, center);
     const age = buildingAgeYears(l.approveDate, now);
     const tags = listingTags(l);
-    const hits = prefKeys.filter((k) => tags.includes(k));
+    const hits = prefKeys.filter((k) => tags.includes(k) || (k === "cheap" && cost != null && percentile(effective, cost) < 0.35));
     const parts = {
-      price: cost == null ? 0.3 : 1 - percentile(monthly, cost),
+      price: cost == null ? 0.3 : 1 - percentile(effective, cost),
       dist: Math.max(0, 1 - dist / Math.max(radiusM, 1)),
       age: age == null ? 0.4 : Math.max(0, 1 - Math.min(Math.max(age, 0), 30) / 30),
       size: l.areaM2 == null ? 0.3 : Math.min(1, l.areaM2 / 40),
       photos: Math.min(photoCount(l), 6) / 6,
-      prefs: prefKeys.length ? hits.length / prefKeys.length : 0,
+      prefs: scoringPrefs.length ? scoringPrefs.filter((k) => tags.includes(k)).length / scoringPrefs.length : 0,
     };
-    const score =
+    let score =
       (parts.price * weights.price +
         parts.dist * weights.dist +
         parts.age * weights.age +
@@ -512,13 +592,31 @@ export function fallbackRank(
         parts.photos * weights.photos +
         parts.prefs * weights.prefs) /
       total;
-    return { listing: l, score, distanceM: dist, reason: genericReason(l, parts, c, dist, hits) };
+    const kind = floorKind(l.floor);
+    if (c.rooms) score += listingRooms(l) === c.rooms ? 0.12 : -0.04;
+    if (kind !== "normal" && !allowsBasement && !c.floorFilter) score -= cheap ? 0.06 : 0.3;
+    // Listings with a photo win ties; a card with a placeholder is a weaker pick.
+    score += hasAnyPhoto(l) ? 0.02 : -0.02;
+    return { listing: l, score, distanceM: dist, reason: genericReason(l, parts, c, dist, hits.filter((h) => h !== "newer" && h !== "spacious" || tags.includes(h))) };
   });
   return scored.sort((a, b) => b.score - a.score || a.listing.id.localeCompare(b.listing.id));
 }
 
+/** Collapse repeats, then cap near-duplicates, keeping the score order. */
+export function prepareRanked(ranked: ScoredCandidate[]): {
+  ranked: ScoredCandidate[];
+  groupSize: Map<string, number>;
+} {
+  const { items, groupSize } = collapseDuplicates(ranked);
+  return { ranked: diversify(items, MAX_NEAR_DUPLICATES), groupSize };
+}
+
 // ---------------------------------------------------------------- AI summaries
 
+/**
+ * What the AI sees per candidate. Fields the listing doesn't have are simply
+ * absent (never null/"unknown") so the model has nothing to invent from.
+ */
 export type CompactCandidate = {
   id: string;
   type: string;
@@ -528,15 +626,20 @@ export type CompactCandidate = {
   monthlyRent?: string;
   maintenanceFee?: string;
   salePrice?: string;
+  /** Rent + deposit×5%/12 in KRW; the number to compare when "cheap" matters. */
+  effectiveMonthly?: string;
   m2?: number;
+  /** tiny <15 m², small <23, medium <33, large <50, very large. */
+  size?: string;
+  /** English floor label, e.g. "Floor 9 of 21", "Semi-basement", "Rooftop". */
   floor?: string;
+  rooms?: number;
   builtYear?: number;
-  buildingAgeYears?: number;
-  distanceM: number;
+  /** Straight-line distance from the search center (not from a subway). */
+  metersFromCenter: number;
   subwayWalkMin?: number;
-  photos: number;
-  listedDaysAgo?: number;
-  facts: string[];
+  hasPhoto: boolean;
+  facts?: string[];
   title?: string;
   area?: string;
 };
@@ -544,11 +647,11 @@ export type CompactCandidate = {
 export function compactCandidate(
   listing: MapListing,
   center: { lat: number; lng: number },
-  now = new Date(),
 ): CompactCandidate {
   const year = builtYear(listing);
-  const updated = listing.updatedAt ? Date.parse(listing.updatedAt.replace(" ", "T") + (listing.updatedAt.includes("T") ? "" : "+09:00")) : NaN;
-  return {
+  const tags = listingTags(listing);
+  const effective = effectiveMonthlyManwon(listing);
+  const out: CompactCandidate = {
     id: listing.id,
     type: propertyTypeLabel[listing.propertyType].toLowerCase(),
     deal: listing.salesType ?? "unknown",
@@ -557,18 +660,20 @@ export function compactCandidate(
       listing.salesType === "wolse" && listing.rent != null ? (formatKrwFromManwon(listing.rent) ?? undefined) : undefined,
     maintenanceFee: listing.manageCost ? (formatKrwFromManwon(listing.manageCost) ?? undefined) : undefined,
     salePrice: listing.salesType === "sale" ? (formatKrwFromManwon(listing.price) ?? undefined) : undefined,
+    effectiveMonthly: effective != null && listing.salesType !== "sale" ? (formatKrwFromManwon(Math.round(effective * 10) / 10) ?? undefined) : undefined,
     m2: listing.areaM2,
-    floor: listing.floor,
+    size: sizeClass(listing.areaM2),
+    floor: formatFloor(listing.floor) ?? undefined,
+    rooms: listingRooms(listing),
     builtYear: year,
-    buildingAgeYears: buildingAgeYears(listing.approveDate, now),
-    distanceM: Math.round(distanceM(listing, center)),
+    metersFromCenter: Math.round(distanceM(listing, center) / 10) * 10,
     subwayWalkMin: subwayWalkMinutes(listing),
-    photos: photoCount(listing),
-    listedDaysAgo: Number.isFinite(updated) ? Math.max(0, Math.floor((now.getTime() - updated) / 86_400_000)) : undefined,
-    facts: listingTags(listing),
-    title: listing.title?.replace(/\s+/g, " ").slice(0, 60),
-    area: listing.address?.split(/\s+/).slice(-2).join(" ").slice(0, 30),
+    hasPhoto: hasAnyPhoto(listing),
+    facts: tags.length ? tags.filter((t) => t !== "spacious" && t !== "newer") : undefined,
+    title: listing.title?.replace(/\s+/g, " ").slice(0, 40),
+    area: areaLabel(listing) ?? undefined,
   };
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined && !(Array.isArray(v) && !v.length))) as CompactCandidate;
 }
 
 function cleanLine(value: unknown, max: number): string | undefined {
@@ -615,40 +720,76 @@ export function validateAiRanking(
   return { picks, summary: cleanLine(data.summary, 300), assumptions, dropped };
 }
 
-/** Merge AI picks with the deterministic ranking so the carousel is always full. */
+function groundedReason(reason: string | undefined, listing: MapListing): string | undefined {
+  if (!reason) return undefined;
+  const tags = listingTags(listing);
+  const ok = reasonIsGrounded(reason, {
+    builtYear: builtYear(listing),
+    subwayWalkMin: subwayWalkMinutes(listing),
+    tags,
+    floor: listing.floor,
+    m2: listing.areaM2,
+  });
+  return ok ? reason : undefined;
+}
+
+/**
+ * Merge AI picks with the deterministic ranking so the carousel is always full.
+ * AI reasons that state facts the listing lacks are replaced by the basic
+ * reason, and no more than MAX_NEAR_DUPLICATES of one complex/price/size make it.
+ */
 export function assemblePicks(
   ai: ValidatedAiRanking | null,
   ranked: ScoredCandidate[],
   target = ASK_PICK_COUNT,
+  groupSize: ReadonlyMap<string, number> = new Map(),
 ): AskPick[] {
   const byId = new Map(ranked.map((r) => [r.listing.id, r]));
   const out: AskPick[] = [];
   const used = new Set<string>();
-  for (const pick of ai?.picks ?? []) {
-    const found = byId.get(pick.id);
-    if (!found || used.has(pick.id)) continue;
-    used.add(pick.id);
-    out.push({
-      rank: out.length + 1,
-      listing: found.listing,
-      reason: pick.reason ?? found.reason,
-      reasonSource: pick.reason ? "ai" : "basic",
-      distanceM: Math.round(found.distanceM),
-    });
-  }
-  for (const item of ranked) {
-    if (out.length >= target) break;
-    if (used.has(item.listing.id)) continue;
+  const perGroup = new Map<string, number>();
+  const take = (item: ScoredCandidate, reason?: string) => {
+    const key = nearDuplicateKey(item.listing);
+    perGroup.set(key, (perGroup.get(key) ?? 0) + 1);
     used.add(item.listing.id);
     out.push({
       rank: out.length + 1,
       listing: item.listing,
-      reason: item.reason,
-      reasonSource: "basic",
+      reason: reason ?? item.reason,
+      reasonSource: reason ? "ai" : "basic",
       distanceM: Math.round(item.distanceM),
     });
+  };
+  const roomFor = (item: ScoredCandidate) => (perGroup.get(nearDuplicateKey(item.listing)) ?? 0) < MAX_NEAR_DUPLICATES;
+  for (const pick of ai?.picks ?? []) {
+    const found = byId.get(pick.id);
+    if (!found || used.has(pick.id) || !roomFor(found)) continue;
+    take(found, groundedReason(pick.reason, found.listing));
   }
-  return out.slice(0, target);
+  for (const item of ranked) {
+    if (out.length >= target) break;
+    if (used.has(item.listing.id) || !roomFor(item)) continue;
+    take(item);
+  }
+  // Short of picks because of the cap: fill from what is left rather than show fewer.
+  for (const item of ranked) {
+    if (out.length >= target) break;
+    if (!used.has(item.listing.id)) take(item);
+  }
+  const shown = new Map<string, number>();
+  for (const pick of out) {
+    const key = nearDuplicateKey(pick.listing);
+    shown.set(key, (shown.get(key) ?? 0) + 1);
+  }
+  const noted = new Set<string>();
+  for (const pick of out) {
+    const key = nearDuplicateKey(pick.listing);
+    if (noted.has(key)) continue;
+    noted.add(key);
+    const extra = (groupSize.get(key) ?? 0) - (shown.get(key) ?? 0);
+    if (extra > 0) pick.similar = extra;
+  }
+  return out.slice(0, target).map((pick, index) => ({ ...pick, rank: index + 1 }));
 }
 
 /** Drop the heavy detail fields before sending a listing to the browser. */
@@ -686,10 +827,41 @@ export { listingHasPhotos };
 
 // ------------------------------------------------------------------- carousel
 
-/** Index of the slide nearest the scroll position. */
-export function activeSlideIndex(scrollLeft: number, stride: number, count: number): number {
+/** Index of the slide nearest the scroll position; the last one once scrolled to the end. */
+export function activeSlideIndex(scrollLeft: number, stride: number, count: number, atEnd = false): number {
   if (count <= 0 || stride <= 0) return 0;
+  if (atEnd) return count - 1;
   return Math.max(0, Math.min(count - 1, Math.round(scrollLeft / stride)));
+}
+
+/**
+ * Slides at least 60% inside the viewport, as first..last (inclusive). With
+ * one full card in view first === last ("Pick N of 10"); with several, the
+ * counter reads "Showing a–b of 10".
+ */
+export function visibleSlideRange(
+  scrollLeft: number,
+  viewport: number,
+  stride: number,
+  count: number,
+  slideWidth = stride,
+): { first: number; last: number } {
+  if (count <= 0 || stride <= 0 || viewport <= 0) return { first: 0, last: 0 };
+  let first = -1;
+  let last = -1;
+  for (let i = 0; i < count; i += 1) {
+    const left = i * stride - scrollLeft;
+    const visible = Math.min(left + slideWidth, viewport) - Math.max(left, 0);
+    if (visible >= slideWidth * 0.6) {
+      if (first < 0) first = i;
+      last = i;
+    }
+  }
+  if (first < 0) {
+    const nearest = activeSlideIndex(scrollLeft, stride, count);
+    return { first: nearest, last: nearest };
+  }
+  return { first, last };
 }
 
 /** Next slide index for an arrow key / button, clamped to the ends. */
@@ -709,6 +881,7 @@ export const PREFERENCE_LABEL: Record<string, string> = {
   sunny: "sunny",
   newer: "newer building",
   spacious: "spacious",
+  cheap: "low cost",
 };
 
 export function constraintsToSnapshot(

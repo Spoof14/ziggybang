@@ -45,14 +45,6 @@ const roomTypeLabel: Record<string, string> = {
   포룸: "Four-room",
 };
 
-const floorTokenLabel: Record<string, string> = {
-  고: "top",
-  중: "middle",
-  저: "low",
-  반지하: "semi-basement",
-  옥탑: "rooftop",
-};
-
 export function formatKrwFromManwon(manwon?: number): string | null {
   if (manwon == null || !Number.isFinite(manwon)) return null;
   const krw = Math.round(manwon * 10_000);
@@ -105,21 +97,30 @@ export function formatArea(areaM2?: number): string | null {
   return `${areaM2.toLocaleString("en-US")} m² (${pyeong.toFixed(1)} pyeong)`;
 }
 
+/**
+ * Korean floor labels → English. "반지하/2" → "Semi-basement", "옥탑방/4" →
+ * "Rooftop", "고/21" → "High floor of 21", "고층/11층" → "High floor of 11",
+ * "11층" → "Floor 11", "9/21" → "Floor 9 of 21".
+ */
 export function formatFloor(value?: string): string | null {
   if (!value) return null;
   const normalized = value.replace(/\s/g, "");
-  const [rawFloor, rawTotal] = normalized.split("/");
-  if (!rawFloor) return value;
-  const named = floorTokenLabel[rawFloor];
-  if (named && rawTotal) {
-    if (rawFloor === "고") return `Top floor of ${rawTotal}`;
-    if (rawFloor === "중") return `Middle floor of ${rawTotal}`;
-    if (rawFloor === "저") return `Lower floor of ${rawTotal}`;
-    return `${named} of ${rawTotal}`;
+  if (!normalized) return null;
+  const [rawFloor = "", rawTotal] = normalized.split("/");
+  const total = rawTotal?.replace(/층$/, "");
+  const head = rawFloor.replace(/층$/, "");
+  if (/반지하|반지층/.test(head)) return "Semi-basement";
+  if (/옥탑/.test(head)) return "Rooftop";
+  if (/^(지하|B-?\d)/i.test(head)) return "Basement";
+  const band = /^(고|중|저)(층)?$/.exec(head)?.[1];
+  if (band) {
+    const label = band === "고" ? "High floor" : band === "중" ? "Mid floor" : "Low floor";
+    return total && /^\d+$/.test(total) ? `${label} of ${total}` : label;
   }
-  if (named) return named;
-  if (!rawTotal) return `Floor ${rawFloor}`;
-  return `Floor ${rawFloor} of ${rawTotal}`;
+  if (/^\d+$/.test(head)) {
+    return total && /^\d+$/.test(total) ? `Floor ${head} of ${total}` : `Floor ${head}`;
+  }
+  return value;
 }
 
 export function formatRoomType(value?: string): string | null {
