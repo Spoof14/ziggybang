@@ -5,8 +5,9 @@ import { GeistSans } from "geist/font/sans";
 import { type Metadata, type Viewport } from "next";
 
 import { TRPCReactProvider } from "~/trpc/react";
+import { canonicalSiteUrl } from "~/lib/site-url";
 
-const SITE_URL = "https://ziggybang.vercel.app";
+const SITE_URL = canonicalSiteUrl();
 const SITE_TITLE = "Ziggybang";
 const SITE_DESCRIPTION =
   "English map of Zigbang, Peterpan, and Naver Korea rentals, with KRW prices and jeonse vs monthly rent explained.";
