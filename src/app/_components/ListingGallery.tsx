@@ -13,8 +13,8 @@ export function ListingGallery({
   alt: string;
   layout?: "sheet" | "page";
 }) {
-  const photos = uniquePhotoUrls(urls, 800);
-  const largePhotos = uniquePhotoUrls(urls, 1600);
+  const photos = uniquePhotoUrls(urls, layout === "page" ? 1200 : 800);
+  const largePhotos = uniquePhotoUrls(urls, 2000);
   const photoKey = photos.join("|");
   const [failed, setFailed] = useState<Set<string>>(new Set());
   const [index, setIndex] = useState(0);
@@ -319,7 +319,7 @@ function PhotoLightbox({
           src={src}
           alt={alt}
           draggable={false}
-          className="max-h-full max-w-full select-none object-contain"
+          className="h-full w-full select-none object-contain"
         />
         {total > 1 ? (
           <>
