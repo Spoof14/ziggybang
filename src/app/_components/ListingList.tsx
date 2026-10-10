@@ -246,7 +246,8 @@ export function ListingList({
                         type="button"
                         onClick={() => onToggleSave(listing)}
                         className="rounded-full bg-white/10 px-2 py-1 text-sm"
-                        aria-label={saved ? "Unsave home" : "Save home"}
+                        aria-label={saved ? "Remove from saved" : "Save listing"}
+                        aria-pressed={saved}
                       >
                         {saved ? "♥" : "♡"}
                       </button>

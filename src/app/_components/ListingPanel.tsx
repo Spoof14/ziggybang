@@ -116,7 +116,8 @@ export function ListingPanel({
               type="button"
               onClick={() => onToggleSave(detail)}
               className="rounded-full bg-white/10 px-2 py-1 text-sm hover:bg-white/20"
-              aria-label={saved ? "Unsave home" : "Save home"}
+              aria-label={saved ? "Remove from saved" : "Save listing"}
+              aria-pressed={saved}
             >
               {saved ? "♥" : "♡"}
             </button>
