@@ -156,7 +156,7 @@ export function diversify<T extends { listing: MapListing }>(items: T[], cap = M
 }
 
 export function hasAnyPhoto(l: Pick<MapListing, "thumbnail" | "photos">): boolean {
-  return Boolean(l.thumbnail?.trim() || l.photos?.some((u) => u.trim()));
+  return (l.thumbnail?.trim().length ?? 0) > 0 || Boolean(l.photos?.some((u) => u.trim().length > 0));
 }
 
 // -------------------------------------------------------------- area labels

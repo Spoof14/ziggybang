@@ -216,6 +216,15 @@ export function constraintChips(c: AskConstraints): AskChip[] {
   return chips;
 }
 
+/** What "Apply as filters" really puts on the map, and what it can't (soft wishes, room count). */
+export function describeAppliedFilters(c: AskConstraints): string {
+  const chips = constraintChips(c);
+  const mapped = chips.filter((chip) => !chip.key.startsWith("pref:") && chip.key !== "rooms").map((chip) => chip.label);
+  const skipped = chips.filter((chip) => chip.key.startsWith("pref:") || chip.key === "rooms").length > 0;
+  const base = mapped.length ? `Filters applied to the map: ${mapped.join(", ")}.` : "Filters applied to the map.";
+  return skipped ? `${base} Preferences and room count only affect Ask's ranking.` : base;
+}
+
 export function removeConstraint(c: AskConstraints, key: string): AskConstraints {
   const next: AskConstraints = { ...c };
   switch (key) {
@@ -594,7 +603,7 @@ export function fallbackRank(
       total;
     const kind = floorKind(l.floor);
     if (c.rooms) score += listingRooms(l) === c.rooms ? 0.12 : -0.04;
-    if (kind !== "normal" && !allowsBasement && !c.floorFilter) score -= cheap ? 0.06 : 0.3;
+    if (kind !== "normal" && !allowsBasement && !c.floorFilter) score -= cheap ? 0.1 : 0.5;
     // Listings with a photo win ties; a card with a placeholder is a weaker pick.
     score += hasAnyPhoto(l) ? 0.02 : -0.02;
     return { listing: l, score, distanceM: dist, reason: genericReason(l, parts, c, dist, hits.filter((h) => h !== "newer" && h !== "spacious" || tags.includes(h))) };

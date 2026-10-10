@@ -1,12 +1,9 @@
 import {
   OFF_TOPIC_REPLY,
-  ROOM_COUNT_NOTE,
   composeAskIntent,
   emptyAskSnapshot,
   hasSearchIntent,
   interpretSearch,
-  isFreshAsk,
-  mentionsRoomCount,
   mergeSearchIntent,
   type SearchIntent,
   type SearchSnapshot,

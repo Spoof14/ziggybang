@@ -7,11 +7,11 @@ import {
   applySuggestion,
   askFallbackNotice,
   constraintChips,
+  describeAppliedFilters,
   constraintsToSnapshot,
   displayPlace,
   removeConstraint,
   type AskConstraints,
-  type AskFallbackReason,
   type AskPick,
   type AskSuggestion,
 } from "~/lib/listings/ask-picks";
@@ -50,6 +50,7 @@ export function AskSearch({
   onClose,
   onToggleSave,
   onApplyFilters,
+  onClearFilters,
   onShowPicks,
 }: {
   open: boolean;
@@ -61,6 +62,8 @@ export function AskSearch({
   onToggleSave: (listing: MapListing) => void;
   /** Explicit button only: Ask never touches the map filters otherwise. */
   onApplyFilters: (snapshot: SearchSnapshot) => void;
+  /** The Ask panel covers the filter sidebar, so it offers its own reset. */
+  onClearFilters: () => void;
   /** Plot picks on the map (and optionally pan to / highlight one). */
   onShowPicks: (picks: AskPick[], focusId?: string) => void;
 }) {
@@ -69,6 +72,7 @@ export function AskSearch({
   const [result, setResult] = useState<AskStoredResult | null>(null);
   const [draft, setDraft] = useState("");
   const [runKey, setRunKey] = useState(0);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [phase, setPhase] = useState<Phase | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
@@ -269,17 +273,19 @@ export function AskSearch({
       <div
         role="dialog"
         aria-label="Ask Ziggybang"
-        className={`fixed inset-x-3 bottom-3 z-[1401] flex w-auto max-w-none flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl md:inset-auto md:bottom-3 md:left-3 md:right-auto md:top-3 md:max-h-none md:w-[calc(var(--desktop-panel)-1.5rem)] md:max-w-[calc(40%-1.5rem)] ${
-          hasResult || pending ? "max-h-[88dvh]" : "max-h-[min(28rem,58dvh)]"
+        className={`fixed inset-x-0 bottom-0 z-[1401] flex w-auto max-w-none flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-slate-950 shadow-2xl sm:inset-x-3 sm:bottom-3 sm:rounded-2xl md:inset-auto md:bottom-3 md:left-3 md:right-auto md:top-3 md:max-h-none md:w-[calc(var(--desktop-panel)-1.5rem)] md:max-w-[calc(40%-1.5rem)] ${
+          hasResult || pending ? "max-h-[92dvh] sm:max-h-[88dvh]" : "max-h-[min(28rem,58dvh)]"
         }`}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-sky-300">
+        <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2 sm:items-start sm:gap-3 sm:px-4 sm:py-3">
+          <div className="min-w-0">
+            <p className="hidden text-[10px] uppercase tracking-[0.18em] text-sky-300 sm:block">
               Ask Ziggybang
             </p>
-            <h2 className="text-sm font-semibold">
-              Describe your ideal home — get 10 picks
+            <h2 className="truncate text-sm font-semibold">
+              <span className="text-sky-300 sm:hidden">Ask · </span>
+              <span className="sm:hidden">10 picks</span>
+              <span className="hidden sm:inline">Describe your ideal home — get 10 picks</span>
             </h2>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -302,7 +308,7 @@ export function AskSearch({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2 sm:space-y-3 sm:px-4 sm:py-3">
           {!hasResult && !pending && !error ? (
             <div className="space-y-2">
               <p className="text-sm text-slate-300">
@@ -352,17 +358,31 @@ export function AskSearch({
             <div className="space-y-2">
               {result &&
               !(pending && phase === "searching" && !picks.length) ? (
-                <p className="text-sm leading-snug text-slate-100">
-                  {result.summary}
-                </p>
+                <div>
+                  <p
+                    className={`text-sm leading-snug text-slate-100 ${summaryOpen ? "" : "line-clamp-3 sm:line-clamp-none"}`}
+                  >
+                    {result.summary}
+                  </p>
+                  {result.summary.length > 120 ? (
+                    <button
+                      type="button"
+                      onClick={() => setSummaryOpen((open) => !open)}
+                      aria-expanded={summaryOpen}
+                      className="text-[11px] text-sky-300 hover:underline sm:hidden"
+                    >
+                      {summaryOpen ? "less" : "more"}
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
               {chips.length ? (
                 <ul
                   aria-label="Interpreted constraints"
-                  className="flex flex-wrap gap-1.5"
+                  className="no-scrollbar -mx-3 flex gap-1.5 overflow-x-auto px-3 pb-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
                 >
                   {chips.map((chip) => (
-                    <li key={chip.key}>
+                    <li key={chip.key} className="shrink-0">
                       <button
                         type="button"
                         disabled={pending}
@@ -389,12 +409,12 @@ export function AskSearch({
                 </p>
               ) : null}
               {picks.length ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
                   <button
                     type="button"
                     onClick={() => showOnMap(picks)}
                     disabled={pending}
-                    className="rounded-full bg-sky-400 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-300 disabled:opacity-50"
+                    className="shrink-0 whitespace-nowrap rounded-full bg-sky-400 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-300 disabled:opacity-50"
                   >
                     Show these on the map
                   </button>
@@ -402,18 +422,22 @@ export function AskSearch({
                     type="button"
                     onClick={applyFilters}
                     disabled={pending}
-                    className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-slate-100 hover:bg-white/20"
+                    className="shrink-0 whitespace-nowrap rounded-full bg-white/10 px-3 py-1.5 text-xs text-slate-100 hover:bg-white/20"
                   >
                     Apply as filters
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClearFilters();
+                      setApplied(false);
+                    }}
+                    disabled={pending}
+                    className="shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs text-slate-300 underline-offset-2 hover:text-white hover:underline"
+                  >
+                    Clear map filters
+                  </button>
                 </div>
-              ) : null}
-              {result?.assumptions.length ? (
-                <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-slate-400">
-                  {result.assumptions.map((note) => (
-                    <li key={note}>{note}</li>
-                  ))}
-                </ul>
               ) : null}
             </div>
           ) : null}
@@ -500,21 +524,35 @@ export function AskSearch({
               />
               <p className="mt-1.5 text-[11px] text-slate-500" role="status">
                 {applied
-                  ? "Filters applied to the map (area, budget, type, floor, building age)."
+                  ? constraints
+                    ? describeAppliedFilters(constraints)
+                    : "Filters applied to the map."
                   : `${result?.status === "ok" ? result.candidateCount : 0} homes matched; these are the best ${picks.length}. Your map filters are unchanged.`}
               </p>
+              {result?.assumptions.length ? (
+                <details className="mt-1 text-[11px] text-slate-400">
+                  <summary className="cursor-pointer select-none hover:text-slate-200">
+                    Notes ({result.assumptions.length})
+                  </summary>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {result.assumptions.map((note) => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
             </div>
           ) : null}
         </div>
 
         <form
-          className="border-t border-white/10 p-3"
+          className="flex items-center gap-2 border-t border-white/10 p-2 sm:block sm:p-3"
           onSubmit={(event) => {
             event.preventDefault();
             submit(draft);
           }}
         >
-          <label className="block">
+          <label className="block min-w-0 flex-1">
             <span className="sr-only">
               {hasResult ? "Refine your picks" : "Describe the home you want"}
             </span>
@@ -524,7 +562,7 @@ export function AskSearch({
               onChange={(event) => setDraft(event.target.value)}
               placeholder={
                 hasResult
-                  ? "Refine: “only with elevator”, “cheaper”, “closer to the station”…"
+                  ? "Refine: “only with elevator”, “cheaper”…"
                   : "e.g. cheap studio near Hongdae under 700k monthly, quiet"
               }
               autoComplete="off"
@@ -532,11 +570,11 @@ export function AskSearch({
               className="search-input w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-400"
             />
           </label>
-          <div className="mt-2 flex justify-end">
+          <div className="flex shrink-0 justify-end sm:mt-2">
             <button
               type="submit"
               disabled={pending || !draft.trim()}
-              className="rounded-full bg-sky-400 px-3 py-1 text-xs font-medium text-slate-950 disabled:opacity-40"
+              className="rounded-full bg-sky-400 px-3 py-1.5 text-xs font-medium text-slate-950 disabled:opacity-40"
             >
               {hasResult ? "Refine" : "Find 10 homes"}
             </button>
