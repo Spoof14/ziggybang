@@ -67,6 +67,8 @@ import { ListingMap, type MapFocus } from "./ListingMap";
 import { ListingPanel } from "./ListingPanel";
 import { ListingPhoto } from "./ListingPhoto";
 import { AskSearch } from "./AskSearch";
+import { loadAskSession } from "~/lib/listings/ask-session";
+import { loadAskUi, patchAskUi, previewFromSearch, withPreviewParam } from "~/lib/listings/ask-ui";
 import { type AskPick } from "~/lib/listings/ask-picks";
 import { groupedHomesHint } from "~/lib/listings/order";
 import { ListingAgeDot } from "./ListingAgeDot";
@@ -144,6 +146,7 @@ export default function MapApp() {
   const [ageFilter, setAgeFilter] = useState<AgeFilter | undefined>();
   const [maxBuildingAge, setMaxBuildingAge] = useState<number | undefined>();
   const [askOpen, setAskOpen] = useState(false);
+  const askUiReady = useRef(false);
   const [savedHomes, setSavedHomes] = useState<MapListing[]>([]);
   const [tool, setTool] = useState<"pan" | "radius" | "draw">("pan");
   const [radiusM, setRadiusM] = useState(DEFAULT_RADIUS_M);
@@ -360,7 +363,8 @@ export default function MapApp() {
       ageFilter,
       maxBuildingAge,
     });
-    const url = `${window.location.pathname}${next}`;
+    const preview = new URLSearchParams(window.location.search).get("preview");
+    const url = `${window.location.pathname}${preview ? withPreviewParam(next, preview) : next}`;
     if (`${window.location.pathname}${window.location.search}` !== url) {
       window.history.replaceState(window.history.state, "", url);
     }
@@ -389,9 +393,24 @@ export default function MapApp() {
     maxBuildingAge,
   ]);
 
+  // Coming back (browser Back from a listing page, reload) restores the open Ask panel.
+  useEffect(() => {
+    const ui = loadAskUi();
+    const sharedPreview =
+      Boolean(previewFromSearch(window.location.search)) && loadAskSession()?.result?.status === "ok";
+    if (ui?.open === true || sharedPreview) setAskOpen(true);
+    askUiReady.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (askUiReady.current) patchAskUi({ open: askOpen });
+  }, [askOpen]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // The Ask listing preview (or its photo viewer) handles its own Escape first.
+      if (document.querySelector("[data-ask-preview], [aria-label='Fullscreen photo']")) return;
       if (askOpen) {
         setAskOpen(false);
         return;

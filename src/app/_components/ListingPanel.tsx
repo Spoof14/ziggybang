@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type Ref } from "react";
 import { api } from "~/trpc/react";
 import {
   formatArea,
@@ -46,11 +46,18 @@ export function ListingPanel({
   saved,
   onClose,
   onToggleSave,
+  modal,
 }: {
   listing: MapListing;
   saved?: boolean;
   onClose: () => void;
   onToggleSave?: (listing: MapListing) => void;
+  /**
+   * Render as an accessible modal (side sheet on desktop, full screen on
+   * mobile) above other panels, e.g. the Ask panel. The caller owns focus
+   * trapping and Escape.
+   */
+  modal?: { labelId: string; closeLabel: string; asideRef?: Ref<HTMLElement> };
 }) {
   const [copied, setCopied] = useState<"address" | "link" | null>(null);
   const detailQuery = api.listings.getDetail.useQuery(
@@ -88,14 +95,25 @@ export function ListingPanel({
   }
 
   return (
-    <aside className="pointer-events-auto fixed inset-0 z-[1350] flex flex-col overflow-auto bg-slate-950 text-slate-100 md:absolute md:inset-auto md:bottom-4 md:left-auto md:right-4 md:top-4 md:max-h-[calc(100dvh-2rem)] md:w-[var(--desktop-panel)] md:max-w-[40%] md:rounded-2xl md:border md:border-white/10 md:shadow-2xl">
+    <aside
+      ref={modal?.asideRef}
+      role={modal ? "dialog" : undefined}
+      aria-modal={modal ? "true" : undefined}
+      aria-labelledby={modal?.labelId}
+      tabIndex={modal ? -1 : undefined}
+      className={
+        modal
+          ? "pointer-events-auto fixed inset-0 z-[1500] flex flex-col overflow-auto overscroll-contain bg-slate-950 text-slate-100 outline-none md:inset-auto md:bottom-4 md:right-4 md:top-4 md:max-h-[calc(100dvh-2rem)] md:w-[min(26rem,calc(100vw-2rem))] md:rounded-2xl md:border md:border-white/10 md:shadow-2xl"
+          : "pointer-events-auto fixed inset-0 z-[1350] flex flex-col overflow-auto bg-slate-950 text-slate-100 md:absolute md:inset-auto md:bottom-4 md:left-auto md:right-4 md:top-4 md:max-h-[calc(100dvh-2rem)] md:w-[var(--desktop-panel)] md:max-w-[40%] md:rounded-2xl md:border md:border-white/10 md:shadow-2xl"
+      }
+    >
       <div className="flex items-start justify-between gap-3 p-4">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wide text-slate-400">
             {sourceLabel[listing.source]} · {propertyTypeLabel[listing.propertyType]}
             {detail.salesType ? ` · ${salesTypeLabel[detail.salesType]}` : ""}
           </p>
-          <h2 className="mt-1 text-lg font-semibold leading-snug">
+          <h2 id={modal?.labelId} className="mt-1 text-lg font-semibold leading-snug">
             {englishTitle !== ""
               ? englishTitle
               : (detail.title ?? `${propertyTypeLabel[listing.propertyType]} ${listing.sourceId}`)}
@@ -132,7 +150,7 @@ export function ListingPanel({
             onClick={onClose}
             className="rounded-full bg-white/10 px-2 py-1 text-sm text-slate-300 hover:bg-white/20"
           >
-            Close
+            {modal?.closeLabel ?? "Close"}
           </button>
         </div>
       </div>

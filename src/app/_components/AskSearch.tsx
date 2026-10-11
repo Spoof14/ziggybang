@@ -22,8 +22,19 @@ import {
   type AskStoredResult,
 } from "~/lib/listings/ask-session";
 import { type MapListing } from "~/lib/listings/types";
+import {
+  findPreviewListing,
+  hasPreviewHistory,
+  loadAskUi,
+  patchAskUi,
+  previewFromSearch,
+  previewKey,
+  PREVIEW_HISTORY_KEY,
+  withPreviewParam,
+} from "~/lib/listings/ask-ui";
 import { api } from "~/trpc/react";
 import { AskCarousel } from "./AskCarousel";
+import { AskListingPreview } from "./AskListingPreview";
 
 /** Hard client-side ceiling for one Ask (interpret + search + rank). */
 const ASK_TIMEOUT_MS = 45_000;
@@ -79,6 +90,10 @@ export function AskSearch({
   const [error, setError] = useState<string | null>(null);
   const [applied, setApplied] = useState(false);
   const restored = useRef(false);
+  const [preview, setPreview] = useState<MapListing | null>(null);
+  /** Carousel slide restored from session storage (only for the restored result). */
+  const [startIndex, setStartIndex] = useState(0);
+  const activeIndex = useRef(0);
   const input = useRef<HTMLInputElement>(null);
   const lastRequest = useRef<(() => void) | null>(null);
   /** Controller of the request in flight; also the synchronous submit lock. */
@@ -96,8 +111,69 @@ export function AskSearch({
       setMessages(saved.messages);
       setConstraints(saved.constraints);
       setResult(saved.result);
+      const ui = loadAskUi();
+      const restoredPicks = saved.result?.status === "ok" ? saved.result.picks : [];
+      if (ui && restoredPicks.length) {
+        const index = Math.min(ui.index, restoredPicks.length - 1);
+        setStartIndex(index);
+        activeIndex.current = index;
+      }
+      // ?preview=<source>:<type>:<id> reopens the in-app preview (e.g. Back from the full page).
+      const ref = previewFromSearch(window.location.search);
+      const pick = findPreviewListing(restoredPicks, ref);
+      if (pick) setPreview(pick.listing);
+      else if (ref) dropPreviewParam();
+    } else if (previewFromSearch(window.location.search)) {
+      dropPreviewParam();
     }
   }, []);
+
+  function dropPreviewParam() {
+    const search = withPreviewParam(window.location.search, null);
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${search}`);
+  }
+
+  function openPreview(listing: MapListing) {
+    if (preview) return;
+    setPreview(listing);
+    const key = previewKey(listing);
+    window.history.pushState(
+      { ...(window.history.state as Record<string, unknown> | null), [PREVIEW_HISTORY_KEY]: key },
+      "",
+      `${window.location.pathname}${withPreviewParam(window.location.search, key)}`,
+    );
+  }
+
+  function closePreview() {
+    if (!preview) return;
+    if (hasPreviewHistory(window.history.state)) {
+      // popstate (below) closes it, so browser Back and this button behave alike.
+      window.history.back();
+      return;
+    }
+    setPreview(null);
+    dropPreviewParam();
+  }
+
+  // Browser Back/Forward drives the preview from the URL.
+  const previewPicks = result?.status === "ok" ? result.picks : null;
+  useEffect(() => {
+    function onPop() {
+      const ref = previewFromSearch(window.location.search);
+      const pick = previewPicks ? findPreviewListing(previewPicks, ref) : null;
+      setPreview(pick ? pick.listing : null);
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [previewPicks]);
+
+  // The preview belongs to the open Ask panel and the current result.
+  useEffect(() => {
+    if (!open && preview) {
+      setPreview(null);
+      if (previewFromSearch(window.location.search)) dropPreviewParam();
+    }
+  }, [open, preview]);
 
   useEffect(() => {
     if (!restored.current) return;
@@ -189,6 +265,9 @@ export function AskSearch({
         return;
       }
       setResult(answer);
+      setStartIndex(0);
+      activeIndex.current = 0;
+      patchAskUi({ index: 0 });
       setRunKey((n) => n + 1);
       setConstraints(answer.constraints);
       setMessages([
@@ -237,6 +316,9 @@ export function AskSearch({
     setApplied(false);
     setDraft("");
     saveAskSession(null);
+    setStartIndex(0);
+    activeIndex.current = 0;
+    patchAskUi({ index: 0 });
     input.current?.focus();
   }
 
@@ -522,6 +604,12 @@ export function AskSearch({
                 highlightedId={highlightedId}
                 onToggleSave={onToggleSave}
                 onShowOnMap={(pick) => showOnMap(picks, pick.listing.id)}
+                onPreview={(pick) => openPreview(pick.listing)}
+                initialIndex={startIndex}
+                onActiveChange={(index) => {
+                  activeIndex.current = index;
+                  patchAskUi({ index });
+                }}
               />
               <p className="mt-1.5 text-[11px] text-slate-500" role="status">
                 {applied
@@ -582,6 +670,14 @@ export function AskSearch({
           </div>
         </form>
       </div>
+      {preview ? (
+        <AskListingPreview
+          listing={preview}
+          saved={savedIds.includes(preview.id)}
+          onClose={closePreview}
+          onToggleSave={onToggleSave}
+        />
+      ) : null}
     </>
   );
 }
