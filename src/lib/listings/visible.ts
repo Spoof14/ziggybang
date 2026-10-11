@@ -1,6 +1,7 @@
 import { clusterListings, cellSizeForZoom, shouldCluster } from "~/lib/geo/cluster";
 import { listingInArea, type CircleFilter, type LatLng } from "~/lib/geo/shape";
-import { areaBuckets, type AreaBucketId } from "./area";
+import { DEFAULT_LANG, t, type Lang } from "~/lib/i18n";
+import { areaBucketLabel, areaBuckets, type AreaBucketId } from "./area";
 import {
   filterListings,
   isAllPropertyTypes,
@@ -10,12 +11,9 @@ import {
 } from "./filter";
 import { describePriceFilter, type PriceFilter } from "./price";
 import { describeBuildingAgeFilter } from "./building-age";
-import { ageFilterLabel, type AgeFilter } from "./age";
-import { floorFilterLabel, type FloorFilter } from "./floor";
-import {
-  propertyTypeLabel,
-  salesTypeFilterLabel,
-} from "./copy";
+import { ageFilterText, type AgeFilter } from "./age";
+import { floorFilterText, type FloorFilter } from "./floor";
+import { propertyTypeText, salesTypeFilterText } from "./copy";
 import {
   type MapCluster,
   type MapListing,
@@ -113,7 +111,8 @@ export function mapLayersForFilters(
   return { clusters: [], listings: matched };
 }
 
-export function describeActiveFilters(input: {
+export function describeActiveFilters(
+  input: {
   propertyTypes: PropertyType[];
   salesTypes: SalesType[];
   areaBucketIds: AreaBucketId[];
@@ -122,33 +121,35 @@ export function describeActiveFilters(input: {
   ageFilter?: AgeFilter;
   maxBuildingAge?: number;
   hasPhotos?: boolean;
-} & PriceFilter): string | null {
+} & PriceFilter,
+  lang: Lang = DEFAULT_LANG,
+): string | null {
   const parts: string[] = [];
   if (!isAllPropertyTypes(input.propertyTypes) && input.propertyTypes.length) {
-    parts.push(input.propertyTypes.map((type) => propertyTypeLabel[type]).join(" · "));
+    parts.push(input.propertyTypes.map((type) => propertyTypeText(lang, type)).join(" · "));
   }
   if (
     input.salesTypes.length &&
     !isDefaultRentSales(input.salesTypes) &&
     input.salesTypes.length < 3
   ) {
-    parts.push(input.salesTypes.map((type) => salesTypeFilterLabel[type]).join(" · "));
+    parts.push(input.salesTypes.map((type) => salesTypeFilterText(lang, type)).join(" · "));
   }
   if (input.areaBucketIds.length) {
     parts.push(
       areaBuckets
         .filter((bucket) => input.areaBucketIds.includes(bucket.id))
-        .map((bucket) => bucket.label)
+        .map((bucket) => areaBucketLabel(lang, bucket.id))
         .join(" · "),
     );
   }
-  const price = describePriceFilter(input);
+  const price = describePriceFilter(input, lang);
   if (price) parts.push(price);
-  if (input.foreignerOk) parts.push("Foreigners welcome");
-  if (input.hasPhotos) parts.push("Has photos");
-  if (input.floorFilter) parts.push(floorFilterLabel[input.floorFilter]);
-  if (input.ageFilter) parts.push(ageFilterLabel[input.ageFilter]);
-  const built = describeBuildingAgeFilter(input.maxBuildingAge);
+  if (input.foreignerOk) parts.push(t(lang, "chip.foreigner"));
+  if (input.hasPhotos) parts.push(t(lang, "chip.photos"));
+  if (input.floorFilter) parts.push(floorFilterText(lang, input.floorFilter));
+  if (input.ageFilter) parts.push(ageFilterText(lang, input.ageFilter));
+  const built = describeBuildingAgeFilter(input.maxBuildingAge, lang);
   if (built) parts.push(built);
   return parts.length ? parts.join(" · ") : null;
 }

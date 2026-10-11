@@ -63,6 +63,7 @@ const messagesSchema = z
   )
   .min(1)
   .max(12);
+const langSchema = z.enum(["en", "ko"]);
 const viewportSchema = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) });
 const fallbackReasonSchema = z.enum(["rate_limited", "quota", "auth", "timeout", "error", "unconfigured"]);
 
@@ -130,6 +131,7 @@ export const listingsRouter = createTRPCRouter({
         messages: messagesSchema,
         previous: constraintsSchema.optional(),
         viewport: viewportSchema.optional(),
+        lang: langSchema.optional(),
       }),
     )
     .mutation(({ input, signal }) => interpretAsk({ ...input, signal })),
@@ -147,6 +149,7 @@ export const listingsRouter = createTRPCRouter({
         constraints: constraintsSchema.optional(),
         previous: constraintsSchema.optional(),
         viewport: viewportSchema.optional(),
+        lang: langSchema.optional(),
         skipAi: fallbackReasonSchema.optional(),
       }),
     )
@@ -161,6 +164,7 @@ export const listingsRouter = createTRPCRouter({
           messages: input.messages,
           previous: input.previous,
           viewport: input.viewport,
+          lang: input.lang,
           signal,
         });
         interpretMs = Date.now() - started;
@@ -186,6 +190,7 @@ export const listingsRouter = createTRPCRouter({
         skipAi,
         assumptions,
         fromText: !input.constraints,
+        lang: input.lang,
         signal,
       });
       if (result.status === "off_topic") return result;

@@ -1,5 +1,6 @@
 import { places, type Place } from "~/lib/geo/places";
 import { type CircleFilter } from "~/lib/geo/shape";
+import { t } from "~/lib/i18n";
 import {
   formatRoomType,
   propertyTypeLabel,
@@ -237,11 +238,9 @@ export function extractStreetAddress(text: string): string | undefined {
   return latin ? latin[0].trim() : undefined;
 }
 
-export const ROAD_LEVEL_HINT =
-  "Showing the street, not the exact house number; try a station or neighborhood name for a tighter search.";
+export const ROAD_LEVEL_HINT = t("en", "hint.road");
 
-export const DISTRICT_ONLY_HINT =
-  "Address search resolved only to the district; try a station or neighborhood name.";
+export const DISTRICT_ONLY_HINT = t("en", "hint.district");
 
 export function isStationQuery(query: string): boolean {
   return /station|subway|yeok|역/i.test(query);

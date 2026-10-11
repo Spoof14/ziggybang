@@ -1,3 +1,5 @@
+import { DEFAULT_LANG, t, tn, type Lang } from "~/lib/i18n";
+
 const OPTION_LABEL: Record<string, string> = {
   에어컨: "Air conditioner",
   냉장고: "Refrigerator",
@@ -104,101 +106,104 @@ const MONTHS = [
   "Dec",
 ];
 
+function formatDate(date: Date, lang: Lang): string {
+  if (lang === "ko") {
+    return `${date.getUTCFullYear()}.${String(date.getUTCMonth() + 1).padStart(2, "0")}.${String(date.getUTCDate()).padStart(2, "0")}`;
+  }
+  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
+/** English users get a plain-English label; Korean users keep the original wording. */
 export function translateListingTerm(
   value: string | undefined,
   table: Record<string, string>,
+  lang: Lang = DEFAULT_LANG,
 ): string | null {
   if (!value?.trim()) return null;
-  return table[value.trim()] ?? value.trim();
+  const text = value.trim();
+  if (lang === "ko") return text;
+  return table[text] ?? text;
 }
 
-export function translateOption(value: string): string {
-  return translateListingTerm(value, OPTION_LABEL) ?? value;
+export function translateOption(value: string, lang: Lang = DEFAULT_LANG): string {
+  return translateListingTerm(value, OPTION_LABEL, lang) ?? value;
 }
 
-export function translateUtility(value: string): string {
-  return translateListingTerm(value, UTILITY_LABEL) ?? value;
+export function translateUtility(value: string, lang: Lang = DEFAULT_LANG): string {
+  return translateListingTerm(value, UTILITY_LABEL, lang) ?? value;
 }
 
-export function translateAmenity(value: string): string {
-  return translateListingTerm(value, AMENITY_LABEL) ?? value;
+export function translateAmenity(value: string, lang: Lang = DEFAULT_LANG): string {
+  return translateListingTerm(value, AMENITY_LABEL, lang) ?? value;
 }
 
-export function translatePoi(value: string): string {
-  return translateListingTerm(value, POI_LABEL) ?? value;
+export function translatePoi(value: string, lang: Lang = DEFAULT_LANG): string {
+  return translateListingTerm(value, POI_LABEL, lang) ?? value;
 }
 
-export function translateResidence(value?: string): string | null {
-  return translateListingTerm(value, RESIDENCE_LABEL);
+export function translateResidence(value?: string, lang: Lang = DEFAULT_LANG): string | null {
+  return translateListingTerm(value, RESIDENCE_LABEL, lang);
 }
 
-export function translateParking(value?: string): string | null {
+export function translateParking(value?: string, lang: Lang = DEFAULT_LANG): string | null {
   if (!value?.trim()) return null;
   const text = value.trim();
-  if (text.includes("불가능") || text.includes("불가")) return "No parking";
+  if (text.includes("불가능") || text.includes("불가")) return t(lang, "dc.parkingNo");
   if (text.includes("가능")) {
     const count = text.match(/(\d+)\s*대/);
-    if (count?.[1]) return `Parking for ${count[1]} car${count[1] === "1" ? "" : "s"}`;
-    return "Parking available";
+    if (count?.[1]) return tn(lang, "dc.parkingN", Number(count[1]));
+    return t(lang, "dc.parkingYes");
   }
   return text;
 }
 
-export function translateDirection(value?: string): string | null {
+export function translateDirection(value?: string, lang: Lang = DEFAULT_LANG): string | null {
   if (!value?.trim()) return null;
   const key = value.trim().toUpperCase();
-  const names: Record<string, string> = {
-    N: "North",
-    NE: "Northeast",
-    E: "East",
-    SE: "Southeast",
-    S: "South",
-    SW: "Southwest",
-    W: "West",
-    NW: "Northwest",
-  };
-  return names[key] ?? value.trim();
+  if (["N", "NE", "E", "SE", "S", "SW", "W", "NW"].includes(key)) {
+    return t(lang, `dir.${key}` as "dir.N");
+  }
+  return value.trim();
 }
 
-export function translateSubwayLine(value?: string): string | null {
+export function translateSubwayLine(value?: string, lang: Lang = DEFAULT_LANG): string | null {
   if (!value?.trim()) return null;
+  if (lang === "ko") return value.trim();
   return value
     .split(/[,\s]+/)
     .filter(Boolean)
     .map((part) => {
       const numbered = part.match(/^(\d+)호선$/);
-      if (numbered) return `Line ${numbered[1]}`;
+      if (numbered) return t(lang, "dc.line", { n: numbered[1]! });
       return LINE_LABEL[part] ?? part;
     })
     .join(", ");
 }
 
-export function formatApproveYear(value?: string): string | null {
+export function formatApproveYear(value?: string, lang: Lang = DEFAULT_LANG): string | null {
   if (!value) return null;
   const digits = value.replace(/\D/g, "");
   if (digits.length < 4) return null;
   const year = Number(digits.slice(0, 4));
   if (year < 1900 || year > 2100) return null;
-  return `Built ${year}`;
+  return t(lang, "dc.built", { year });
 }
 
-export function formatListedAt(value?: string): string | null {
+export function formatListedAt(value?: string, lang: Lang = DEFAULT_LANG): string | null {
   const date = parseLooseDate(value);
   if (!date) return null;
-  return `Listed ${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+  return t(lang, "dc.listedAt", { date: formatDate(date, lang) });
 }
 
-export function formatMoveIn(value?: string): string | null {
+export function formatMoveIn(value?: string, lang: Lang = DEFAULT_LANG): string | null {
   if (!value?.trim()) return null;
   const text = value.trim();
-  if (/즉시/.test(text)) return "Move-in immediate";
+  if (/즉시/.test(text)) return t(lang, "dc.moveInNow");
   const date = parseLooseDate(text);
   const negotiable = /협의/.test(text);
   if (date) {
-    const stamp = `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
-    return negotiable
-      ? `Move-in from ${stamp} (negotiable)`
-      : `Move-in from ${stamp}`;
+    const stamp = formatDate(date, lang);
+    return t(lang, negotiable ? "dc.moveInFromNeg" : "dc.moveInFrom", { date: stamp });
   }
   return text;
 }

@@ -1,6 +1,8 @@
 import { places } from "~/lib/geo/places";
 import { distanceM } from "~/lib/geo/shape";
+import { DEFAULT_LANG, t, type Lang } from "~/lib/i18n";
 import { englishDistrict, englishNeighborhood } from "./english";
+import { hasHangul } from "./foreigner";
 import { matchPlaceInAddress } from "./search";
 import { type MapListing } from "./types";
 
@@ -106,17 +108,24 @@ export function valuePerM2(listing: MapListing): number | null {
   return monthly / listing.areaM2;
 }
 
-export function neighborhoodForListing(listing: MapListing): {
+export function neighborhoodForListing(
+  listing: MapListing,
+  lang: Lang = DEFAULT_LANG,
+): {
   id: string;
   label: string;
   score: number;
 } {
   const address = listing.address ?? "";
+  const nameOf = (names: string[], id: string) =>
+    lang === "ko"
+      ? (names.find((name) => hasHangul(name)) ?? titleCase(names[0] ?? id))
+      : titleCase(names[0] ?? id);
   const named = matchPlaceInAddress(address);
   if (named) {
     return {
       id: named.id,
-      label: titleCase(named.names[0] ?? named.id),
+      label: nameOf(named.names, named.id),
       score: NEIGHBORHOOD_SCORE[named.id] ?? 50,
     };
   }
@@ -128,7 +137,7 @@ export function neighborhoodForListing(listing: MapListing): {
     if (!nearest || meters < nearest.meters) {
       nearest = {
         id: place.id,
-        label: titleCase(place.names[0] ?? place.id),
+        label: nameOf(place.names, place.id),
         meters,
       };
     }
@@ -145,18 +154,24 @@ export function neighborhoodForListing(listing: MapListing): {
     listing.lat > 37.43 && listing.lat < 37.7 && listing.lng > 126.78 && listing.lng < 127.18;
   return {
     id: "other",
-    label: englishNeighborhood(address) ?? englishDistrict(address) ?? "This area",
+    label:
+      (lang === "ko" ? undefined : (englishNeighborhood(address) ?? englishDistrict(address))) ??
+      (lang === "ko" ? (address.match(/[가-힣]+구/)?.[0]) : undefined) ??
+      t(lang, "list.reason.thisArea"),
     score: inSeoul ? 48 : 36,
   };
 }
 
-export function livabilityScore(listing: MapListing): { score: number; reason: string | null } {
+export function livabilityScore(
+  listing: MapListing,
+  lang: Lang = DEFAULT_LANG,
+): { score: number; reason: string | null } {
   const floor = (listing.floor ?? "").replace(/\s/g, "");
   if (/반지하|지하/.test(floor)) {
-    return { score: 18, reason: "Semi-basement" };
+    return { score: 18, reason: t(lang, "list.reason.semiBasement") };
   }
   if (/옥탑/.test(floor)) {
-    return { score: 42, reason: "Rooftop unit" };
+    return { score: 42, reason: t(lang, "list.reason.rooftop") };
   }
   const numeric = Number.parseInt(floor, 10);
   if (floor.startsWith("저") || numeric === 1) {
@@ -166,7 +181,7 @@ export function livabilityScore(listing: MapListing): { score: number; reason: s
     return { score: 78, reason: null };
   }
   if (Number.isFinite(numeric) && numeric >= 2 && numeric <= 7) {
-    return { score: 84, reason: `Floor ${numeric}` };
+    return { score: 84, reason: t(lang, "list.reason.floor", { n: numeric }) };
   }
   if (listing.areaM2 != null && listing.areaM2 >= 20) {
     return { score: 70, reason: null };
@@ -196,6 +211,7 @@ function percentileScore(values: number[], value: number, lowerIsBetter: boolean
 export function rankListings(
   listings: MapListing[],
   photos: Record<string, PhotoScoreInput> = {},
+  lang: Lang = DEFAULT_LANG,
 ): RankedListing[] {
   const values = listings
     .map(valuePerM2)
@@ -203,8 +219,8 @@ export function rankListings(
 
   return listings
     .map((listing) => {
-      const area = neighborhoodForListing(listing);
-      const live = livabilityScore(listing);
+      const area = neighborhoodForListing(listing, lang);
+      const live = livabilityScore(listing, lang);
       const perM2 = valuePerM2(listing);
       const valueScore = perM2 == null ? 52 : percentileScore(values, perM2, true);
       const photo = listing.thumbnail ? photos[listing.thumbnail] : undefined;
@@ -220,19 +236,19 @@ export function rankListings(
       const reasons: string[] = [];
       let valueLabel: string | null = null;
       const photoLabel = photo?.summary ?? null;
-      if (photo?.likelyFloorplan) reasons.push("Mostly a floorplan");
-      else if (photo?.likelyDim) reasons.push("Dark photos");
+      if (photo?.likelyFloorplan) reasons.push(t(lang, "list.reason.floorplan"));
+      else if (photo?.likelyDim) reasons.push(t(lang, "list.reason.dark"));
       else if (photo && photo.score >= 72 && photoLabel) reasons.push(photoLabel);
       if (valueScore >= 78 && perM2 != null) {
-        valueLabel = "Strong ₩/m²";
+        valueLabel = t(lang, "list.reason.value");
         reasons.push(valueLabel);
       }
-      if (area.score >= 86) reasons.push(`Popular ${area.label}`);
+      if (area.score >= 86) reasons.push(t(lang, "list.reason.popular", { area: area.label }));
       else if (area.label) reasons.push(area.label);
       if (live.reason) reasons.push(live.reason);
-      if (listing.foreignerOk) reasons.push("Foreigners welcome");
+      if (listing.foreignerOk) reasons.push(t(lang, "list.reason.foreigner"));
       else if (!photo && listing.photos && listing.photos.length >= 5) {
-        reasons.push("Lots of photos");
+        reasons.push(t(lang, "list.reason.photos"));
       }
 
       return {

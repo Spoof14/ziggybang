@@ -2,6 +2,9 @@ import { env } from "~/env";
 import { hasHangul } from "~/lib/listings/foreigner";
 import { cached } from "./cache";
 
+/** Short on purpose: the button is optional, so a slow model should not hang the panel. */
+export const TRANSLATE_TIMEOUT_MS = 6_000;
+
 export type TranslatedNotes = {
   english: string | null;
   source: "original" | "openai" | "none";
@@ -31,7 +34,7 @@ async function translateWithOpenAi(
   key: string,
 ): Promise<TranslatedNotes> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10_000);
+  const timer = setTimeout(() => controller.abort(), TRANSLATE_TIMEOUT_MS);
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

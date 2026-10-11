@@ -1,3 +1,4 @@
+import { DEFAULT_LANG, t, type Lang } from "~/lib/i18n";
 import { formatKrwFromManwon } from "./copy";
 import { type SalesType } from "./types";
 
@@ -116,22 +117,22 @@ export function parseWonToManwon(raw: string): number | undefined {
   return manwon;
 }
 
-function boundLabel(min?: number, max?: number): string | null {
-  const minLabel = min != null ? formatKrwFromManwon(min) : null;
-  const maxLabel = max != null ? formatKrwFromManwon(max) : null;
+function boundLabel(min: number | undefined, max: number | undefined, lang: Lang): string | null {
+  const minLabel = min != null ? formatKrwFromManwon(min, lang) : null;
+  const maxLabel = max != null ? formatKrwFromManwon(max, lang) : null;
   if (minLabel && maxLabel) return `${minLabel}–${maxLabel.replace("₩", "")}`;
   if (maxLabel) return `≤ ${maxLabel}`;
   if (minLabel) return `≥ ${minLabel}`;
   return null;
 }
 
-export function describePriceFilter(filter: PriceFilter): string | null {
+export function describePriceFilter(filter: PriceFilter, lang: Lang = DEFAULT_LANG): string | null {
   const next = normalizePriceFilter(filter);
   if (isEmptyPriceFilter(next)) return null;
   const parts: string[] = [];
-  const deposit = boundLabel(next.minDeposit, next.maxDeposit);
-  const rent = boundLabel(next.minRent, next.maxRent);
-  if (deposit) parts.push(`Deposit ${deposit}`);
-  if (rent) parts.push(`Monthly ${rent}`);
+  const deposit = boundLabel(next.minDeposit, next.maxDeposit, lang);
+  const rent = boundLabel(next.minRent, next.maxRent, lang);
+  if (deposit) parts.push(t(lang, "price.depositSummary", { range: deposit }));
+  if (rent) parts.push(t(lang, "price.monthlySummary", { range: rent }));
   return parts.join(" · ") || null;
 }

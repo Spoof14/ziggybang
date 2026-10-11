@@ -1,3 +1,5 @@
+import { DEFAULT_LANG, t, tn, type Lang } from "~/lib/i18n";
+
 export const ageFilters = ["week", "month"] as const;
 export type AgeFilter = (typeof ageFilters)[number];
 
@@ -5,6 +7,13 @@ export const ageFilterLabel: Record<AgeFilter, string> = {
   week: "This week",
   month: "This month",
 };
+
+export function ageFilterText(lang: Lang, filter: AgeFilter): string {
+  return t(lang, `age.${filter}`);
+}
+export function ageFilterTitle(lang: Lang, filter: AgeFilter): string {
+  return t(lang, `age.${filter}.title`);
+}
 
 export type ListingAgeTone = "fresh" | "recent" | "stale";
 
@@ -83,15 +92,18 @@ export function listingMatchesAge(
   return ageMs <= MONTH_MS;
 }
 
-export function formatRelativeListed(value?: string, now = Date.now()): string | null {
+export function formatRelativeListed(
+  value?: string,
+  now = Date.now(),
+  lang: Lang = DEFAULT_LANG,
+): string | null {
   const ageMs = listingAgeMs(value, now);
   if (ageMs == null) return null;
   const days = Math.floor(ageMs / DAY_MS);
-  if (days < 1) return "today";
-  if (days === 1) return "1 day ago";
-  if (days < 7) return `${days} days ago`;
+  if (days < 1) return t(lang, "ago.today");
+  if (days < 7) return tn(lang, "ago.day", days);
   const weeks = Math.floor(days / 7);
-  if (days < 30) return weeks === 1 ? "1 week ago" : `${weeks} weeks ago`;
+  if (days < 30) return tn(lang, "ago.week", weeks);
   const months = Math.floor(days / 30);
-  return months === 1 ? "1 month ago" : `${months} months ago`;
+  return tn(lang, "ago.month", months);
 }
