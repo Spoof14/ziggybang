@@ -99,7 +99,7 @@ not change the map.
 
 ## Tests
 
-`bun run test` runs the Vitest unit tests for geohash tiling, clustering, source mapping, English copy, and aggregation. Naver is asserted to fail soft if the host is unreachable. `src/server/listings/live.test.ts` is a live Zigbang smoke test that needs network access and can be flaky; CI excludes it (`bun run test --exclude src/server/listings/live.test.ts`).
+`bun run test` runs the Vitest unit tests for geohash tiling, clustering, source mapping, English copy, and aggregation. Naver is asserted to fail soft if the host is unreachable. `src/server/listings/live.test.ts` is a network test (live Zigbang/Peterpan/Naver; Peterpan upstream timeouts are tolerated). It is excluded from `bun run test` and CI; run it on demand with `bun run test:live`.
 
 CI (`.github/workflows/ci.yml`) runs lint, `tsc`, build, and tests with Bun on every PR and push to `main`.
 

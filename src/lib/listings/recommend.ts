@@ -156,7 +156,7 @@ export function neighborhoodForListing(
     id: "other",
     label:
       (lang === "ko" ? undefined : (englishNeighborhood(address) ?? englishDistrict(address))) ??
-      (lang === "ko" ? (address.match(/[가-힣]+구/)?.[0]) : undefined) ??
+      (lang === "ko" ? ((/[가-힣]+구/.exec(address))?.[0]) : undefined) ??
       t(lang, "list.reason.thisArea"),
     score: inSeoul ? 48 : 36,
   };
@@ -170,7 +170,7 @@ export function livabilityScore(
   if (/반지하|지하/.test(floor)) {
     return { score: 18, reason: t(lang, "list.reason.semiBasement") };
   }
-  if (/옥탑/.test(floor)) {
+  if (floor.includes('옥탑')) {
     return { score: 42, reason: t(lang, "list.reason.rooftop") };
   }
   const numeric = Number.parseInt(floor, 10);

@@ -44,7 +44,7 @@ function home(over: Partial<MapListing> & Record<string, unknown> = {}): MapList
     thumbnail: "https://ic.zigbang.com/ic/items/1/1.jpg",
     url: "https://example.com",
     ...over,
-  } as MapListing;
+  };
 }
 
 describe("constraint chips", () => {

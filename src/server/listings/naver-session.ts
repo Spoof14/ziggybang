@@ -45,9 +45,9 @@ export function naverTransport(): NaverTransport {
 }
 
 export function extractNaverToken(html: string): string | undefined {
-  const fromState = html.match(/"token"\s*:\s*\{\s*"token"\s*:\s*"(eyJ[^"]+)"/);
+  const fromState = /"token"\s*:\s*\{\s*"token"\s*:\s*"(eyJ[^"]+)"/.exec(html);
   if (fromState?.[1]) return fromState[1];
-  return html.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/)?.[0];
+  return (/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/.exec(html))?.[0];
 }
 
 export function cookieHeaderFromSetCookie(setCookies: string[]): string {

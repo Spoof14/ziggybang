@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const envMock = vi.hoisted(() => ({ OPENAI_API_KEY: "test-key" as string | undefined }));
+const envMock = vi.hoisted((): { OPENAI_API_KEY: string | undefined } => ({ OPENAI_API_KEY: "test-key" }));
 vi.mock("~/env", () => ({ env: envMock }));
 
 import { groundPreferences, interpretAsk, resolveAskPlace } from "./ask";

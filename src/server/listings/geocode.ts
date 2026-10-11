@@ -229,7 +229,7 @@ export async function geocodeKorea(query: string): Promise<Place | null> {
       // A full street address must not collapse to the district the catalog
       // matched on ("마포"). OpenStreetMap knows the road even when it lacks
       // the house number, which is close enough for a 400 m circle.
-      const parts = trimmed.match(/([가-힣]+구)\s+([가-힣]+\d*(?:대로|로|길))\s*(\d+(?:-\d+)?)/);
+      const parts = /([가-힣]+구)\s+([가-힣]+\d*(?:대로|로|길))\s*(\d+(?:-\d+)?)/.exec(trimmed);
       const attempts: Array<{ q: string; structured?: { street: string; city: string } }> = [];
       if (parts) {
         attempts.push({

@@ -228,13 +228,11 @@ export function looksLikeStreetAddress(query: string): boolean {
 
 /** The street-address part of a message ("서울 마포구 양화로 160"), if any. */
 export function extractStreetAddress(text: string): string | undefined {
-  const hangul = text.match(
-    /(?:(?:서울|경기|인천|부산|대구|대전|광주|울산|세종)(?:특별시|광역시|특별자치시|도)?\s+)?(?:[가-힣]+구\s+)?(?:[가-힣]+동\s+)?[가-힣]+\d*(?:대로|로|길)\s*\d+(?:-\d+)?/,
-  );
+  const hangul = /(?:(?:서울|경기|인천|부산|대구|대전|광주|울산|세종)(?:특별시|광역시|특별자치시|도)?\s+)?(?:[가-힣]+구\s+)?(?:[가-힣]+동\s+)?[가-힣]+\d*(?:대로|로|길)\s*\d+(?:-\d+)?/.exec(text);
   if (hangul) return hangul[0].replace(/\s+/g, " ").trim();
   const latin =
-    text.match(/\b\d+[\s,]+[a-z]+(?:-[a-z]+)*-(?:ro|gil|daero)\b/i) ??
-    text.match(/\b[a-z]+(?:-[a-z]+)*-(?:ro|gil|daero)\s+\d+/i);
+    (/\b\d+[\s,]+[a-z]+(?:-[a-z]+)*-(?:ro|gil|daero)\b/i.exec(text)) ??
+    (/\b[a-z]+(?:-[a-z]+)*-(?:ro|gil|daero)\s+\d+/i.exec(text));
   return latin ? latin[0].trim() : undefined;
 }
 

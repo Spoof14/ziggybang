@@ -17,6 +17,9 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - name: Lint
@@ -25,6 +28,7 @@ jobs:
         run: bunx tsc --noEmit
       - name: Build
         run: bun run build
-      # live.test.ts hits the real Zigbang network and is flaky, so CI skips it.
+      # live.test.ts hits the real Zigbang/Peterpan network, so it is excluded by
+      # vitest.config.ts unless RUN_LIVE_TESTS is set (`bun run test:live`).
       - name: Test
         run: bun run test --exclude src/server/listings/live.test.ts

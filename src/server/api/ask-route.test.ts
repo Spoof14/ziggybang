@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const envMock = vi.hoisted(() => ({ OPENAI_API_KEY: "test-key" as string | undefined, NODE_ENV: "test" }));
+const envMock = vi.hoisted((): { OPENAI_API_KEY: string | undefined; NODE_ENV: string } => ({ OPENAI_API_KEY: "test-key", NODE_ENV: "test" }));
 vi.mock("~/env", () => ({ env: envMock }));
 vi.mock("~/server/listings/aggregate", () => ({
   getMapData: vi.fn(),
@@ -28,7 +28,7 @@ function listings(n: number): MapListing[] {
     approveDate: "2016-01-01",
     thumbnail: "https://ic.zigbang.com/x.jpg",
     url: "https://example.com",
-  })) as MapListing[];
+  }));
 }
 
 const mapResult = (list: MapListing[]) => ({
@@ -46,6 +46,7 @@ describe("listings.ask route (OpenAI mocked)", () => {
     clearAskCache();
     vi.stubGlobal("fetch", fetchMock);
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.mocked(getMapData).mockReset();
     vi.mocked(getMapData).mockImplementation(async (q) => mapResult(q.sources.includes("zigbang") ? listings(30) : []));
   });
   afterEach(() => {

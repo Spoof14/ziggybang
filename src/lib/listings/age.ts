@@ -53,7 +53,7 @@ export function parseListingDate(value?: string): Date | null {
   if (!value) return null;
   const iso = Date.parse(value.includes("T") ? value : value.replace(" ", "T"));
   if (Number.isFinite(iso)) return new Date(iso);
-  const compact = value.match(/(\d{4})[.\-/]?(\d{2})[.\-/]?(\d{2})/);
+  const compact = /(\d{4})[.\-/]?(\d{2})[.\-/]?(\d{2})/.exec(value);
   if (!compact) return null;
   const year = Number(compact[1]);
   const month = Number(compact[2]);

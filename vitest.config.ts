@@ -5,6 +5,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // Network tests only run on demand: `bun run test:live`.
+    exclude: process.env.RUN_LIVE_TESTS ? ["node_modules/**"] : ["node_modules/**", "src/**/live.test.ts"],
   },
   resolve: {
     alias: {

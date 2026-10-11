@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const envMock = vi.hoisted(() => ({ OPENAI_API_KEY: "test-key" as string | undefined }));
+const envMock = vi.hoisted((): { OPENAI_API_KEY: string | undefined } => ({ OPENAI_API_KEY: "test-key" }));
 vi.mock("~/env", () => ({ env: envMock }));
 
 import { clearAskCache, computeAskPicks, runAskPicks, type CandidateFetch } from "./ask-picks";
@@ -28,7 +28,7 @@ function homes(n: number, over: (i: number) => Partial<MapListing> = () => ({}))
     thumbnail: "https://ic.zigbang.com/x.jpg",
     url: "https://example.com",
     ...over(i),
-  })) as MapListing[];
+  }));
 }
 
 function openAiReply(payload: unknown) {

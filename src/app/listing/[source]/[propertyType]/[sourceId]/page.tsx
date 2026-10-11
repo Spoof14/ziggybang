@@ -21,14 +21,14 @@ export async function generateMetadata({
   params,
   searchParams,
 }: {
-  params: PageParams;
-  searchParams?: SearchParams;
+  params: Promise<PageParams>;
+  searchParams?: Promise<SearchParams>;
 }): Promise<Metadata> {
-  const rawLang = searchParams?.lang;
+  const rawLang = (await searchParams)?.lang;
   const lang = parseLang(Array.isArray(rawLang) ? rawLang[0] : rawLang) ?? "en";
   const suffix = t(lang, "app.listingSuffix");
   const fallbackTitle = `${t(lang, "app.listingTitle")} · ${suffix}`;
-  const path = parseListingPath(params);
+  const path = parseListingPath(await params);
   if (!path) return { title: fallbackTitle };
   try {
     const listing = await getListingDetail(path);
@@ -54,8 +54,8 @@ export async function generateMetadata({
   }
 }
 
-export default async function ListingPage({ params }: { params: PageParams }) {
-  const path = parseListingPath(params);
+export default async function ListingPage({ params }: { params: Promise<PageParams> }) {
+  const path = parseListingPath(await params);
   if (!path) notFound();
   let initial = null;
   try {
