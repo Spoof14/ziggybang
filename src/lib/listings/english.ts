@@ -76,7 +76,7 @@ export function englishDistrict(address?: string): string | null {
       best = { label, length: korean.length };
     }
   }
-  const latin = address.match(/[A-Za-z-]+-gu/i)?.[0];
+  const latin = (/[A-Za-z-]+-gu/i.exec(address))?.[0];
   if (latin) {
     const label = `${latin.charAt(0).toUpperCase()}${latin.slice(1).toLowerCase()}`;
     if (!best || latin.length > best.length) return label;
@@ -103,7 +103,7 @@ function koreanAddressLine(listing: MapListing): string | null {
   if (!address) return null;
   if (!hasHangul(address)) return englishDistrict(address) ?? address;
   const hood = koreanNeighborhood(address);
-  const district = address.match(/[가-힣]+구/)?.[0];
+  const district = (/[가-힣]+구/.exec(address))?.[0];
   if (hood && district) return hood === district.replace(/구$/, "") ? district : `${hood} · ${district}`;
   return hood ?? district ?? address;
 }

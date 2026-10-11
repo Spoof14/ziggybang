@@ -366,7 +366,7 @@ export function parseNaverManwon(value: number | string | undefined): number | u
   if (typeof value !== "string") return undefined;
   const cleaned = value.replace(/,/g, "").trim();
   if (!cleaned) return undefined;
-  const eok = cleaned.match(/(\d+(?:\.\d+)?)\s*억/);
+  const eok = /(\d+(?:\.\d+)?)\s*억/.exec(cleaned);
   const rest = cleaned.replace(/(\d+(?:\.\d+)?)\s*억/, "").trim();
   let manwon = 0;
   if (eok?.[1]) manwon += Number(eok[1]) * 10000;
@@ -444,7 +444,7 @@ function naverDetailCoords(
     coordsFrom(payload) ??
     coordsFrom(payload.latlng) ??
     coordsFrom(payload.articleDetail) ??
-    coordsFrom(payload as NaverArticle)
+    coordsFrom(payload)
   );
 }
 

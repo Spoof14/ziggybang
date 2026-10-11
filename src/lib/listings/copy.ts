@@ -144,7 +144,7 @@ export function formatFloor(value?: string, lang: Lang = DEFAULT_LANG): string |
   const head = rawFloor.replace(/층$/, "");
   const hasTotal = Boolean(total && /^\d+$/.test(total));
   if (/반지하|반지층/.test(head)) return t(lang, "floorText.semiBasement");
-  if (/옥탑/.test(head)) return t(lang, "floorText.rooftop");
+  if (head.includes('옥탑')) return t(lang, "floorText.rooftop");
   if (/^(지하|B-?\d)/i.test(head)) return t(lang, "floorText.basement");
   const band = /^(고|중|저)(층)?$/.exec(head)?.[1];
   if (band) {

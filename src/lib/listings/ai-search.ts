@@ -203,9 +203,7 @@ function classifyBound(text: string, hit: MoneyHit): MoneyBound {
 function parsePriceIntent(text: string): PriceFilter {
   const hits = extractMoney(text);
   const next: PriceFilter = {};
-  const between = text.match(
-    /(?:between|from)\s+([^,]+?)\s+(?:and|to|-)\s+([^,]+?)(?:\s+(deposit|rent|monthly|보증금|월세))?/i,
-  );
+  const between = /(?:between|from)\s+([^,]+?)\s+(?:and|to|-)\s+([^,]+?)(?:\s+(deposit|rent|monthly|보증금|월세))?/i.exec(text);
   if (between) {
     const left = extractMoney(between[1] ?? "")[0];
     const right = extractMoney(between[2] ?? "")[0];
@@ -229,9 +227,7 @@ function parsePriceIntent(text: string): PriceFilter {
     }
   }
 
-  const dash = text.match(
-    /(\d+(?:\.\d+)?)\s*[-~–]\s*(\d+(?:\.\d+)?)\s*(만|만원|억)?\s*(deposit|rent|monthly|보증금|월세)?/i,
-  );
+  const dash = /(\d+(?:\.\d+)?)\s*[-~–]\s*(\d+(?:\.\d+)?)\s*(만|만원|억)?\s*(deposit|rent|monthly|보증금|월세)?/i.exec(text);
   if (dash && next.minDeposit == null && next.minRent == null) {
     const unit = dash[3];
     const left = parseManwonToken(Number(dash[1]), unit);
@@ -297,7 +293,7 @@ function parseAreaBuckets(text: string): AreaBucketId[] | undefined {
   if (/small studio|6-?10 py|20-?33/i.test(text)) return ["s"];
   if (/family|spacious|large|50\+|15\+ py/i.test(text)) return ["l"];
   if (/10-?15 py|33-?50/i.test(text)) return ["m"];
-  const pyeong = text.match(/(\d+(?:\.\d+)?)\s*(?:pyeong|py)\b/i);
+  const pyeong = /(\d+(?:\.\d+)?)\s*(?:pyeong|py)\b/i.exec(text);
   if (pyeong) {
     const value = Number(pyeong[1]);
     const m2 = value * 3.3058;
@@ -312,7 +308,7 @@ function parseAreaBuckets(text: string): AreaBucketId[] | undefined {
 }
 
 function parseRadius(text: string): number | undefined {
-  const meters = text.match(/(\d+(?:\.\d+)?)\s*(km|kilometers?|m|meters?)\b/i);
+  const meters = /(\d+(?:\.\d+)?)\s*(km|kilometers?|m|meters?)\b/i.exec(text);
   if (meters) {
     const value = Number(meters[1]);
     const radiusM = /km/i.test(meters[2] ?? "") ? value * 1000 : value;

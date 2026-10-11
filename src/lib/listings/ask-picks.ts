@@ -786,7 +786,7 @@ export function compactCandidate(
 
 function cleanLine(value: unknown, max: number): string | undefined {
   if (typeof value !== "string") return undefined;
-  // eslint-disable-next-line no-control-regex
+   
   const text = value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
   if (!text) return undefined;
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;

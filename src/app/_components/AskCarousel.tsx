@@ -287,7 +287,7 @@ export function AskCarousel({
           </button>
         </div>
       </div>
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+      { }
       <ul
         ref={scroller}
         tabIndex={0}

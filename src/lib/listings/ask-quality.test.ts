@@ -48,7 +48,7 @@ function home(over: Record<string, unknown> = {}): MapListing {
     thumbnail: "https://ic.zigbang.com/a.jpg",
     url: "https://example.com",
     ...over,
-  } as MapListing;
+  };
 }
 const center = { lat: mangwon.lat, lng: mangwon.lng };
 

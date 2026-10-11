@@ -150,7 +150,7 @@ export function translateParking(value?: string, lang: Lang = DEFAULT_LANG): str
   const text = value.trim();
   if (text.includes("불가능") || text.includes("불가")) return t(lang, "dc.parkingNo");
   if (text.includes("가능")) {
-    const count = text.match(/(\d+)\s*대/);
+    const count = /(\d+)\s*대/.exec(text);
     if (count?.[1]) return tn(lang, "dc.parkingN", Number(count[1]));
     return t(lang, "dc.parkingYes");
   }
@@ -173,7 +173,7 @@ export function translateSubwayLine(value?: string, lang: Lang = DEFAULT_LANG): 
     .split(/[,\s]+/)
     .filter(Boolean)
     .map((part) => {
-      const numbered = part.match(/^(\d+)호선$/);
+      const numbered = /^(\d+)호선$/.exec(part);
       if (numbered) return t(lang, "dc.line", { n: numbered[1]! });
       return LINE_LABEL[part] ?? part;
     })
@@ -198,9 +198,9 @@ export function formatListedAt(value?: string, lang: Lang = DEFAULT_LANG): strin
 export function formatMoveIn(value?: string, lang: Lang = DEFAULT_LANG): string | null {
   if (!value?.trim()) return null;
   const text = value.trim();
-  if (/즉시/.test(text)) return t(lang, "dc.moveInNow");
+  if (text.includes('즉시')) return t(lang, "dc.moveInNow");
   const date = parseLooseDate(text);
-  const negotiable = /협의/.test(text);
+  const negotiable = text.includes('협의');
   if (date) {
     const stamp = formatDate(date, lang);
     return t(lang, negotiable ? "dc.moveInFromNeg" : "dc.moveInFrom", { date: stamp });
@@ -233,7 +233,7 @@ export function telHref(value?: string): string | null {
 
 function parseLooseDate(value?: string): Date | null {
   if (!value) return null;
-  const compact = value.match(/(\d{4})[.\-/]?(\d{2})[.\-/]?(\d{2})/);
+  const compact = /(\d{4})[.\-/]?(\d{2})[.\-/]?(\d{2})/.exec(value);
   if (!compact) return null;
   const year = Number(compact[1]);
   const month = Number(compact[2]);

@@ -48,7 +48,7 @@ export function parseFloorFilter(text: string): {
 export function isBasementFloor(floor?: string): boolean {
   if (!floor) return false;
   const compact = floor.replace(/\s+/g, "");
-  if (/옥탑/.test(compact)) return false;
+  if (compact.includes('옥탑')) return false;
   return /반지하|지하|basement|\bB-?\d/i.test(compact);
 }
 
@@ -56,7 +56,7 @@ export function floorNumber(floor?: string): number | undefined {
   if (!floor) return undefined;
   const compact = floor.replace(/\s+/g, "");
   if (isBasementFloor(compact)) return 0;
-  if (/옥탑/.test(compact)) return 99;
+  if (compact.includes('옥탑')) return 99;
   if (compact.startsWith("고")) return 8;
   if (compact.startsWith("중")) return 3;
   if (compact.startsWith("저")) return 1;

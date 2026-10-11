@@ -104,7 +104,7 @@ export function formatWonInput(manwon?: number): string {
 export function parseWonToManwon(raw: string): number | undefined {
   const trimmed = raw.trim().replace(/₩/g, "").replace(/,/g, "").replace(/\s+/g, " ");
   if (!trimmed) return undefined;
-  const million = trimmed.match(/^(\d+(?:\.\d+)?)\s*(m|mil|million)$/i);
+  const million = /^(\d+(?:\.\d+)?)\s*(m|mil|million)$/i.exec(trimmed);
   if (million) {
     const krw = Number(million[1]) * 1_000_000;
     if (!Number.isFinite(krw) || krw < 0) return undefined;
