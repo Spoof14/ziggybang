@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { activeSlideIndex, stepSlide, visibleSlideRange, type AskPick } from "~/lib/listings/ask-picks";
+import { activeSlideIndex, displayPlace, stepSlide, visibleSlideRange, type AskPick } from "~/lib/listings/ask-picks";
 import { areaLabel } from "~/lib/listings/ask-quality";
 import { buildingAgeYears } from "~/lib/listings/building-age";
+import { type AskCommute } from "~/lib/listings/ask-followup";
 import { formatCount, t as translate, tn, type Lang } from "~/lib/i18n";
 import { useI18n } from "~/lib/i18n/react";
 import { formatFloor, propertyTypeText, salesTypeFilterText, sourceText } from "~/lib/listings/copy";
@@ -35,8 +36,12 @@ export function AskPickCard({
   onToggleSave,
   onShowOnMap,
   onPreview,
+  onSimilar,
+  commute,
 }: {
   pick: AskPick;
+  onSimilar?: (pick: AskPick) => void;
+  commute?: AskCommute;
   total: number;
   saved: boolean;
   highlighted: boolean;
@@ -105,6 +110,11 @@ export function AskPickCard({
         <p className="text-[11px] leading-snug text-slate-400">
           {[where, distanceLabel(pick.distanceM, lang)].filter(Boolean).join(" · ")}
         </p>
+        {commute && pick.commuteMin != null ? (
+          <p className="text-[11px] leading-snug text-emerald-300">
+            {t("ask.commute.card", { min: pick.commuteMin, dest: displayPlace(commute.name) })}
+          </p>
+        ) : null}
         <p
           className={`mt-0.5 rounded-lg px-2 py-1.5 text-xs leading-snug ${
             pick.reasonSource === "ai" ? "bg-sky-400/10 text-sky-100" : "bg-white/5 text-slate-300"
@@ -133,6 +143,16 @@ export function AskPickCard({
             <span className="sr-only">{t("ask.showMapSr", { rank: pick.rank })}</span>
           </button>
         </div>
+        {onSimilar ? (
+          <button
+            type="button"
+            onClick={() => onSimilar(pick)}
+            aria-label={t("ask.similar.aria")}
+            className="self-start rounded-full px-2 py-1 text-[11px] text-sky-300 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+          >
+            {t("ask.similar.btn")}
+          </button>
+        ) : null}
       </div>
     </li>
   );
@@ -147,7 +167,11 @@ export function AskCarousel({
   onPreview,
   initialIndex = 0,
   onActiveChange,
+  onSimilar,
+  commute,
 }: {
+  onSimilar?: (pick: AskPick) => void;
+  commute?: AskCommute;
   picks: AskPick[];
   savedIds: ReadonlySet<string>;
   highlightedId?: string;
@@ -286,6 +310,8 @@ export function AskCarousel({
             onToggleSave={onToggleSave}
             onShowOnMap={onShowOnMap}
             onPreview={onPreview}
+            onSimilar={onSimilar}
+            commute={commute}
           />
         ))}
       </ul>

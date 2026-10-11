@@ -49,8 +49,11 @@ export function ListingPanel({
   saved,
   onClose,
   onToggleSave,
+  onSimilar,
   modal,
 }: {
+  /** "Similar to this": runs Ask anchored on this listing. */
+  onSimilar?: (listing: MapListing) => void;
   listing: MapListing;
   saved?: boolean;
   onClose: () => void;
@@ -263,6 +266,16 @@ export function ListingPanel({
           compact
         />
         <div className="flex flex-col gap-2 p-4">
+          {onSimilar ? (
+            <button
+              type="button"
+              onClick={() => onSimilar(listing)}
+              aria-label={t("ask.similar.aria")}
+              className="inline-flex w-full items-center justify-center rounded-xl bg-sky-400/15 px-4 py-2 text-sm font-medium text-sky-200 hover:bg-sky-400/25"
+            >
+              {t("ask.similar.btn")}
+            </button>
+          ) : null}
           <ListingPageLink
             listing={detail}
             className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"

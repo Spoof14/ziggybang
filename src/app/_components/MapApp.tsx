@@ -150,6 +150,12 @@ export default function MapApp() {
   const [ageFilter, setAgeFilter] = useState<AgeFilter | undefined>();
   const [maxBuildingAge, setMaxBuildingAge] = useState<number | undefined>();
   const [askOpen, setAskOpen] = useState(false);
+  const [similarRequest, setSimilarRequest] = useState<{ listing: MapListing; nonce: number } | null>(null);
+  const onSimilar = useCallback((listing: MapListing) => {
+    setSimilarRequest((current) => ({ listing, nonce: (current?.nonce ?? 0) + 1 }));
+    setSelected(null);
+    setAskOpen(true);
+  }, []);
   const askUiReady = useRef(false);
   const [savedHomes, setSavedHomes] = useState<MapListing[]>([]);
   const [tool, setTool] = useState<"pan" | "radius" | "draw">("pan");
@@ -1665,6 +1671,7 @@ export default function MapApp() {
               scrollToId={listScrollId}
               scrollToAt={listScrollAt}
               onToggleSave={onToggleSave}
+              onSimilar={onSimilar}
               loadingMore={
                 (viewMode === "list" || viewMode === "best") &&
                 refreshing &&
@@ -1681,6 +1688,7 @@ export default function MapApp() {
             saved={isSavedHome(savedHomes, selected.id)}
             onClose={() => setSelected(null)}
             onToggleSave={onToggleSave}
+            onSimilar={onSimilar}
           />
         ) : null}
         {viewMode === "map" && visible.listings.length ? (
@@ -1750,14 +1758,14 @@ export default function MapApp() {
             onClick={() => setAskOpen(true)}
             className="rounded-full bg-sky-400 px-2.5 py-1 font-medium text-slate-950 hover:bg-sky-300"
           >
-            Back to picks
+            {t("ask.backToPicks")}
           </button>
           <button
             type="button"
             onClick={exitAskPins}
             className="rounded-full bg-white/10 px-2.5 py-1 text-slate-200 hover:bg-white/20"
           >
-            Show all homes
+            {t("card.showAll")}
           </button>
         </div>
       ) : null}
@@ -1769,6 +1777,7 @@ export default function MapApp() {
         highlightedId={askHighlight ?? undefined}
         onClose={() => setAskOpen(false)}
         onToggleSave={onToggleSave}
+        similarRequest={similarRequest}
         onApplyFilters={applySearchSnapshot}
         onClearFilters={clearChipFilters}
         onShowPicks={showAskPicks}

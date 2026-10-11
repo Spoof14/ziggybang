@@ -35,7 +35,7 @@ const constraintsSchema = z.object({
       name: z.string().min(1).max(60),
       lat: z.number().min(33).max(39),
       lng: z.number().min(124).max(132),
-      radiusM: z.number().min(250).max(3000),
+      radiusM: z.number().min(250).max(4000),
       kind: z.enum(["place", "viewport"]),
     })
     .optional(),
@@ -49,6 +49,15 @@ const constraintsSchema = z.object({
   foreignerOk: z.boolean().optional(),
   hasPhotos: z.boolean().optional(),
   preferences: z.array(z.string().min(1).max(40)).max(5).optional(),
+  commute: z
+    .object({
+      name: z.string().min(1).max(60),
+      lat: z.number().min(33).max(39),
+      lng: z.number().min(124).max(132),
+      maxMin: z.number().min(5).max(90),
+    })
+    .optional(),
+  similarTo: z.object({ id: z.string().min(1).max(120), label: z.string().max(60) }).optional(),
   minDeposit: z.number().min(0).max(1_000_000).optional(),
   maxDeposit: z.number().min(0).max(1_000_000).optional(),
   minRent: z.number().min(0).max(50_000).optional(),
@@ -63,6 +72,23 @@ const messagesSchema = z
   )
   .min(1)
   .max(12);
+const priorPicksSchema = z
+  .array(
+    z.object({
+      rank: z.number().int().min(1).max(10),
+      id: z.string().min(1).max(120),
+      propertyType: propertyTypeSchema,
+      salesType: salesTypeSchema.optional(),
+      deposit: z.number().optional(),
+      rent: z.number().optional(),
+      price: z.number().optional(),
+      areaM2: z.number().optional(),
+      lat: z.number().min(33).max(39),
+      lng: z.number().min(124).max(132),
+      label: z.string().max(60),
+    }),
+  )
+  .max(10);
 const langSchema = z.enum(["en", "ko"]);
 const viewportSchema = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) });
 const fallbackReasonSchema = z.enum(["rate_limited", "quota", "auth", "timeout", "error", "unconfigured"]);
@@ -132,6 +158,7 @@ export const listingsRouter = createTRPCRouter({
         previous: constraintsSchema.optional(),
         viewport: viewportSchema.optional(),
         lang: langSchema.optional(),
+        priorPicks: priorPicksSchema.optional(),
       }),
     )
     .mutation(({ input, signal }) => interpretAsk({ ...input, signal })),
@@ -150,6 +177,7 @@ export const listingsRouter = createTRPCRouter({
         previous: constraintsSchema.optional(),
         viewport: viewportSchema.optional(),
         lang: langSchema.optional(),
+        priorPicks: priorPicksSchema.optional(),
         skipAi: fallbackReasonSchema.optional(),
       }),
     )
@@ -165,6 +193,7 @@ export const listingsRouter = createTRPCRouter({
           previous: input.previous,
           viewport: input.viewport,
           lang: input.lang,
+          priorPicks: input.priorPicks,
           signal,
         });
         interpretMs = Date.now() - started;

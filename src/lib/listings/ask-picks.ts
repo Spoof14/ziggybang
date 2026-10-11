@@ -25,6 +25,7 @@ import {
   sizeClass,
   MAX_NEAR_DUPLICATES,
 } from "./ask-quality";
+import { approxCommuteMin, commuteRadiusM, MAX_COMMUTE_RADIUS_M, type AskCommute, type SimilarAnchor } from "./ask-followup";
 import { filterListings, isNaverClusterListing } from "./filter";
 import { floorFilterText, type FloorFilter } from "./floor";
 import { listingHasPhotos } from "./photo";
@@ -70,6 +71,10 @@ export type AskConstraints = {
   hasPhotos?: boolean;
   /** Soft wishes ("quiet", "subway"). They rank; they never exclude. */
   preferences?: string[];
+  /** "Within 30 min of Gangnam": filters and ranks by an approximate straight-line commute. */
+  commute?: AskCommute;
+  /** "Similar to this": the anchor listing is excluded from its own picks. */
+  similarTo?: SimilarAnchor;
 } & PriceFilter;
 
 export type AskPick = {
@@ -78,6 +83,8 @@ export type AskPick = {
   reason: string;
   reasonSource: "ai" | "basic";
   distanceM?: number;
+  /** Approximate door-to-door minutes to `constraints.commute` (rough straight-line estimate). */
+  commuteMin?: number;
   /** Other listings of the same complex/price/size that were folded into or left out of this pick. */
   similar?: number;
 };
@@ -220,6 +227,15 @@ export function constraintChips(c: AskConstraints, lang: Lang = DEFAULT_LANG): A
   }
   if (c.foreignerOk) chips.push({ key: "foreigner", label: t(lang, "ask.chip.foreigner") });
   if (c.hasPhotos) chips.push({ key: "photos", label: t(lang, "ask.chip.photos") });
+  if (c.commute) {
+    chips.push({
+      key: "commute",
+      label: t(lang, "ask.chip.commute", { min: c.commute.maxMin, dest: displayPlace(c.commute.name) }),
+    });
+  }
+  if (c.similarTo) {
+    chips.push({ key: "similar", label: t(lang, "ask.chip.similar", { label: c.similarTo.label }) });
+  }
   for (const pref of c.preferences ?? []) {
     chips.push({ key: `pref:${pref}`, label: t(lang, "ask.chip.prefer", { pref: preferenceText(pref, lang) }) });
   }
@@ -229,8 +245,9 @@ export function constraintChips(c: AskConstraints, lang: Lang = DEFAULT_LANG): A
 /** What "Apply as filters" really puts on the map, and what it can't (soft wishes, room count). */
 export function describeAppliedFilters(c: AskConstraints, lang: Lang = DEFAULT_LANG): string {
   const chips = constraintChips(c, lang);
-  const mapped = chips.filter((chip) => !chip.key.startsWith("pref:") && chip.key !== "rooms").map((chip) => chip.label);
-  const skipped = chips.filter((chip) => chip.key.startsWith("pref:") || chip.key === "rooms").length > 0;
+  const notMapped = (key: string) => key.startsWith("pref:") || ["rooms", "commute", "similar"].includes(key);
+  const mapped = chips.filter((chip) => !notMapped(chip.key)).map((chip) => chip.label);
+  const skipped = chips.some((chip) => notMapped(chip.key));
   const base = mapped.length
     ? t(lang, "ask.filtersAppliedList", { list: mapped.join(", ") })
     : t(lang, "ask.filtersApplied");
@@ -251,6 +268,8 @@ export function removeConstraint(c: AskConstraints, key: string): AskConstraints
     case "listed": delete next.ageFilter; break;
     case "foreigner": delete next.foreignerOk; break;
     case "photos": delete next.hasPhotos; break;
+    case "commute": delete next.commute; break;
+    case "similar": delete next.similarTo; break;
     default:
       if (key.startsWith("pref:")) {
         const rest = (c.preferences ?? []).filter((p) => `pref:${p}` !== key);
@@ -306,7 +325,28 @@ export function sanitizeConstraints(raw: AskConstraints): AskConstraints {
   const price = normalizePriceFilter(raw);
   const next: AskConstraints = { ...price };
   if (raw.place) {
-    next.place = { ...raw.place, name: raw.place.name.slice(0, 60), radiusM: Math.min(3000, Math.max(250, raw.place.radiusM)) };
+    next.place = {
+      ...raw.place,
+      name: raw.place.name.slice(0, 60),
+      radiusM: Math.min(raw.commute ? MAX_COMMUTE_RADIUS_M : 3000, Math.max(250, raw.place.radiusM)),
+    };
+  }
+  if (
+    raw.commute &&
+    Number.isFinite(raw.commute.lat) &&
+    Number.isFinite(raw.commute.lng) &&
+    raw.commute.maxMin >= 5 &&
+    raw.commute.maxMin <= 90
+  ) {
+    next.commute = {
+      name: raw.commute.name.slice(0, 60),
+      lat: raw.commute.lat,
+      lng: raw.commute.lng,
+      maxMin: Math.round(raw.commute.maxMin),
+    };
+  }
+  if (raw.similarTo?.id) {
+    next.similarTo = { id: raw.similarTo.id.slice(0, 120), label: raw.similarTo.label.slice(0, 60) };
   }
   if (raw.propertyTypes?.length) next.propertyTypes = raw.propertyTypes;
   if (raw.salesTypes?.length) next.salesTypes = raw.salesTypes;
@@ -427,7 +467,9 @@ function hardFilterStep(
   const seen = new Set<string>();
   const pool = listings.filter((l) => {
     if (!usable(l) || seen.has(l.id)) return false;
+    if (c.similarTo && l.id === c.similarTo.id) return false;
     seen.add(l.id);
+    if (c.commute && distanceM(l, c.commute) > commuteRadiusM(c.commute.maxMin)) return false;
     return pointInCircle(l, circle);
   });
   const input = {
@@ -468,6 +510,7 @@ function hardFilterStep(
 
 export type ScoredCandidate = {
   listing: MapListing;
+  commuteMin?: number;
   score: number;
   distanceM: number;
   reason: string;
@@ -608,7 +651,7 @@ export function fallbackRank(
     .sort((a, b) => a - b);
   const weights = {
     price: cheap ? 0.5 : 0.3,
-    dist: CLOSE_WORDS.test(requestText) ? 0.35 : 0.25,
+    dist: c.commute ? 0.4 : CLOSE_WORDS.test(requestText) ? 0.35 : 0.25,
     age: wantsNew ? 0.3 : 0.15,
     size: wantsBig ? 0.25 : 0.1,
     photos: 0.1,
@@ -618,7 +661,8 @@ export function fallbackRank(
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
   const scored = candidates.map((l) => {
     const cost = effectiveMonthlyManwon(l);
-    const dist = distanceM(l, center);
+    const dist = distanceM(l, c.commute ?? center);
+    const commuteMin = c.commute ? approxCommuteMin(distanceM(l, c.commute)) : undefined;
     const age = buildingAgeYears(l.approveDate, now);
     const tags = listingTags(l);
     const hits = prefKeys.filter((k) => tags.includes(k) || (k === "cheap" && cost != null && percentile(effective, cost) < 0.35));
@@ -630,7 +674,10 @@ export function fallbackRank(
             ? // "Cheap" is low monthly total AND low money up front.
               0.6 * (1 - percentile(effective, cost)) + 0.4 * (1 - percentile(deposits, l.deposit))
             : 1 - percentile(effective, cost),
-      dist: Math.max(0, 1 - dist / Math.max(radiusM, 1)),
+      dist: Math.max(
+        0,
+        1 - dist / Math.max(c.commute ? Math.min(radiusM, commuteRadiusM(c.commute.maxMin)) : radiusM, 1),
+      ),
       age: age == null ? 0.4 : Math.max(0, 1 - Math.min(Math.max(age, 0), 30) / 30),
       size: l.areaM2 == null ? 0.3 : Math.min(1, l.areaM2 / 40),
       photos: Math.min(photoCount(l), 6) / 6,
@@ -649,7 +696,7 @@ export function fallbackRank(
     if (kind !== "normal" && !allowsBasement && !c.floorFilter) score -= cheap ? 0.1 : 0.5;
     // Listings with a photo win ties; a card with a placeholder is a weaker pick.
     score += hasAnyPhoto(l) ? 0.02 : -0.02;
-    return { listing: l, score, distanceM: dist, reason: genericReason(l, parts, c, dist, hits.filter((h) => h !== "newer" && h !== "spacious" || tags.includes(h)), lang) };
+    return { listing: l, score, distanceM: dist, ...(commuteMin != null ? { commuteMin } : {}), reason: genericReason(l, parts, c, dist, hits.filter((h) => h !== "newer" && h !== "spacious" || tags.includes(h)), lang) };
   });
   return scored.sort((a, b) => b.score - a.score || a.listing.id.localeCompare(b.listing.id));
 }
@@ -694,6 +741,8 @@ export type CompactCandidate = {
   /** Straight-line distance from the search center (not from a subway). */
   metersFromCenter: number;
   subwayWalkMin?: number;
+  /** Approximate door-to-door minutes to the user's commute destination (rough estimate). */
+  commuteMinApprox?: number;
   hasPhoto: boolean;
   facts?: string[];
   title?: string;
@@ -704,6 +753,7 @@ export function compactCandidate(
   listing: MapListing,
   center: { lat: number; lng: number },
   lang: Lang = DEFAULT_LANG,
+  commute?: AskCommute,
 ): CompactCandidate {
   const year = builtYear(listing);
   const tags = listingTags(listing);
@@ -725,6 +775,7 @@ export function compactCandidate(
     builtYear: year,
     metersFromCenter: Math.round(distanceM(listing, center) / 10) * 10,
     subwayWalkMin: subwayWalkMinutes(listing),
+    commuteMinApprox: commute ? approxCommuteMin(distanceM(listing, commute)) : undefined,
     hasPhoto: hasAnyPhoto(listing),
     facts: tags.length ? tags.filter((t) => t !== "spacious" && t !== "newer") : undefined,
     title: listing.title?.replace(/\s+/g, " ").slice(0, 40),
@@ -822,6 +873,7 @@ export function assemblePicks(
       reason: reason ?? item.reason,
       reasonSource: reason ? "ai" : "basic",
       distanceM: Math.round(item.distanceM),
+      ...(item.commuteMin != null ? { commuteMin: item.commuteMin } : {}),
     });
   };
   const roomFor = (item: ScoredCandidate) => (perGroup.get(groupOf(item.listing)) ?? 0) < MAX_NEAR_DUPLICATES;
