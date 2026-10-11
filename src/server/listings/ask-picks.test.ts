@@ -209,3 +209,28 @@ describe("runAskPicks caching", () => {
     expect(fetchCandidates).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("localizeAskResult (language switch)", () => {
+  it("reuses picks, counts and constraints; only text changes", async () => {
+    const { localizeAskResult } = await import("./ask-picks");
+    const { fallbackRank, assemblePicks } = await import("~/lib/listings/ask-picks");
+    const place = { name: "gangnam", lat: 37.4979, lng: 127.0276, radiusM: 1500, kind: "place" as const };
+    const listing = {
+      id: "z:1", source: "zigbang" as const, sourceId: "1", lat: place.lat, lng: place.lng,
+      propertyType: "oneroom" as const, salesType: "wolse" as const, deposit: 3000, rent: 40, url: "https://x.test",
+    };
+    const ranked = fallbackRank([listing], { place }, place, 1500, "", new Date(), "en");
+    const result = {
+      status: "ok" as const,
+      picks: assemblePicks(null, ranked, 1, {}),
+      summary: "x", assumptions: [], constraints: { place }, provider: "local" as const,
+      candidateCount: 141, radiusM: 1500, widened: false, sourceErrors: [], elapsedMs: 1,
+    };
+    const ko = await localizeAskResult({ result, fromLang: "en", lang: "ko" });
+    if (ko.status !== "ok") throw new Error("status");
+    expect(ko.candidateCount).toBe(141);
+    expect(ko.constraints).toEqual({ place });
+    expect(ko.picks.map((p) => p.listing.id)).toEqual(["z:1"]);
+    expect(ko.picks[0]!.reason).not.toMatch(/전세/);
+  });
+});

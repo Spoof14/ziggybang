@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hasHangul } from "~/lib/listings/foreigner";
-import { translateListingNotes } from "./translate";
+import { translateListingBundle, translateListingNotes, translateListingTitle } from "./translate";
 
 describe("listing note translation", () => {
   it("skips the model when the text is already English", async () => {
@@ -21,5 +21,20 @@ describe("listing note translation", () => {
       expect(result.source).toBe("openai");
       expect(result.english).toBeTruthy();
     }
+  });
+
+  it("title: original when English, none (fall back to original) without a key", async () => {
+    expect(await translateListingTitle("Bright 2-room")).toEqual({ english: "Bright 2-room", source: "original" });
+    if (!process.env.OPENAI_API_KEY) {
+      expect(await translateListingTitle("서교동 투룸, 넓고 채광도 좋아요")).toEqual({ english: null, source: "none" });
+    }
+  });
+
+  it("bundle: English text passes through with its title", async () => {
+    expect(await translateListingBundle("Bright", "Quiet place")).toEqual({
+      english: "Quiet place",
+      source: "original",
+      englishTitle: "Bright",
+    });
   });
 });
