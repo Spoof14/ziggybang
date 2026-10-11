@@ -53,14 +53,6 @@ const DISTRICT_LABEL: Record<string, string> = {
   부산광역시: "Busan",
 };
 
-function titleCase(value: string): string {
-  return value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 /** The Korean 구 named in an address ("마포구", or Latin "Mapo-gu" mapped back), if any. */
 export function addressGu(address?: string): string | null {
   if (!address) return null;

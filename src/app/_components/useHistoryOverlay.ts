@@ -6,6 +6,7 @@ import {
   listingSheetSyncAction,
   withListingSheet,
 } from "~/lib/listings/overlay-history";
+import { previewKey, withPreviewParam } from "~/lib/listings/ask-ui";
 import { type MapListing } from "~/lib/listings/types";
 
 const SHEET_LISTING_KEY = "ziggybang:sheet-listing";
@@ -78,11 +79,28 @@ export function useHistoryOverlay({
       sheetOpen,
     );
     if (action === "push") {
-      window.history.pushState(withListingSheet(window.history.state, true), "");
+      // ?preview=<source>:<type>:<id> like the Ask flow, so the open listing is in the URL.
+      const key = selected ? previewKey(selected) : null;
+      window.history.pushState(
+        withListingSheet(window.history.state, true),
+        "",
+        key ? `${window.location.pathname}${withPreviewParam(window.location.search, key)}${window.location.hash}` : undefined,
+      );
       return;
     }
     if (action === "back") {
       window.history.back();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyReady, sheetOpen]);
+
+  // Another listing selected while the sheet stays open: keep ?preview= in step.
+  const selectedKey = selected ? previewKey(selected) : null;
+  useEffect(() => {
+    if (!historyReady || !selectedKey || !listingSheetInHistory(window.history.state)) return;
+    const search = withPreviewParam(window.location.search, selectedKey);
+    if (search !== window.location.search) {
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${search}${window.location.hash}`);
+    }
+  }, [historyReady, selectedKey]);
 }

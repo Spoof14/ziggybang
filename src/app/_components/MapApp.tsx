@@ -78,6 +78,7 @@ import { ListingAgeDot } from "./ListingAgeDot";
 import { ListingPrice } from "./ListingPrice";
 import { BuildingAgeSlider } from "./BuildingAgeSlider";
 import { PriceFilters } from "./PriceFilters";
+import { listingSheetInHistory } from "~/lib/listings/overlay-history";
 import { useHistoryOverlay } from "./useHistoryOverlay";
 import { usePhotoQuality } from "./usePhotoQuality";
 
@@ -408,7 +409,9 @@ export default function MapApp() {
   useEffect(() => {
     const ui = loadAskUi();
     const sharedPreview =
-      Boolean(previewFromSearch(window.location.search)) && loadAskSession()?.result?.status === "ok";
+      Boolean(previewFromSearch(window.location.search)) &&
+      !listingSheetInHistory(window.history.state) &&
+      loadAskSession()?.result?.status === "ok";
     if (ui?.open === true || sharedPreview) setAskOpen(true);
     askUiReady.current = true;
   }, []);

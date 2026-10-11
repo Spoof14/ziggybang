@@ -9,6 +9,7 @@ import {
   similarConstraints,
   stripNearWrapper,
 } from "~/lib/listings/ask-followup";
+import { listingSheetInHistory } from "~/lib/listings/overlay-history";
 import { areaLabel } from "~/lib/listings/ask-quality";
 import { useI18n } from "~/lib/i18n/react";
 import {
@@ -147,8 +148,8 @@ export function AskSearch({
       const ref = previewFromSearch(window.location.search);
       const pick = findPreviewListing(restoredPicks, ref);
       if (pick) setPreview(pick.listing);
-      else if (ref) dropPreviewParam();
-    } else if (previewFromSearch(window.location.search)) {
+      else if (ref && !listingSheetInHistory(window.history.state)) dropPreviewParam();
+    } else if (previewFromSearch(window.location.search) && !listingSheetInHistory(window.history.state)) {
       dropPreviewParam();
     }
   }, []);
