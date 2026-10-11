@@ -99,6 +99,14 @@ export function ListingGallery({
     return () => window.removeEventListener("keydown", onKey);
   }, [layout, lightbox, visible.length]);
 
+  const fullscreenButton = useRef<HTMLButtonElement>(null);
+  const wasLightbox = useRef(false);
+  // Closing the fullscreen viewer returns focus to the button that opens it.
+  useEffect(() => {
+    if (wasLightbox.current && !lightbox) fullscreenButton.current?.focus({ preventScroll: true });
+    wasLightbox.current = lightbox;
+  }, [lightbox]);
+
   if (!current) return null;
 
   return (
@@ -148,6 +156,7 @@ export function ListingGallery({
           }}
         />
         <button
+          ref={fullscreenButton}
           type="button"
           className="absolute bottom-2 right-2 rounded-full bg-slate-950/80 px-2.5 py-1 text-[11px] text-slate-100 hover:bg-slate-900"
           onClick={(event) => {
