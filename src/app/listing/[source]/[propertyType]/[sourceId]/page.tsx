@@ -1,6 +1,7 @@
 import { type Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ListingDetailView } from "~/app/_components/ListingDetailView";
+import { parseLang, t } from "~/lib/i18n";
 import { englishCardTitle } from "~/lib/listings/english";
 import { listingPagePath, parseListingPath } from "~/lib/listings/path";
 import { listingPhotoUrl } from "~/lib/listings/photo";
@@ -14,33 +15,42 @@ type PageParams = {
   sourceId: string;
 };
 
+type SearchParams = Record<string, string | string[] | undefined>;
+
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: PageParams;
+  searchParams?: SearchParams;
 }): Promise<Metadata> {
+  const rawLang = searchParams?.lang;
+  const lang = parseLang(Array.isArray(rawLang) ? rawLang[0] : rawLang) ?? "en";
+  const suffix = t(lang, "app.listingSuffix");
+  const fallbackTitle = `${t(lang, "app.listingTitle")} · ${suffix}`;
   const path = parseListingPath(params);
-  if (!path) return { title: "Listing · Ziggybang" };
+  if (!path) return { title: fallbackTitle };
   try {
     const listing = await getListingDetail(path);
     const title =
-      [englishCardTitle(listing), listing.title].find((value) => value?.trim()) ??
-      "Listing";
+      [englishCardTitle(listing, lang), listing.title].find((value) => value?.trim()) ??
+      t(lang, "app.listingTitle");
     const photo = listingPhotoUrl(listing.photos?.[0], 1200);
     return {
-      title: `${title} · Ziggybang`,
+      title: `${title} · ${suffix}`,
       description: listing.description?.slice(0, 160) ?? title,
       alternates: { canonical: listingPagePath(path) },
       openGraph: {
         type: "article",
-        title: `${title} · Ziggybang`,
+        title: `${title} · ${suffix}`,
+        locale: t(lang, "app.ogLocale"),
         description: listing.description?.slice(0, 160) ?? title,
         url: listingPagePath(path),
         ...(photo ? { images: [{ url: photo }] } : {}),
       },
     };
   } catch {
-    return { title: "Listing · Ziggybang" };
+    return { title: fallbackTitle };
   }
 }
 

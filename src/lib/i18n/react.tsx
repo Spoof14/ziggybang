@@ -58,6 +58,8 @@ export function LangProvider({
 
   useEffect(() => {
     document.documentElement.lang = lang;
+    // The home page title follows the language (listing pages get theirs from the server).
+    if (window.location.pathname === "/") document.title = translate(lang, "app.title");
   }, [lang]);
 
   const setLang = useCallback((next: Lang) => {

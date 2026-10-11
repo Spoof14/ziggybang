@@ -1164,7 +1164,7 @@ export default function MapApp() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] uppercase tracking-[0.18em] text-sky-300">
-                Ziggybang
+                {t("app.name")}
                 {refreshing && !waitingForFirst ? (
                   <span className="ml-2 tracking-normal text-slate-400">
                     {t("header.updating")}
@@ -1279,7 +1279,7 @@ export default function MapApp() {
                   : "bg-white/10 text-slate-300"
               }`}
             >
-              Foreigners welcome
+              {t("chip.foreigner")}
             </button>
             <button
               type="button"
@@ -1524,7 +1524,7 @@ export default function MapApp() {
 
           {tool === "radius" || circle ? (
             <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-300">
-              Radius
+              {t("tool.radius")}
               <input
                 type="range"
                 min={250}
