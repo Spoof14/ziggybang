@@ -406,7 +406,7 @@ export async function interpretAsk(
       if (said && (sameCatalogPlace || said.includes(dest) || dest.includes(said) || normalizeSearch(name) === said)) {
         snapshot.searchInput = "";
       }
-      commuteAsArea = !snapshot.searchInput && (fresh || prevAreaIsCommute || previous?.place?.kind !== "place");
+      commuteAsArea = snapshot.searchInput === "" && (fresh === true || Boolean(prevAreaIsCommute) || previous?.place?.kind !== "place");
     } else {
       assumptions.push(t(lang, "ask.assume.commuteNoDest", { text: commuteReq.destination.slice(0, 40) }));
     }
