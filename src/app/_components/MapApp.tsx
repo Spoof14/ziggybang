@@ -37,7 +37,7 @@ import {
   unrefinedPlaceLeftover,
 } from "~/lib/listings/search";
 import { listingCardMeta } from "~/lib/listings/english";
-import { formatCount, keepLangParam } from "~/lib/i18n";
+import { formatCount, keepLangParam, syncLangParam } from "~/lib/i18n";
 import { useI18n } from "~/lib/i18n/react";
 import { ageFilterText, ageFilterTitle, ageFilters, type AgeFilter } from "~/lib/listings/age";
 import { floorFilterText, floorFilters, type FloorFilter } from "~/lib/listings/floor";
@@ -842,7 +842,7 @@ export default function MapApp() {
       ageFilter,
       maxBuildingAge,
     });
-    const href = `${window.location.origin}${window.location.pathname}${next}`;
+    const href = `${window.location.origin}${window.location.pathname}${syncLangParam(next, lang)}`;
     try {
       await navigator.clipboard.writeText(href);
       setShareHint(t("header.copied"));

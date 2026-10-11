@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { LANG_STORAGE_KEY, resolveLang, syncLangParam, DEFAULT_LANG, type Lang } from "./lang";
+import { LANG_COOKIE, LANG_STORAGE_KEY, resolveLang, syncLangParam, DEFAULT_LANG, type Lang } from "./lang";
 import { t as translate, type MessageKey, type Params } from "./index";
 
 type I18n = {
@@ -25,6 +25,27 @@ const fallback: I18n = {
 };
 
 const Context = createContext<I18n>(fallback);
+
+function persistLang(lang: Lang) {
+  try {
+    window.localStorage.setItem(LANG_STORAGE_KEY, lang);
+  } catch {
+    /* private mode */
+  }
+  // Lets the server render the right language on a bare "/" (and <html lang>).
+  document.cookie = `${LANG_COOKIE}=${lang}; path=/; max-age=31536000; samesite=lax`;
+}
+
+/** Writes `?lang=ko` into the address bar (removed for English), keeping every other param. */
+function writeLangToUrl(lang: Lang) {
+  const search = syncLangParam(window.location.search, lang);
+  if (search === window.location.search) return;
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${search}${window.location.hash}`,
+  );
+}
 
 function readStored(): string | null {
   try {
@@ -45,15 +66,12 @@ export function LangProvider({
 
   // Resolve ?lang= / localStorage after hydration so server and client markup agree.
   useEffect(() => {
-    const next = resolveLang({ search: window.location.search, stored: readStored() });
+    const next = resolveLang({ search: window.location.search, stored: readStored() ?? initialLang });
     setLangState(next);
-    if (new URLSearchParams(window.location.search).has("lang")) {
-      try {
-        window.localStorage.setItem(LANG_STORAGE_KEY, next);
-      } catch {
-        /* private mode */
-      }
-    }
+    persistLang(next);
+    // A stored Korean choice on a bare link still produces a shareable ?lang=ko URL.
+    writeLangToUrl(next);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -64,19 +82,8 @@ export function LangProvider({
 
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
-    try {
-      window.localStorage.setItem(LANG_STORAGE_KEY, next);
-    } catch {
-      /* private mode */
-    }
-    const search = syncLangParam(window.location.search, next);
-    if (search !== window.location.search) {
-      window.history.replaceState(
-        window.history.state,
-        "",
-        `${window.location.pathname}${search}${window.location.hash}`,
-      );
-    }
+    persistLang(next);
+    writeLangToUrl(next);
   }, []);
 
   const value = useMemo<I18n>(

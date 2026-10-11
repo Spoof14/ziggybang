@@ -32,7 +32,7 @@ export async function shareListing(
   const origin =
     options?.origin ??
     (typeof window === "undefined" ? "" : window.location.origin);
-  const url = listingPageUrl(listing, origin);
+  const url = listingPageUrl(listing, origin, options?.lang ?? DEFAULT_LANG);
   const lang = options?.lang ?? DEFAULT_LANG;
   const title = shareTitle(listing, options?.title, lang);
   if (

@@ -22,6 +22,7 @@ import {
 } from "~/lib/listings/english";
 import { agencyFeeCopy } from "~/lib/listings/agency-fee";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
+import { withLangPath } from "~/lib/i18n/lang";
 import { listingPagePath, mergeListingDetail, hasListingCoords } from "~/lib/listings/path";
 import { listingGalleryUrls } from "~/lib/listings/photo";
 import { type MapListing } from "~/lib/listings/types";
@@ -292,7 +293,7 @@ export function ListingPanel({
           </a>
           <button
             type="button"
-            onClick={() => void copy("link", `${window.location.origin}${listingPagePath(detail)}`)}
+            onClick={() => void copy("link", `${window.location.origin}${withLangPath(listingPagePath(detail), lang)}`)}
             className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/20"
           >
             {copied === "link" ? t("panel.pageLinkCopied") : t("panel.copyPageLink")}

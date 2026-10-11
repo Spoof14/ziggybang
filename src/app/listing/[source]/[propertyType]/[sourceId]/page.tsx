@@ -1,7 +1,8 @@
 import { type Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ListingDetailView } from "~/app/_components/ListingDetailView";
-import { parseLang, t } from "~/lib/i18n";
+import { headers } from "next/headers";
+import { LANG_HEADER, resolveServerLang, t } from "~/lib/i18n";
 import { englishCardTitle } from "~/lib/listings/english";
 import { listingPagePath, parseListingPath } from "~/lib/listings/path";
 import { listingPhotoUrl } from "~/lib/listings/photo";
@@ -25,7 +26,7 @@ export async function generateMetadata({
   searchParams?: Promise<SearchParams>;
 }): Promise<Metadata> {
   const rawLang = (await searchParams)?.lang;
-  const lang = parseLang(Array.isArray(rawLang) ? rawLang[0] : rawLang) ?? "en";
+  const lang = resolveServerLang(rawLang, (await headers()).get(LANG_HEADER));
   const suffix = t(lang, "app.listingSuffix");
   const fallbackTitle = `${t(lang, "app.listingTitle")} · ${suffix}`;
   const path = parseListingPath(await params);
