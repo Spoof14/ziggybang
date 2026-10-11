@@ -314,6 +314,14 @@ export function AskSearch({
     void run({ edited: next });
   }
 
+  // Switching language re-ranks the same constraints so the summary and
+  // reasons are rewritten in the new UI language.
+  useEffect(() => {
+    if (!result || !constraints || resultLang === lang || inFlight.current) return;
+    rerun(constraints);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
+
   function newSearch() {
     cancel();
     setMessages([]);

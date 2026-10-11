@@ -28,8 +28,6 @@ import { describeActiveFilters, filterKeyOf, mapLayersForFilters } from "~/lib/l
 import { loadPrefs, savePrefs, type SavedPrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
 import { type PriceFilter } from "~/lib/listings/price";
 import {
-  DISTRICT_ONLY_HINT,
-  ROAD_LEVEL_HINT,
   circleForPlaceSearch,
   looksLikeStreetAddress,
   isStationQuery,
@@ -847,6 +845,7 @@ export default function MapApp() {
     }
     window.setTimeout(() => setShareHint(null), 1600);
   }, [
+    t,
     areaBucketIds,
     circle,
     urlView,
