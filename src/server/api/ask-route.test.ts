@@ -46,6 +46,7 @@ describe("listings.ask route (OpenAI mocked)", () => {
     clearAskCache();
     vi.stubGlobal("fetch", fetchMock);
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.mocked(getMapData).mockReset();
     vi.mocked(getMapData).mockImplementation(async (q) => mapResult(q.sources.includes("zigbang") ? listings(30) : []));
   });
   afterEach(() => {
