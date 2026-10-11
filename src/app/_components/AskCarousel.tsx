@@ -8,7 +8,6 @@ import { formatFloor, propertyTypeLabel, salesTypeFilterLabel, sourceLabel } fro
 import { englishAddressLine } from "~/lib/listings/english";
 import { toPyeong } from "~/lib/listings/area";
 import { type MapListing } from "~/lib/listings/types";
-import { ListingPageLink } from "./ListingPageLink";
 import { ListingPhoto } from "./ListingPhoto";
 import { ListingPrice } from "./ListingPrice";
 
@@ -31,6 +30,7 @@ export function AskPickCard({
   highlighted,
   onToggleSave,
   onShowOnMap,
+  onPreview,
 }: {
   pick: AskPick;
   total: number;
@@ -38,6 +38,8 @@ export function AskPickCard({
   highlighted: boolean;
   onToggleSave: (listing: MapListing) => void;
   onShowOnMap: (pick: AskPick) => void;
+  /** Open the in-app listing preview (card click or View). */
+  onPreview: (pick: AskPick) => void;
 }) {
   const { listing } = pick;
   const facts = [
@@ -59,7 +61,12 @@ export function AskPickCard({
       aria-label={`${pick.rank} of ${total}: ${kind}${where ? `, ${where}` : ""}`}
       aria-current={highlighted ? "true" : undefined}
       data-pick-id={listing.id}
-      className={`flex w-[85%] shrink-0 snap-start sm:w-[min(16.5rem,80%)] flex-col overflow-hidden rounded-2xl border bg-slate-900 text-slate-100 shadow-lg ${
+      onClick={(event) => {
+        // Clicking the card itself previews; its own buttons keep their meaning.
+        if ((event.target as HTMLElement).closest("button, a")) return;
+        onPreview(pick);
+      }}
+      className={`cursor-pointer flex w-[85%] shrink-0 snap-start sm:w-[min(16.5rem,80%)] flex-col overflow-hidden rounded-2xl border bg-slate-900 text-slate-100 shadow-lg ${
         highlighted ? "border-sky-400 ring-1 ring-sky-400" : "border-white/10"
       }`}
     >
@@ -103,13 +110,15 @@ export function AskPickCard({
           {pick.similar ? <span className="ml-1 whitespace-nowrap text-slate-400">· +{pick.similar} similar</span> : null}
         </p>
         <div className="mt-auto flex gap-2 pt-2">
-          <ListingPageLink
-            listing={listing}
+          <button
+            type="button"
+            onClick={() => onPreview(pick)}
+            aria-haspopup="dialog"
             className="flex-1 rounded-full bg-sky-400 px-3 py-1.5 text-center text-xs font-medium text-slate-950 hover:bg-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
           >
             View
             <span className="sr-only"> listing {pick.rank}</span>
-          </ListingPageLink>
+          </button>
           <button
             type="button"
             onClick={() => onShowOnMap(pick)}
@@ -130,12 +139,19 @@ export function AskCarousel({
   highlightedId,
   onToggleSave,
   onShowOnMap,
+  onPreview,
+  initialIndex = 0,
+  onActiveChange,
 }: {
   picks: AskPick[];
   savedIds: ReadonlySet<string>;
   highlightedId?: string;
   onToggleSave: (listing: MapListing) => void;
   onShowOnMap: (pick: AskPick) => void;
+  onPreview: (pick: AskPick) => void;
+  /** Slide to scroll to when first shown (restored position). */
+  initialIndex?: number;
+  onActiveChange?: (index: number) => void;
 }) {
   const scroller = useRef<HTMLUListElement>(null);
   const [active, setActive] = useState(0);
@@ -167,11 +183,27 @@ export function AskCarousel({
     };
   }, [measure]);
 
-  // Jump back to the first card for a new result set.
-  const firstId = picks[0]?.listing.id;
+  const mounted = useRef(false);
   useEffect(() => {
-    scroller.current?.scrollTo({ left: 0 });
+    // Skip the initial 0 so a restored position isn't overwritten before it is applied.
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    onActiveChange?.(active);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  // First mount restores the saved position; a new result set starts at the first card.
+  const firstId = picks[0]?.listing.id;
+  const restore = useRef<number | null>(initialIndex > 0 ? initialIndex : null);
+  useEffect(() => {
+    const target = restore.current;
+    restore.current = null;
+    const index = target == null ? 0 : Math.min(target, Math.max(0, picks.length - 1));
+    scroller.current?.scrollTo({ left: index * stride() });
     measure();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firstId, measure]);
 
   function goTo(index: number) {
@@ -247,6 +279,7 @@ export function AskCarousel({
             highlighted={highlightedId === pick.listing.id}
             onToggleSave={onToggleSave}
             onShowOnMap={onShowOnMap}
+            onPreview={onPreview}
           />
         ))}
       </ul>
