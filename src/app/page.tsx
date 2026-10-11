@@ -1,8 +1,7 @@
 import { type Metadata } from "next";
-import dynamic from "next/dynamic";
 import { parseLang, t } from "~/lib/i18n";
 
-const MapApp = dynamic(() => import("./_components/MapApp"), { ssr: false });
+import MapAppClient from "./_components/MapAppClient";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -12,12 +11,12 @@ function langFrom(searchParams: SearchParams | undefined) {
 }
 
 /** `?lang=ko` localizes the title/description; plain `/` stays English. */
-export function generateMetadata({
+export async function generateMetadata({
   searchParams,
 }: {
-  searchParams?: SearchParams;
-}): Metadata {
-  const lang = langFrom(searchParams);
+  searchParams?: Promise<SearchParams>;
+}): Promise<Metadata> {
+  const lang = langFrom(await searchParams);
   if (lang === "en") return {};
   const title = t(lang, "app.title");
   const description = t(lang, "app.description");
@@ -29,8 +28,8 @@ export function generateMetadata({
   };
 }
 
-export default function Home({ searchParams }: { searchParams?: SearchParams }) {
-  const lang = langFrom(searchParams);
+export default async function Home({ searchParams }: { searchParams?: Promise<SearchParams> }) {
+  const lang = langFrom(await searchParams);
   return (
     <>
       {/*
@@ -45,7 +44,7 @@ export default function Home({ searchParams }: { searchParams?: SearchParams }) 
       <noscript>
         <p className="p-4 text-slate-200">{t(lang, "app.noscript")}</p>
       </noscript>
-      <MapApp />
+      <MapAppClient />
     </>
   );
 }
