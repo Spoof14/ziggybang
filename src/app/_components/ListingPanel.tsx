@@ -113,8 +113,8 @@ export function ListingPanel({
       tabIndex={modal ? -1 : undefined}
       className={
         modal
-          ? "pointer-events-auto fixed inset-0 z-[1500] flex flex-col overflow-auto overscroll-contain bg-slate-950 text-slate-100 outline-none md:inset-auto md:bottom-4 md:right-4 md:top-4 md:max-h-[calc(100dvh-2rem)] md:w-[min(26rem,calc(100vw-2rem))] md:rounded-2xl md:border md:border-white/10 md:shadow-2xl"
-          : "pointer-events-auto fixed inset-0 z-[1350] flex flex-col overflow-auto bg-slate-950 text-slate-100 md:absolute md:inset-auto md:bottom-4 md:left-auto md:right-4 md:top-4 md:max-h-[calc(100dvh-2rem)] md:w-[var(--desktop-panel)] md:max-w-[40%] md:rounded-2xl md:border md:border-white/10 md:shadow-2xl"
+          ? "pointer-events-auto fixed inset-0 z-[1500] flex flex-col overflow-auto overscroll-contain bg-slate-950 text-slate-100 outline-none desk:inset-auto desk:bottom-4 desk:right-4 desk:top-4 desk:max-h-[calc(100dvh-2rem)] desk:w-[min(26rem,calc(100vw-2rem))] desk:rounded-2xl desk:border desk:border-white/10 desk:shadow-2xl"
+          : "pointer-events-auto fixed inset-0 z-[1350] flex flex-col overflow-auto bg-slate-950 text-slate-100 desk:absolute desk:inset-auto desk:bottom-4 desk:left-auto desk:right-4 desk:top-4 desk:max-h-[calc(100dvh-2rem)] desk:w-[var(--desktop-panel)] desk:max-w-[40%] desk:rounded-2xl desk:border desk:border-white/10 desk:shadow-2xl"
       }
     >
       <div className="flex items-start justify-between gap-3 p-4">

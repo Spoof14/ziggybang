@@ -57,6 +57,8 @@ describe("panel offset for the URL focal point", () => {
     expect(panelOffsetPx(1400, 1400)).toBe(280);
     expect(panelOffsetPx(390, 390)).toBe(0);
     expect(panelOffsetPx(700, 1400)).toBe(0);
+    expect(panelOffsetPx(900, 900)).toBe(0);
+    expect(panelOffsetPx(1400, 1400, 400)).toBe(0);
   });
   it("round-trips: shifting the map center west then reporting east restores the place", () => {
     const lng = 126.9236;

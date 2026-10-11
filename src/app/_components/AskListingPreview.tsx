@@ -80,7 +80,7 @@ export function AskListingPreview({
         type="button"
         tabIndex={-1}
         aria-hidden="true"
-        className="fixed inset-0 z-[1499] hidden cursor-default bg-slate-950/50 md:block"
+        className="fixed inset-0 z-[1499] hidden cursor-default bg-slate-950/50 desk:block"
         onClick={onClose}
       />
       <ListingPanel
