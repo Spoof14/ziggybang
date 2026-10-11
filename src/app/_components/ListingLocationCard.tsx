@@ -2,6 +2,7 @@
 
 import { Component, type ReactNode } from "react";
 import dynamic from "next/dynamic";
+import { useI18n } from "~/lib/i18n/react";
 import { hasListingCoords, listingMapLinks } from "~/lib/listings/path";
 import { type MapListing } from "~/lib/listings/types";
 
@@ -38,6 +39,7 @@ export function ListingLocationCard({
   title: string;
   compact?: boolean;
 }) {
+  const { t } = useI18n();
   const links = listingMapLinks(listing, title);
   const hasCoords = hasListingCoords(listing);
   if (!hasCoords && !links.google && !links.kakao && !links.naver) return null;
@@ -60,7 +62,7 @@ export function ListingLocationCard({
         </MiniMapGuard>
       ) : (
         <p className="px-3 pt-3 text-xs text-slate-400">
-          Open a map with the listing address.
+          {t("loc.fallback")}
         </p>
       )}
       <div className="flex flex-wrap gap-2 p-3 text-[11px]">
@@ -71,7 +73,7 @@ export function ListingLocationCard({
             rel="noopener noreferrer"
             className="rounded-full bg-white/10 px-2.5 py-1 text-slate-200 hover:bg-white/20"
           >
-            Google Maps
+            {t("loc.google")}
           </a>
         ) : null}
         {links.kakao ? (
@@ -81,7 +83,7 @@ export function ListingLocationCard({
             rel="noopener noreferrer"
             className="rounded-full bg-white/10 px-2.5 py-1 text-slate-200 hover:bg-white/20"
           >
-            Kakao Map
+            {t("loc.kakao")}
           </a>
         ) : null}
         {links.naver ? (
@@ -91,7 +93,7 @@ export function ListingLocationCard({
             rel="noopener noreferrer"
             className="rounded-full bg-white/10 px-2.5 py-1 text-slate-200 hover:bg-white/20"
           >
-            Naver Map
+            {t("loc.naver")}
           </a>
         ) : null}
       </div>

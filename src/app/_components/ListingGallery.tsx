@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useI18n } from "~/lib/i18n/react";
 import { preloadListingPhotos, uniquePhotoUrls } from "~/lib/listings/photo";
 
 export function ListingGallery({
@@ -13,6 +14,7 @@ export function ListingGallery({
   alt: string;
   layout?: "sheet" | "page";
 }) {
+  const { t } = useI18n();
   const photos = uniquePhotoUrls(urls, layout === "page" ? 1200 : 800);
   const largePhotos = uniquePhotoUrls(urls, 2000);
   const photoKey = photos.join("|");
@@ -164,9 +166,9 @@ export function ListingGallery({
             ignoreClick.current = false;
             setLightbox(true);
           }}
-          aria-label="View photo fullscreen"
+          aria-label={t("gallery.view")}
         >
-          Fullscreen
+          {t("gallery.fullscreenBtn")}
         </button>
         {visible.length > 1 ? (
           <>
@@ -177,7 +179,7 @@ export function ListingGallery({
                 event.stopPropagation();
                 go(-1);
               }}
-              aria-label="Previous photo"
+              aria-label={t("gallery.prev")}
             >
               ‹
             </button>
@@ -188,7 +190,7 @@ export function ListingGallery({
                 event.stopPropagation();
                 go(1);
               }}
-              aria-label="Next photo"
+              aria-label={t("gallery.next")}
             >
               ›
             </button>
@@ -198,10 +200,10 @@ export function ListingGallery({
       {visible.length > 1 ? (
         <p className="mt-1 text-center text-[11px] text-slate-400">
           {currentIndex + 1} / {visible.length}
-          {layout === "page" ? " · tap to enlarge · arrows or swipe" : " · tap to enlarge · swipe"}
+          {layout === "page" ? t("gallery.hintPage") : t("gallery.hintSheet")}
         </p>
       ) : (
-        <p className="mt-1 text-center text-[11px] text-slate-400">Tap to enlarge</p>
+        <p className="mt-1 text-center text-[11px] text-slate-400">{t("gallery.tap")}</p>
       )}
       {layout === "page" && visible.length > 1 ? (
         <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
@@ -209,7 +211,7 @@ export function ListingGallery({
             <button
               key={src}
               type="button"
-              aria-label={`Show photo ${photoIndex + 1} of ${visible.length}`}
+              aria-label={t("gallery.show", { i: photoIndex + 1, n: visible.length })}
               aria-current={photoIndex === currentIndex}
               onClick={() => setIndex(photoIndex)}
               className={`h-14 w-20 shrink-0 overflow-hidden rounded-lg border ${
@@ -262,6 +264,7 @@ function PhotoLightbox({
   onPrev: () => void;
   onNext: () => void;
 }) {
+  const { t } = useI18n();
   const start = useRef<{ x: number; y: number } | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [broken, setBroken] = useState(false);
@@ -295,12 +298,13 @@ function PhotoLightbox({
       className="fixed inset-0 z-[2000] flex flex-col bg-slate-950/95 text-slate-100"
       role="dialog"
       aria-modal="true"
-      aria-label="Fullscreen photo"
+      aria-label={t("gallery.fullscreen")}
+      data-photo-lightbox=""
       onClick={onClose}
     >
       <div className="flex items-center justify-between gap-3 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <p className="text-sm text-slate-300">
-          {total > 1 ? `${index + 1} / ${total}` : "Photo"}
+          {total > 1 ? `${index + 1} / ${total}` : t("gallery.photo")}
         </p>
         <button
           type="button"
@@ -311,7 +315,7 @@ function PhotoLightbox({
             onClose();
           }}
         >
-          Close
+          {t("gallery.close")}
         </button>
       </div>
       <div
@@ -339,12 +343,12 @@ function PhotoLightbox({
             className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-slate-300"
           >
             <span className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-sky-400" />
-            Loading photo…
+            {t("gallery.loading")}
           </div>
         ) : null}
         {broken ? (
           <p role="alert" className="text-sm text-slate-300">
-            This photo could not be loaded.
+            {t("gallery.failed")}
           </p>
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
@@ -366,7 +370,7 @@ function PhotoLightbox({
               type="button"
               className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-slate-950/80 px-3 py-2 text-lg hover:bg-slate-900"
               onClick={onPrev}
-              aria-label="Previous photo"
+              aria-label={t("gallery.prev")}
             >
               ‹
             </button>
@@ -374,7 +378,7 @@ function PhotoLightbox({
               type="button"
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-slate-950/80 px-3 py-2 text-lg hover:bg-slate-900"
               onClick={onNext}
-              aria-label="Next photo"
+              aria-label={t("gallery.next")}
             >
               ›
             </button>

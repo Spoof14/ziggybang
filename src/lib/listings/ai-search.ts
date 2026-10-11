@@ -1,3 +1,4 @@
+import { t } from "~/lib/i18n";
 import { areaBuckets, type AreaBucketId } from "./area";
 import {
   propertyTypeLabel,
@@ -469,10 +470,8 @@ function usableLocalListingQuery(query?: string | null): string | null | undefin
   return query.trim();
 }
 
-export const OFF_TOPIC_REPLY =
-  "I can only help find a rental. Tell me an area or station, a budget, or a type — like “quiet studio near Hongdae under ₩700,000”.";
-export const ROOM_COUNT_NOTE =
-  "Room count isn't supported yet, so I didn't filter by bedrooms.";
+export const OFF_TOPIC_REPLY = t("en", "ask.offTopic");
+export const ROOM_COUNT_NOTE = t("en", "ask.roomCountNote");
 
 /** True when the message asks for a bedroom / room count (we have no such filter). */
 export function mentionsRoomCount(text: string): boolean {

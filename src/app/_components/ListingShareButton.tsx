@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "~/lib/i18n/react";
 import { shareListing } from "~/lib/listings/share";
 import { type MapListing } from "~/lib/listings/types";
 
@@ -44,16 +45,17 @@ export function ListingShareButton({
   labeled?: boolean;
   className?: string;
 }) {
+  const { lang, t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   async function onShare() {
-    const result = await shareListing(listing, { title });
+    const result = await shareListing(listing, { title, lang });
     if (result !== "copied") return;
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   }
 
-  const label = copied ? "Link copied" : "Share listing";
+  const label = copied ? t("share.copiedLabel") : t("share.label");
 
   return (
     <button
@@ -66,7 +68,7 @@ export function ListingShareButton({
       aria-label={label}
       title={label}
     >
-      {labeled ? copied ? "Copied" : "Share" : copied ? "✓" : <ShareIcon />}
+      {labeled ? (copied ? t("share.copiedText") : t("share.text")) : copied ? "✓" : <ShareIcon />}
     </button>
   );
 }

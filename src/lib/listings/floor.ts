@@ -1,3 +1,5 @@
+import { t, type Lang } from "~/lib/i18n";
+
 export const floorFilters = ["no-basement", "min-2", "min-5"] as const;
 export type FloorFilter = (typeof floorFilters)[number];
 
@@ -6,6 +8,16 @@ export const floorFilterLabel: Record<FloorFilter, string> = {
   "min-2": "2F+",
   "min-5": "5F+",
 };
+
+const FLOOR_FILTER_KEY = {
+  "no-basement": "floor.noBasement",
+  "min-2": "floor.min2",
+  "min-5": "floor.min5",
+} as const;
+
+export function floorFilterText(lang: Lang, filter: FloorFilter): string {
+  return t(lang, FLOOR_FILTER_KEY[filter]);
+}
 
 const NO_BASEMENT =
   /no\s+(semi-?)?basements?|not\s+(a\s+)?basements?|exclude\s+basements?|without\s+(an?\s+)?(semi-?)?basements?|반지하\s*(제외|없는|싫)|지하\s*제외/i;

@@ -5,10 +5,11 @@
  */
 import { distanceM, pointInCircle } from "~/lib/geo/shape";
 import { type SearchSnapshot } from "./ai-search";
-import { ageFilterLabel, type AgeFilter } from "./age";
-import { areaBuckets, toPyeong, type AreaBucketId } from "./area";
+import { DEFAULT_LANG, t, type Lang, type MessageKey } from "~/lib/i18n";
+import { ageFilterText, type AgeFilter } from "./age";
+import { areaBucketHint, areaBuckets, toPyeong, type AreaBucketId } from "./area";
 import { buildingAgeYears, describeBuildingAgeFilter } from "./building-age";
-import { formatFloor, formatKrwFromManwon, propertyTypeLabel, salesTypeLabel } from "./copy";
+import { formatFloor, formatKrwFromManwon, propertyTypeText, salesTypeText } from "./copy";
 import {
   BASEMENT_OR_ROOFTOP_WORDS,
   CHEAP_WORDS,
@@ -25,7 +26,7 @@ import {
   MAX_NEAR_DUPLICATES,
 } from "./ask-quality";
 import { filterListings, isNaverClusterListing } from "./filter";
-import { floorFilterLabel, type FloorFilter } from "./floor";
+import { floorFilterText, type FloorFilter } from "./floor";
 import { listingHasPhotos } from "./photo";
 import { normalizePriceFilter, type PriceFilter } from "./price";
 import {
@@ -139,24 +140,17 @@ export type AskInterpretResult =
     }
   | { status: "off_topic"; reply: string };
 
-const FALLBACK_WORDS: Record<AskFallbackReason, string> = {
-  rate_limited: "rate limited",
-  quota: "quota exhausted",
-  auth: "key rejected",
-  timeout: "timed out",
-  error: "error",
-  unconfigured: "not configured",
-};
-
-export function askFallbackNotice(reason: AskFallbackReason): string {
-  return `Using basic ranking — AI unavailable (${FALLBACK_WORDS[reason]})`;
+export function askFallbackNotice(reason: AskFallbackReason, lang: Lang = DEFAULT_LANG): string {
+  return t(lang, "ask.fallback", { reason: t(lang, `ask.fb.${reason}`) });
 }
 
-export const ASK_SUGGESTIONS = [
-  "Cheap studio near Hongdae under ₩700,000 monthly, quiet, close to subway",
-  "Jeonse villa near Guro Digital, no basement, under 15 years old",
-  "Spacious officetel near Gangnam station, newer building, elevator",
-];
+export const ASK_SUGGESTION_KEYS = ["ask.suggest1", "ask.suggest2", "ask.suggest3"] as const;
+
+export function askSuggestions(lang: Lang = DEFAULT_LANG): string[] {
+  return ASK_SUGGESTION_KEYS.map((key) => t(lang, key));
+}
+
+export const ASK_SUGGESTIONS = askSuggestions("en");
 
 // ---------------------------------------------------------------- constraints
 
@@ -170,58 +164,77 @@ export function displayPlace(name: string): string {
 }
 
 function formatRadius(radiusM: number): string {
-  return radiusM >= 1000 ? `${(radiusM / 1000).toFixed(radiusM % 1000 ? 1 : 0)} km` : `${Math.round(radiusM)} m`;
+  return radiusM >= 1000
+    ? `${(radiusM / 1000).toFixed(radiusM % 1000 ? 1 : 0)} km`
+    : `${Math.round(radiusM)} m`;
 }
 
 export type AskChip = { key: string; label: string };
 
+/** Display text for a stored preference (canonical English words) in the UI language. */
+export function preferenceText(pref: string, lang: Lang = DEFAULT_LANG): string {
+  if (lang === "en") return pref;
+  const key = preferenceKey(pref);
+  return key && key in PREFERENCE_LABEL ? t(lang, `pref.${key}` as MessageKey) : pref;
+}
+
 /** Everything the search actually applies, as removable chips. */
-export function constraintChips(c: AskConstraints): AskChip[] {
+export function constraintChips(c: AskConstraints, lang: Lang = DEFAULT_LANG): AskChip[] {
   const chips: AskChip[] = [];
   if (c.place && c.place.kind === "place") {
     chips.push({
       key: "place",
-      label: `Near ${displayPlace(c.place.name)} · ${formatRadius(c.place.radiusM)}`,
+      label: t(lang, "ask.chip.near", {
+        place: displayPlace(c.place.name),
+        radius: formatRadius(c.place.radiusM),
+      }),
     });
   }
   if (c.propertyTypes?.length && c.propertyTypes.length < ALL_PROPERTY_TYPES.length) {
-    chips.push({ key: "types", label: c.propertyTypes.map((t) => propertyTypeLabel[t]).join(" / ") });
+    chips.push({ key: "types", label: c.propertyTypes.map((type) => propertyTypeText(lang, type)).join(" / ") });
   }
   if (c.salesTypes?.length && !(c.salesTypes.length === 2 && DEFAULT_ASK_SALES.every((s) => c.salesTypes!.includes(s)))) {
-    chips.push({ key: "sales", label: c.salesTypes.map((t) => salesTypeLabel[t]).join(" / ") });
+    chips.push({ key: "sales", label: c.salesTypes.map((type) => salesTypeText(lang, type)).join(" / ") });
   }
-  const money = (manwon: number | undefined) => formatKrwFromManwon(manwon) ?? "";
-  if (c.minDeposit != null) chips.push({ key: "minDeposit", label: `Deposit ≥ ${money(c.minDeposit)}` });
-  if (c.maxDeposit != null) chips.push({ key: "maxDeposit", label: `Deposit ≤ ${money(c.maxDeposit)}` });
-  if (c.minRent != null) chips.push({ key: "minRent", label: `Rent ≥ ${money(c.minRent)}` });
-  if (c.maxRent != null) chips.push({ key: "maxRent", label: `Rent ≤ ${money(c.maxRent)}` });
+  const money = (manwon: number | undefined) => formatKrwFromManwon(manwon, lang) ?? "";
+  if (c.minDeposit != null) chips.push({ key: "minDeposit", label: t(lang, "ask.chip.depositMin", { v: money(c.minDeposit) }) });
+  if (c.maxDeposit != null) chips.push({ key: "maxDeposit", label: t(lang, "ask.chip.depositMax", { v: money(c.maxDeposit) }) });
+  if (c.minRent != null) chips.push({ key: "minRent", label: t(lang, "ask.chip.rentMin", { v: money(c.minRent) }) });
+  if (c.maxRent != null) chips.push({ key: "maxRent", label: t(lang, "ask.chip.rentMax", { v: money(c.maxRent) }) });
   if (c.areaBucketIds?.length && c.areaBucketIds.length < areaBuckets.length) {
     chips.push({
       key: "size",
       label: areaBuckets
         .filter((b) => c.areaBucketIds!.includes(b.id))
-        .map((b) => b.hint)
-        .join(" or "),
+        .map((b) => areaBucketHint(lang, b.id))
+        .join(t(lang, "ask.chip.or")),
     });
   }
-  if (c.rooms) chips.push({ key: "rooms", label: roomsLabel(c.rooms) });
-  if (c.floorFilter) chips.push({ key: "floor", label: floorFilterLabel[c.floorFilter] });
-  const built = describeBuildingAgeFilter(c.maxBuildingAge);
+  if (c.rooms) chips.push({ key: "rooms", label: roomsLabel(c.rooms, lang) });
+  if (c.floorFilter) chips.push({ key: "floor", label: floorFilterText(lang, c.floorFilter) });
+  const built = describeBuildingAgeFilter(c.maxBuildingAge, lang);
   if (built) chips.push({ key: "builtAge", label: built });
-  if (c.ageFilter) chips.push({ key: "listed", label: `Listed ${ageFilterLabel[c.ageFilter].toLowerCase()}` });
-  if (c.foreignerOk) chips.push({ key: "foreigner", label: "Foreigner-friendly" });
-  if (c.hasPhotos) chips.push({ key: "photos", label: "With photos" });
-  for (const pref of c.preferences ?? []) chips.push({ key: `pref:${pref}`, label: `Prefer ${pref}` });
+  if (c.ageFilter) {
+    const when = ageFilterText(lang, c.ageFilter);
+    chips.push({ key: "listed", label: t(lang, "ask.chip.listed", { when: lang === "en" ? when.toLowerCase() : when }) });
+  }
+  if (c.foreignerOk) chips.push({ key: "foreigner", label: t(lang, "ask.chip.foreigner") });
+  if (c.hasPhotos) chips.push({ key: "photos", label: t(lang, "ask.chip.photos") });
+  for (const pref of c.preferences ?? []) {
+    chips.push({ key: `pref:${pref}`, label: t(lang, "ask.chip.prefer", { pref: preferenceText(pref, lang) }) });
+  }
   return chips;
 }
 
 /** What "Apply as filters" really puts on the map, and what it can't (soft wishes, room count). */
-export function describeAppliedFilters(c: AskConstraints): string {
-  const chips = constraintChips(c);
+export function describeAppliedFilters(c: AskConstraints, lang: Lang = DEFAULT_LANG): string {
+  const chips = constraintChips(c, lang);
   const mapped = chips.filter((chip) => !chip.key.startsWith("pref:") && chip.key !== "rooms").map((chip) => chip.label);
   const skipped = chips.filter((chip) => chip.key.startsWith("pref:") || chip.key === "rooms").length > 0;
-  const base = mapped.length ? `Filters applied to the map: ${mapped.join(", ")}.` : "Filters applied to the map.";
-  return skipped ? `${base} Preferences and room count only affect Ask's ranking.` : base;
+  const base = mapped.length
+    ? t(lang, "ask.filtersAppliedList", { list: mapped.join(", ") })
+    : t(lang, "ask.filtersApplied");
+  return skipped ? t(lang, "ask.filtersAppliedSkipped", { base }) : base;
 }
 
 export function removeConstraint(c: AskConstraints, key: string): AskConstraints {
@@ -264,26 +277,26 @@ export function applySuggestion(c: AskConstraints, action: AskSuggestion["action
   return next;
 }
 
-export function emptySuggestions(c: AskConstraints): AskSuggestion[] {
+export function emptySuggestions(c: AskConstraints, lang: Lang = DEFAULT_LANG): AskSuggestion[] {
   const out: AskSuggestion[] = [];
   if (c.maxRent != null || c.maxDeposit != null) {
-    out.push({ label: "Raise the budget by about 30%", action: { type: "widen_budget" } });
+    out.push({ label: t(lang, "ask.sug.budget"), action: { type: "widen_budget" } });
   }
   if (c.place && c.place.radiusM < 3000) {
-    out.push({ label: "Search a wider area", action: { type: "widen_radius" } });
+    out.push({ label: t(lang, "ask.sug.radius"), action: { type: "widen_radius" } });
   }
-  const droppable: Array<[string, string, boolean]> = [
-    ["builtAge", "Allow older buildings", c.maxBuildingAge != null],
-    ["rooms", "Ignore the room count", Boolean(c.rooms)],
-    ["floor", "Drop the floor requirement", Boolean(c.floorFilter)],
-    ["size", "Allow any size", Boolean(c.areaBucketIds?.length)],
-    ["foreigner", "Include landlords who don't mention foreigners", Boolean(c.foreignerOk)],
-    ["types", "Include every home type", Boolean(c.propertyTypes?.length && c.propertyTypes.length < 4)],
-    ["listed", "Include older listings", Boolean(c.ageFilter)],
-    ["photos", "Include listings without photos", Boolean(c.hasPhotos)],
+  const droppable: Array<[string, MessageKey, boolean]> = [
+    ["builtAge", "ask.sug.builtAge", c.maxBuildingAge != null],
+    ["rooms", "ask.sug.rooms", Boolean(c.rooms)],
+    ["floor", "ask.sug.floor", Boolean(c.floorFilter)],
+    ["size", "ask.sug.size", Boolean(c.areaBucketIds?.length)],
+    ["foreigner", "ask.sug.foreigner", Boolean(c.foreignerOk)],
+    ["types", "ask.sug.types", Boolean(c.propertyTypes?.length && c.propertyTypes.length < 4)],
+    ["listed", "ask.sug.listed", Boolean(c.ageFilter)],
+    ["photos", "ask.sug.photos", Boolean(c.hasPhotos)],
   ];
   for (const [key, label, active] of droppable) {
-    if (active) out.push({ label, action: { type: "remove", key } });
+    if (active) out.push({ label: t(lang, label), action: { type: "remove", key } });
   }
   return out.slice(0, 4);
 }
@@ -496,60 +509,68 @@ function genericReason(
   c: AskConstraints,
   dist: number,
   prefHits: string[],
+  lang: Lang = DEFAULT_LANG,
 ): string {
   const v = (n: number) => pickVariant(l.id, n);
   const phrases: Array<[number, string]> = [];
-  const money = formatKrwFromManwon(l.salesType === "jeonse" ? l.deposit : l.rent);
+  const money = formatKrwFromManwon(l.salesType === "jeonse" ? l.deposit : l.rent, lang);
+  const pick = (base: string, n: number, params: Record<string, string | number>) =>
+    t(lang, `${base}${v(n) + 1}` as MessageKey, params);
   if (money && parts.price >= 0.6) {
-    phrases.push([
-      parts.price,
-      l.salesType === "jeonse"
-        ? [`Jeonse deposit is on the low side (${money})`, `Only ${money} jeonse`, `${money} deposit, cheaper than most`][v(3)]!
-        : [`Lower monthly cost (${money}/mo)`, `Rent of ${money}/mo is below most options`, `${money}/mo keeps costs down`][v(3)]!,
-    ]);
+    phrases.push([parts.price, pick(l.salesType === "jeonse" ? "ask.r.jeonseLow" : "ask.r.rentLow", 3, { money })]);
   }
-  const where = c.place?.kind === "place" ? displayPlace(c.place.name) : "the center";
+  const where = c.place?.kind === "place" ? displayPlace(c.place.name) : t(lang, "ask.r.center");
   const meters = Math.round(dist / 10) * 10;
   if (parts.dist >= 0.5) {
-    phrases.push([parts.dist * 0.9, [`${meters} m from ${where}`, `Close to ${where} (${meters} m)`, `About ${meters} m to ${where}`][v(3)]!]);
+    phrases.push([parts.dist * 0.9, pick("ask.r.near", 3, { m: meters, where })]);
   }
   const year = builtYear(l);
-  if (year && parts.age >= 0.6) phrases.push([parts.age * 0.8, [`Built ${year}`, `Newer building (${year})`][v(2)]!]);
+  if (year && parts.age >= 0.6) phrases.push([parts.age * 0.8, pick("ask.r.built", 2, { year })]);
   const size = sizeClass(l.areaM2);
   if (l.areaM2 && parts.size >= 0.5 && size) {
-    phrases.push([parts.size * 0.7, [`${l.areaM2} m² (${toPyeong(l.areaM2).toFixed(1)} pyeong)`, `${size[0]!.toUpperCase()}${size.slice(1)} at ${l.areaM2} m²`][v(2)]!]);
+    const sizeWord = t(lang, size === "very large" ? "size.veryLarge" : (`size.${size}` as MessageKey));
+    phrases.push([
+      parts.size * 0.7,
+      v(2) === 0
+        ? t(lang, "ask.r.size1", { m2: l.areaM2, py: toPyeong(l.areaM2).toFixed(1) })
+        : t(lang, "ask.r.size2", {
+            size: lang === "en" ? `${sizeWord[0]!.toUpperCase()}${sizeWord.slice(1)}` : sizeWord,
+            m2: l.areaM2,
+          }),
+    ]);
   }
   for (const hit of prefHits) {
+    const built = builtYear(l);
     phrases.push([
       1,
       hit === "subway"
-        ? `Subway ${subwayWalkMinutes(l) ?? "a few"} min walk`
+        ? t(lang, "ask.r.subway", { min: subwayWalkMinutes(l) ?? t(lang, "ask.r.subwayFew") })
         : hit === "elevator"
-          ? "Has an elevator"
+          ? t(lang, "ask.r.elevator")
           : hit === "quiet"
-            ? "Listing mentions a quiet setting"
+            ? t(lang, "ask.r.quiet")
             : hit === "cheap"
-              ? ["Low rent plus deposit cost", "Among the cheapest once deposit is counted"][v(2)]!
+              ? t(lang, v(2) === 0 ? "ask.r.cheap1" : "ask.r.cheap2")
               : hit === "newer"
-                ? `Newer building${builtYear(l) ? ` (${builtYear(l)})` : ""}`
+                ? t(lang, "ask.r.newer", { year: built ? ` (${built})` : "" })
                 : hit === "spacious"
-                  ? `Roomy at ${l.areaM2} m²`
+                  ? t(lang, "ask.r.roomy", { m2: l.areaM2 ?? "" })
                   : hit === "pet"
-                    ? "Listing welcomes pets"
+                    ? t(lang, "ask.r.pet")
                     : hit === "parking"
-                      ? "Parking available"
+                      ? t(lang, "ask.r.parking")
                       : hit === "furnished"
-                        ? "Comes with many options"
+                        ? t(lang, "ask.r.furnished")
                         : hit === "sunny"
-                          ? "Sunny / south-facing"
-                          : `Matches “${hit}”`,
+                          ? t(lang, "ask.r.sunny")
+                          : t(lang, "ask.r.matches", { hit }),
     ]);
   }
   const photos = photoCount(l);
-  if (photos >= 4) phrases.push([parts.photos * 0.5, `${photos} photos`]);
+  if (photos >= 4) phrases.push([parts.photos * 0.5, t(lang, "ask.r.photos", { n: photos })]);
   phrases.sort((a, b) => b[0] - a[0]);
   const top = phrases.slice(0, 3).map(([, text]) => text);
-  if (!top.length) return `Fits your constraints, ${meters} m from ${where}`;
+  if (!top.length) return t(lang, "ask.r.fits", { m: meters, where });
   return top.join(" · ");
 }
 
@@ -569,6 +590,7 @@ export function fallbackRank(
   radiusM: number,
   requestText = "",
   now = new Date(),
+  lang: Lang = DEFAULT_LANG,
 ): ScoredCandidate[] {
   if (!candidates.length) return [];
   const prefKeys = (c.preferences ?? []).map(preferenceKey).filter((k): k is string => Boolean(k));
@@ -627,7 +649,7 @@ export function fallbackRank(
     if (kind !== "normal" && !allowsBasement && !c.floorFilter) score -= cheap ? 0.1 : 0.5;
     // Listings with a photo win ties; a card with a placeholder is a weaker pick.
     score += hasAnyPhoto(l) ? 0.02 : -0.02;
-    return { listing: l, score, distanceM: dist, reason: genericReason(l, parts, c, dist, hits.filter((h) => h !== "newer" && h !== "spacious" || tags.includes(h))) };
+    return { listing: l, score, distanceM: dist, reason: genericReason(l, parts, c, dist, hits.filter((h) => h !== "newer" && h !== "spacious" || tags.includes(h)), lang) };
   });
   return scored.sort((a, b) => b.score - a.score || a.listing.id.localeCompare(b.listing.id));
 }
@@ -681,23 +703,24 @@ export type CompactCandidate = {
 export function compactCandidate(
   listing: MapListing,
   center: { lat: number; lng: number },
+  lang: Lang = DEFAULT_LANG,
 ): CompactCandidate {
   const year = builtYear(listing);
   const tags = listingTags(listing);
   const effective = effectiveMonthlyManwon(listing);
   const out: CompactCandidate = {
     id: listing.id,
-    type: propertyTypeLabel[listing.propertyType].toLowerCase(),
+    type: propertyTypeText(lang, listing.propertyType).toLowerCase(),
     deal: listing.salesType ?? "unknown",
-    deposit: listing.salesType === "sale" ? undefined : (formatKrwFromManwon(listing.deposit) ?? undefined),
+    deposit: listing.salesType === "sale" ? undefined : (formatKrwFromManwon(listing.deposit, lang) ?? undefined),
     monthlyRent:
-      listing.salesType === "wolse" && listing.rent != null ? (formatKrwFromManwon(listing.rent) ?? undefined) : undefined,
-    maintenanceFee: listing.manageCost ? (formatKrwFromManwon(listing.manageCost) ?? undefined) : undefined,
-    salePrice: listing.salesType === "sale" ? (formatKrwFromManwon(listing.price) ?? undefined) : undefined,
-    effectiveMonthly: effective != null && listing.salesType === "wolse" ? (formatKrwFromManwon(Math.round(effective * 10) / 10) ?? undefined) : undefined,
+      listing.salesType === "wolse" && listing.rent != null ? (formatKrwFromManwon(listing.rent, lang) ?? undefined) : undefined,
+    maintenanceFee: listing.manageCost ? (formatKrwFromManwon(listing.manageCost, lang) ?? undefined) : undefined,
+    salePrice: listing.salesType === "sale" ? (formatKrwFromManwon(listing.price, lang) ?? undefined) : undefined,
+    effectiveMonthly: effective != null && listing.salesType === "wolse" ? (formatKrwFromManwon(Math.round(effective * 10) / 10, lang) ?? undefined) : undefined,
     m2: listing.areaM2,
     size: sizeClass(listing.areaM2),
-    floor: formatFloor(listing.floor) ?? undefined,
+    floor: formatFloor(listing.floor, lang) ?? undefined,
     rooms: listingRooms(listing),
     builtYear: year,
     metersFromCenter: Math.round(distanceM(listing, center) / 10) * 10,
@@ -705,7 +728,7 @@ export function compactCandidate(
     hasPhoto: hasAnyPhoto(listing),
     facts: tags.length ? tags.filter((t) => t !== "spacious" && t !== "newer") : undefined,
     title: listing.title?.replace(/\s+/g, " ").slice(0, 40),
-    area: areaLabel(listing) ?? undefined,
+    area: areaLabel(listing, lang) ?? undefined,
   };
   return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined && !(Array.isArray(v) && !v.length))) as CompactCandidate;
 }

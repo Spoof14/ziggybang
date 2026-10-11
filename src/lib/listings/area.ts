@@ -1,3 +1,5 @@
+import { t, type Lang } from "~/lib/i18n";
+
 export const M2_PER_PYEONG = 3.3058;
 
 export function toPyeong(areaM2: number): number {
@@ -79,6 +81,13 @@ export const areaBuckets = [
 ] as const;
 
 export type AreaBucketId = (typeof areaBuckets)[number]["id"];
+
+export function areaBucketLabel(lang: Lang, id: AreaBucketId): string {
+  return t(lang, `size.${id}.label`);
+}
+export function areaBucketHint(lang: Lang, id: AreaBucketId): string {
+  return t(lang, `size.${id}.hint`);
+}
 
 export function isAllAreaBuckets(selected: AreaBucketId[]): boolean {
   return selected.length === 0 || selected.length === areaBuckets.length;

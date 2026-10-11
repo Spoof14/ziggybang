@@ -1,3 +1,5 @@
+import { DEFAULT_LANG, formatCount, t, type Lang } from "~/lib/i18n";
+
 export type LatLngLike = { lat: number; lng: number };
 
 /** Equirectangular distance in meters; plenty accurate at city scale. */
@@ -25,7 +27,7 @@ export function sortByDistanceTo<T extends LatLngLike>(
 }
 
 /** Message for a list that is empty while the map still shows grouped homes. */
-export function groupedHomesHint(groupedCount: number): string | undefined {
+export function groupedHomesHint(groupedCount: number, lang: Lang = DEFAULT_LANG): string | undefined {
   if (groupedCount <= 0) return undefined;
-  return `Zoom in to load individual homes. ${groupedCount.toLocaleString("en-US")} homes are grouped into clusters on the map at this zoom.`;
+  return t(lang, "list.groupedHint", { n: formatCount(groupedCount, lang) });
 }

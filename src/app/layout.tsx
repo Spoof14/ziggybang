@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { GeistSans } from "geist/font/sans";
 import { type Metadata, type Viewport } from "next";
 
+import { LangProvider } from "~/lib/i18n/react";
 import { TRPCReactProvider } from "~/trpc/react";
 import { canonicalSiteUrl } from "~/lib/site-url";
 
@@ -52,7 +53,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${GeistSans.variable}`}>
       <body className="bg-slate-950">
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+        <LangProvider>
+          <TRPCReactProvider>{children}</TRPCReactProvider>
+        </LangProvider>
         {process.env.VERCEL ? <Analytics /> : null}
       </body>
     </html>

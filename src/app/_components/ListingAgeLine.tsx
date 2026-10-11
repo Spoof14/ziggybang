@@ -1,5 +1,6 @@
 "use client";
 
+import { useI18n } from "~/lib/i18n/react";
 import { formatRelativeListed } from "~/lib/listings/age";
 import { formatListedAt } from "~/lib/listings/detail-copy";
 import { ListingAgeDot } from "./ListingAgeDot";
@@ -11,8 +12,9 @@ export function ListingAgeLine({
   updatedAt?: string;
   className?: string;
 }) {
-  const listed = formatListedAt(updatedAt);
-  const relative = formatRelativeListed(updatedAt);
+  const { lang } = useI18n();
+  const listed = formatListedAt(updatedAt, lang);
+  const relative = formatRelativeListed(updatedAt, Date.now(), lang);
   if (!listed && !relative) return null;
   return (
     <span className={`inline-flex items-center gap-1.5 ${className}`}>

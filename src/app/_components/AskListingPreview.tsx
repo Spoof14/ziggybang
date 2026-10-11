@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
+import { useI18n } from "~/lib/i18n/react";
 import { type MapListing } from "~/lib/listings/types";
 import { ListingPanel } from "./ListingPanel";
 
@@ -23,6 +24,7 @@ export function AskListingPreview({
   onClose: () => void;
   onToggleSave: (listing: MapListing) => void;
 }) {
+  const { t } = useI18n();
   const labelId = useId();
   const aside = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
@@ -31,7 +33,7 @@ export function AskListingPreview({
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     aside.current?.focus({ preventScroll: true });
-    const lightbox = () => document.querySelector('[aria-label="Fullscreen photo"]');
+    const lightbox = () => document.querySelector('[data-photo-lightbox]');
     const onKey = (event: KeyboardEvent) => {
       // The fullscreen photo viewer handles its own Escape.
       if (lightbox()) return;
@@ -84,7 +86,7 @@ export function AskListingPreview({
         saved={saved}
         onClose={onClose}
         onToggleSave={onToggleSave}
-        modal={{ labelId, closeLabel: "Back to picks", asideRef: aside }}
+        modal={{ labelId, closeLabel: t("ask.backToPicks"), asideRef: aside }}
       />
     </div>
   );

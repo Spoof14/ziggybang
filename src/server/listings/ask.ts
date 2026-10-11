@@ -1,5 +1,4 @@
 import {
-  OFF_TOPIC_REPLY,
   composeAskIntent,
   emptyAskSnapshot,
   hasSearchIntent,
@@ -20,6 +19,7 @@ import {
   type AskInterpretResult,
   type AskPlace,
 } from "~/lib/listings/ask-picks";
+import { DEFAULT_LANG, t, type Lang } from "~/lib/i18n";
 import { areaBuckets } from "~/lib/listings/area";
 import { ageFilters } from "~/lib/listings/age";
 import { floorFilters } from "~/lib/listings/floor";
@@ -95,7 +95,7 @@ export function intentFromUnknown(raw: unknown): SearchIntent {
   };
 }
 
-const SYSTEM_PROMPT = `You extract rental-search constraints from a message for Ziggybang (Korean rentals). Apply ONLY constraints the user actually stated. Every field you are not sure about must be omitted — never guess, never add a "sensible default".
+const SYSTEM_PROMPT = `You extract rental-search constraints from a message for Ziggybang (Korean rentals). The message may be in English or Korean (전세, 월세, 보증금, 원룸, 빌라, 오피스텔, 아파트, 반지하, 옥탑, 평, ㎡ are all normal); keep Korean place names as written and write "preferences" in plain English words regardless. Apply ONLY constraints the user actually stated. Every field you are not sure about must be omitted — never guess, never add a "sensible default".
 Return JSON with:
 - offTopic: true if the message is not about finding a rental, or has no searchable constraint at all ("what is the weather", "something nice"). Then omit everything else.
 - searchInput: neighborhood or station name ONLY (e.g. "Guro Digital", "Hongdae", "Seoul Station"). No numbers, prices, sentences, "years old", "near", "good value".
@@ -197,6 +197,7 @@ export async function resolveAskPlace(
   viewport: { lat: number; lng: number } | undefined,
   assumptions: string[],
   resolver: PlaceResolver = defaultResolvePlace,
+  lang: Lang = DEFAULT_LANG,
 ): Promise<AskPlace> {
   const text = searchInput.trim();
   if (text) {
@@ -214,13 +215,13 @@ export async function resolveAskPlace(
         kind: "place",
       };
     }
-    assumptions.push(`I couldn't locate “${text.slice(0, 40)}”, so I searched around the current map view instead.`);
+    assumptions.push(t(lang, "ask.assume.noLocate", { text: text.slice(0, 40) }));
   } else if (previous?.kind === "viewport" && !viewport) {
     return previous;
   } else if (!viewport) {
-    assumptions.push("No area was given, so I searched around central Seoul.");
+    assumptions.push(t(lang, "ask.assume.noAreaSeoul"));
   } else {
-    assumptions.push("No area was given, so I searched around the current map view.");
+    assumptions.push(t(lang, "ask.assume.noAreaView"));
   }
   const center = viewport ?? SEOUL_CENTER;
   return { name: "current map view", ...center, radiusM: Math.min(3000, Math.max(250, radiusOverride ?? 1500)), kind: "viewport" };
@@ -285,10 +286,17 @@ export function localInterpretIsEnough(
  * naming a different area starts from scratch.
  */
 export async function interpretAsk(
-  input: { messages: Message[]; previous?: AskConstraints; viewport?: { lat: number; lng: number }; signal?: AbortSignal },
+  input: {
+    messages: Message[];
+    previous?: AskConstraints;
+    viewport?: { lat: number; lng: number };
+    lang?: Lang;
+    signal?: AbortSignal;
+  },
   deps: InterpretDeps = {},
 ): Promise<AskInterpretResult> {
   const { messages, previous, viewport } = input;
+  const lang = input.lang ?? DEFAULT_LANG;
   const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const current = constraintsToSnapshot(previous ?? {});
   const local = interpretSearch(lastUser, current);
@@ -302,7 +310,7 @@ export async function interpretAsk(
   const localPlaceGuess = local.intent.searchInput?.trim();
   const speculativePlace =
     useAi && localPlaceGuess
-      ? resolveAskPlace(localPlaceGuess, undefined, previous?.place, viewport, [], resolver)
+      ? resolveAskPlace(localPlaceGuess, undefined, previous?.place, viewport, [], resolver, lang)
       : null;
   const ai = useAi ? await interpretWithOpenAi(messages, current, input.signal) : null;
   const fallbackReason: AskFallbackReason | undefined = !configured
@@ -337,11 +345,11 @@ export async function interpretAsk(
       return {
         status: "ok",
         constraints: previous,
-        assumptions: ["Kept your earlier constraints and used your note when ranking."],
+        assumptions: [t(lang, "ask.keptEarlier")],
         provider: "openai",
       };
     }
-    return { status: "off_topic", reply: OFF_TOPIC_REPLY };
+    return { status: "off_topic", reply: t(lang, "ask.offTopic") };
   }
 
   // Follow-ups merge; a brand-new search (no previous, or an explicit "find …" in another area) resets.
@@ -365,7 +373,7 @@ export async function interpretAsk(
   ) {
     place = await speculativePlace;
   } else {
-    place = await resolveAskPlace(snapshot.searchInput, statedRadius, keepPrevPlace, viewport, assumptions, resolver);
+    place = await resolveAskPlace(snapshot.searchInput, statedRadius, keepPrevPlace, viewport, assumptions, resolver, lang);
   }
   // Same spot as before under another spelling ("망원동" vs "Mangwon"): keep the earlier place and radius.
   if (

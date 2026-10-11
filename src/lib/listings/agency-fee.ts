@@ -1,3 +1,4 @@
+import { DEFAULT_LANG, t, type Lang } from "~/lib/i18n";
 import { formatKrwFromManwon } from "./copy";
 import { type MapListing, type PropertyType, type SalesType } from "./types";
 
@@ -43,13 +44,16 @@ export function leaseDealKrw(depositManwon: number, rentManwon: number): number 
   return rent * 100 > deposit ? deposit + rent * 70 : deposit + rent * 100;
 }
 
-export function estimateAgencyFee(listing: {
-  salesType?: SalesType;
-  propertyType?: PropertyType;
-  deposit?: number;
-  rent?: number;
-  price?: number;
-}): AgencyFeeEstimate | null {
+export function estimateAgencyFee(
+  listing: {
+    salesType?: SalesType;
+    propertyType?: PropertyType;
+    deposit?: number;
+    rent?: number;
+    price?: number;
+  },
+  lang: Lang = DEFAULT_LANG,
+): AgencyFeeEstimate | null {
   const officetel = listing.propertyType === "officetel";
   if (listing.salesType === "sale") {
     if (listing.price == null || !Number.isFinite(listing.price) || listing.price <= 0) {
@@ -59,7 +63,7 @@ export function estimateAgencyFee(listing: {
     const { rate, capKrw } = officetel
       ? { rate: 0.005, capKrw: undefined }
       : saleRate(dealKrw);
-    return toEstimate(applyRate(dealKrw, rate, capKrw), rate, officetel ? "officetel" : "housing-sale");
+    return toEstimate(applyRate(dealKrw, rate, capKrw), rate, officetel ? "officetel" : "housing-sale", lang);
   }
 
   const deposit = listing.deposit ?? 0;
@@ -70,7 +74,7 @@ export function estimateAgencyFee(listing: {
     const { rate, capKrw } = officetel
       ? { rate: 0.005, capKrw: undefined }
       : leaseRate(dealKrw);
-    return toEstimate(applyRate(dealKrw, rate, capKrw), rate, officetel ? "officetel" : "housing-lease");
+    return toEstimate(applyRate(dealKrw, rate, capKrw), rate, officetel ? "officetel" : "housing-lease", lang);
   }
 
   if (listing.salesType === "jeonse" || (listing.rent == null && listing.deposit != null)) {
@@ -79,29 +83,27 @@ export function estimateAgencyFee(listing: {
     const { rate, capKrw } = officetel
       ? { rate: 0.005, capKrw: undefined }
       : leaseRate(dealKrw);
-    return toEstimate(applyRate(dealKrw, rate, capKrw), rate, officetel ? "officetel" : "housing-lease");
+    return toEstimate(applyRate(dealKrw, rate, capKrw), rate, officetel ? "officetel" : "housing-lease", lang);
   }
   return null;
 }
 
-export function agencyFeeCopy(listing: MapListing): AgencyFeeEstimate | null {
-  return estimateAgencyFee(listing);
+export function agencyFeeCopy(listing: MapListing, lang: Lang = DEFAULT_LANG): AgencyFeeEstimate | null {
+  return estimateAgencyFee(listing, lang);
 }
 
 function toEstimate(
   feeKrw: number,
   rate: number,
   kind: AgencyFeeEstimate["kind"],
+  lang: Lang,
 ): AgencyFeeEstimate {
   const withVat = feeKrw * 1.1;
   const feeManwon = feeKrw / MANWON;
   const feeWithVatManwon = withVat / MANWON;
-  const feeLabel = formatKrwFromManwon(feeManwon) ?? "";
-  const vatLabel = formatKrwFromManwon(feeWithVatManwon) ?? "";
-  const hint =
-    kind === "officetel"
-      ? "Officetel fees are negotiated (often 0.3–0.9%). This is a 0.5% midpoint, plus 10% VAT. Who pays is up to you and the agent; tenants often cover it."
-      : "Legal cap for housing, plus 10% VAT. Who pays is negotiable; tenants often cover the full fee.";
+  const feeLabel = formatKrwFromManwon(feeManwon, lang) ?? "";
+  const vatLabel = formatKrwFromManwon(feeWithVatManwon, lang) ?? "";
+  const hint = t(lang, kind === "officetel" ? "page.agencyKind.officetel" : "page.agencyKind.housing");
   return {
     feeManwon,
     feeWithVatManwon,

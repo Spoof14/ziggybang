@@ -1,10 +1,12 @@
+import { DEFAULT_LANG, type Lang } from "~/lib/i18n";
 import {
   formatArea,
   formatFloor,
   formatRoomType,
-  propertyTypeLabel,
-  salesTypeFilterLabel,
+  propertyTypeText,
+  salesTypeFilterText,
 } from "./copy";
+import { hasHangul } from "./foreigner";
 import { matchPlaceInAddress } from "./search";
 import { type MapListing } from "./types";
 
@@ -82,16 +84,45 @@ export function englishDistrict(address?: string): string | null {
   return best?.label ?? null;
 }
 
-export function englishCardTitle(listing: MapListing): string {
-  const where = englishNeighborhood(listing.address);
-  const layout = formatRoomType(listing.roomType);
-  const kind = propertyTypeLabel[listing.propertyType];
-  const deal = listing.salesType ? salesTypeFilterLabel[listing.salesType] : null;
+/** Korean neighborhood name for a listing ("홍대"), when the place table knows it. */
+export function koreanNeighborhood(address?: string): string | null {
+  if (!address) return null;
+  const place = matchPlaceInAddress(address);
+  if (!place) return null;
+  return place.names.find((name) => hasHangul(name)) ?? null;
+}
+
+function localNeighborhood(address: string | undefined, lang: Lang): string | null {
+  if (lang === "ko") return koreanNeighborhood(address);
+  return englishNeighborhood(address);
+}
+
+/** The Korean address as listed, trimmed to "시/구/동" level when it is a long road address. */
+function koreanAddressLine(listing: MapListing): string | null {
+  const address = listing.address?.trim();
+  if (!address) return null;
+  if (!hasHangul(address)) return englishDistrict(address) ?? address;
+  const hood = koreanNeighborhood(address);
+  const district = address.match(/[가-힣]+구/)?.[0];
+  if (hood && district) return hood === district.replace(/구$/, "") ? district : `${hood} · ${district}`;
+  return hood ?? district ?? address;
+}
+
+/**
+ * Card/panel title. English users get "Hongdae · Studio · Monthly"; Korean
+ * users get the same pieces in Korean ("홍대 · 원룸 · 월세") with Korean place names.
+ */
+export function englishCardTitle(listing: MapListing, lang: Lang = DEFAULT_LANG): string {
+  const where = localNeighborhood(listing.address, lang);
+  const layout = formatRoomType(listing.roomType, lang);
+  const kind = propertyTypeText(lang, listing.propertyType);
+  const deal = listing.salesType ? salesTypeFilterText(lang, listing.salesType) : null;
   const room = layout && layout !== kind ? layout : kind;
   return [where, room, deal].filter(Boolean).join(" · ");
 }
 
-export function englishAddressLine(listing: MapListing): string | null {
+export function englishAddressLine(listing: MapListing, lang: Lang = DEFAULT_LANG): string | null {
+  if (lang === "ko") return koreanAddressLine(listing);
   const where = englishNeighborhood(listing.address);
   const district = englishDistrict(listing.address);
   if (where && district) {
@@ -108,11 +139,11 @@ export function koreanAddressForTaxi(address?: string): string | null {
   return address.trim();
 }
 
-export function listingCardMeta(listing: MapListing): string {
+export function listingCardMeta(listing: MapListing, lang: Lang = DEFAULT_LANG): string {
   return [
-    englishAddressLine(listing),
-    formatArea(listing.areaM2),
-    formatFloor(listing.floor),
+    englishAddressLine(listing, lang),
+    formatArea(listing.areaM2, lang),
+    formatFloor(listing.floor, lang),
   ]
     .filter(Boolean)
     .join(" · ");

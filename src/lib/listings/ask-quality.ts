@@ -5,8 +5,10 @@
  */
 import { places } from "~/lib/geo/places";
 import { distanceM } from "~/lib/geo/shape";
+import { DEFAULT_LANG, t, tn, type Lang } from "~/lib/i18n";
 import { formatKrwFromManwon, formatFloor } from "./copy";
-import { englishDistrict, englishNeighborhood } from "./english";
+import { englishDistrict, englishNeighborhood, koreanNeighborhood } from "./english";
+import { hasHangul } from "./foreigner";
 import { type MapListing } from "./types";
 
 /** Deposit → monthly conversion used when comparing "cheap" homes (5% a year). */
@@ -50,13 +52,12 @@ export function listingRooms(l: MapListing): number | undefined {
   return undefined;
 }
 
-export function roomsLabel(rooms: number): string {
-  const word = rooms === 2 ? "Two" : rooms === 3 ? "Three" : rooms === 4 ? "Four" : String(rooms);
-  return `${word}-room (best effort)`;
+export function roomsLabel(rooms: number, lang: Lang = DEFAULT_LANG): string {
+  if (rooms >= 2 && rooms <= 4) return t(lang, `ask.rooms.${rooms}` as "ask.rooms.2");
+  return t(lang, "ask.rooms.n", { n: rooms });
 }
 
-export const ROOMS_APPROX_NOTE =
-  "Room count is approximate: listings rarely state it, so I used the layout/title text where present.";
+export const ROOMS_APPROX_NOTE = t("en", "ask.assume.rooms");
 
 // ------------------------------------------------------------ floor and size
 
@@ -185,17 +186,33 @@ const LANDMARKS = places.filter((p) => p.zoom >= 15 && !p.districtOnly);
  * "Hongdae" only when the home really is near it: the nearest named place within
  * 700 m wins over a looser address match; else the neighbourhood/district text.
  */
-export function areaLabel(l: Pick<MapListing, "lat" | "lng" | "address">): string | null {
-  let best: { name: string; d: number } | undefined;
+export function areaLabel(
+  l: Pick<MapListing, "lat" | "lng" | "address">,
+  lang: Lang = DEFAULT_LANG,
+): string | null {
+  let best: { name: string; korean: string | undefined; d: number } | undefined;
   for (const p of LANDMARKS) {
     const d = distanceM(l, p);
-    if (d <= 700 && (!best || d < best.d)) best = { name: p.names[0]!, d };
+    if (d <= 700 && (!best || d < best.d)) {
+      best = { name: p.names[0]!, korean: p.names.find((n) => hasHangul(n)), d };
+    }
+  }
+  const title = (s: string) => s.replace(/(^|[\s-])([a-z])/g, (_, a: string, b: string) => `${a}${b.toUpperCase()}`);
+  if (lang === "ko") {
+    if (best?.korean) return t(lang, "ask.area.near", { name: best.korean });
+    return koreanAddressForArea(l.address);
   }
   const district = englishDistrict(l.address);
-  const title = (s: string) => s.replace(/(^|[\s-])([a-z])/g, (_, a: string, b: string) => `${a}${b.toUpperCase()}`);
-  if (best) return `Near ${title(best.name)}`;
+  if (best) return t(lang, "ask.area.near", { name: title(best.name) });
   const hood = englishNeighborhood(l.address);
   if (hood && district) return `${hood} · ${district}`;
+  return hood ?? district ?? null;
+}
+
+function koreanAddressForArea(address?: string): string | null {
+  const hood = koreanNeighborhood(address);
+  const district = address?.match(/[가-힣]+구/)?.[0];
+  if (hood && district) return hood === district.replace(/구$/, "") ? district : `${hood} · ${district}`;
   return hood ?? district ?? null;
 }
 
@@ -216,17 +233,18 @@ export function reasonIsGrounded(
   },
 ): boolean {
   const r = reason.toLowerCase();
-  if (/\b(built|constructed)\b|\bnewly built\b|\bnew building\b|\byears? old\b|\byrs? old\b|\bnewer\b/.test(r) && facts.builtYear == null) return false;
-  const builtYear = /\b(?:built|from|in)\s+((?:19|20)\d{2})\b/.exec(r)?.[1];
-  if (builtYear && facts.builtYear != null && Number(builtYear) !== facts.builtYear) return false;
-  if (/subway|metro|\bwalk/.test(r) && facts.subwayWalkMin == null) return false;
-  if (/elevator/.test(r) && !facts.tags.includes("elevator")) return false;
-  if (/quiet|calm|peaceful/.test(r) && !facts.tags.includes("quiet")) return false;
-  if (/parking/.test(r) && !facts.tags.includes("parking")) return false;
-  if (/furnished|full[- ]option/.test(r) && !facts.tags.includes("furnished")) return false;
-  if (/\bpet/.test(r) && !facts.tags.includes("pet")) return false;
-  if (/\bfloor\b|rooftop|basement/.test(r) && !facts.floor) return false;
-  if (/spacious|roomy|large\b/.test(r) && !(facts.m2 != null && facts.m2 >= 33)) return false;
+  if (/\b(built|constructed)\b|\bnewly built\b|\bnew building\b|\byears? old\b|\byrs? old\b|\bnewer\b|준공|신축|년차|연식/.test(r) && facts.builtYear == null) return false;
+  const builtYear = /\b(?:built|from|in)\s+((?:19|20)\d{2})\b|((?:19|20)\d{2})\s*년\s*(?:준공|건축|사용승인)/.exec(r);
+  const claimedYear = builtYear?.[1] ?? builtYear?.[2];
+  if (claimedYear && facts.builtYear != null && Number(claimedYear) !== facts.builtYear) return false;
+  if (/subway|metro|\bwalk|지하철|역세권|도보/.test(r) && facts.subwayWalkMin == null) return false;
+  if (/elevator|엘리베이터|엘베/.test(r) && !facts.tags.includes("elevator")) return false;
+  if (/quiet|calm|peaceful|조용|한적/.test(r) && !facts.tags.includes("quiet")) return false;
+  if (/parking|주차/.test(r) && !facts.tags.includes("parking")) return false;
+  if (/furnished|full[- ]option|풀옵션|옵션/.test(r) && !facts.tags.includes("furnished")) return false;
+  if (/\bpet|반려|애완/.test(r) && !facts.tags.includes("pet")) return false;
+  if (/\bfloor\b|rooftop|basement|층|옥탑|반지하/.test(r) && !facts.floor) return false;
+  if (/spacious|roomy|large\b|넓/.test(r) && !(facts.m2 != null && facts.m2 >= 33)) return false;
   return true;
 }
 
@@ -252,25 +270,53 @@ export function buildAskSummary(input: {
   rooms?: number;
   picks: MapListing[];
   cheap?: boolean;
+  lang?: Lang;
 }): string {
+  const lang = input.lang ?? DEFAULT_LANG;
   const { picks } = input;
-  const dealWord =
-    input.deals.length === 1 ? { jeonse: "jeonse", wolse: "monthly-rent", sale: "for-sale" }[input.deals[0]!] : "";
-  const roomWord = input.rooms ? `${roomsLabel(input.rooms).replace(" (best effort)", "").toLowerCase()} ` : "";
-  const what = [dealWord, roomWord.trim(), input.typeWord].filter(Boolean).join(" ");
-  const where = input.placeName ? ` near ${input.placeName}` : "";
-  const head = `Top ${input.count} ${what}${input.count === 1 ? "" : "s"}${where}, from ${input.candidates} match${input.candidates === 1 ? "" : "es"}`;
+  const dealKey = { jeonse: "ask.sum.dealJeonse", wolse: "ask.sum.dealWolse", sale: "ask.sum.dealSale" } as const;
+  const dealWord = input.deals.length === 1 ? t(lang, dealKey[input.deals[0]!]) : "";
+  const roomWord =
+    input.rooms && input.rooms >= 2 && input.rooms <= 4
+      ? t(lang, (["", "", "ask.room.two", "ask.room.three", "ask.room.four"] as const)[input.rooms] as "ask.room.two")
+      : "";
+  const what = [dealWord, roomWord, input.typeWord].filter(Boolean).join(" ");
   const bits: string[] = [];
   const rents = picks.filter((p) => p.salesType === "wolse" && p.rent != null).map((p) => p.rent!);
   const deposits = picks.filter((p) => p.deposit != null && p.salesType !== "sale").map((p) => p.deposit!);
-  const rent = rangeText(rents, formatKrwFromManwon);
-  const dep = rangeText(deposits, formatKrwFromManwon);
-  if (rent) bits.push(`rent ${rent}/mo`);
-  if (dep) bits.push(`${input.deals.includes("jeonse") && !rents.length ? "jeonse" : "deposit"} ${dep}`);
+  const money = (n: number) => formatKrwFromManwon(n, lang);
+  const rent = rangeText(rents, money);
+  const dep = rangeText(deposits, money);
+  if (rent) bits.push(t(lang, "ask.sum.rent", { v: rent }));
+  const depKey = input.deals.includes("jeonse") && !rents.length ? "ask.sum.jeonse" : "ask.sum.deposit";
+  if (dep) bits.push(t(lang, depKey, { v: dep }));
   const areas = picks.map((p) => p.areaM2).filter((v): v is number => typeof v === "number");
-  if (areas.length) bits.push(`${Math.round(Math.min(...areas))}–${Math.round(Math.max(...areas))} m²`);
+  if (areas.length) {
+    bits.push(t(lang, "area.m2", { m2: `${Math.round(Math.min(...areas))}–${Math.round(Math.max(...areas))}` }));
+  }
   const tail = bits.length ? `: ${bits.join(", ")}` : "";
-  return `${head}${tail}${input.cheap ? " — sorted by rent plus deposit cost" : ""}.`.replace("..", ".");
+  const cheapTail = input.cheap ? t(lang, "ask.sum.cheap") : "";
+  if (lang === "ko") {
+    const where = input.placeName ? t(lang, "ask.sum.near", { place: input.placeName }) : "";
+    const head = t(lang, "ask.sum.head", {
+      count: input.count,
+      what,
+      where,
+      candidates: input.candidates,
+      matchWord: tn(lang, "ask.sum.match", input.candidates),
+    });
+    return `${head}${tail}${cheapTail}.`.replace("..", ".");
+  }
+  const where = input.placeName ? t(lang, "ask.sum.near", { place: input.placeName }) : "";
+  const head = t(lang, "ask.sum.head", {
+    count: input.count,
+    what,
+    plural: input.count === 1 ? "" : "s",
+    where,
+    candidates: input.candidates,
+    matchWord: tn(lang, "ask.sum.match", input.candidates),
+  });
+  return `${head}${tail}${cheapTail}.`.replace("..", ".");
 }
 
 export { formatFloor };

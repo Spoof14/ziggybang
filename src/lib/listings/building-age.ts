@@ -1,3 +1,5 @@
+import { DEFAULT_LANG, tn, type Lang } from "~/lib/i18n";
+
 /** Strictest filter: only buildings this young or newer. */
 export const MAX_BUILDING_AGE_MIN = 5;
 /** At or above this value the filter is off ("any age"). */
@@ -56,10 +58,12 @@ export function listingMatchesBuildingAge(
   return age <= maxBuildingAge;
 }
 
-export function describeBuildingAgeFilter(maxBuildingAge?: number): string | null {
+export function describeBuildingAgeFilter(
+  maxBuildingAge?: number,
+  lang: Lang = DEFAULT_LANG,
+): string | null {
   if (!maxBuildingAge) return null;
-  if (maxBuildingAge === 1) return "Up to 1 year old";
-  return `Up to ${maxBuildingAge} years old`;
+  return tn(lang, "building.upTo", maxBuildingAge);
 }
 
 export function parseMaxBuildingAge(text: string, now = new Date()): number | undefined {

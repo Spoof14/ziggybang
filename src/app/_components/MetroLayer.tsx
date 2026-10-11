@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { useI18n } from "~/lib/i18n/react";
 import {
   CircleMarker,
   Polyline,
@@ -60,6 +61,7 @@ function MetroIcon() {
 }
 
 function MetroToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  const { t } = useI18n();
   const map = useMap();
   const [host, setHost] = useState<HTMLElement | null>(null);
 
@@ -82,7 +84,7 @@ function MetroToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
     };
   }, [map]);
 
-  const title = on ? "Hide metro lines" : "Show metro lines";
+  const title = on ? t("map.metroHide") : t("map.metroShow");
 
   if (!host) return null;
   return createPortal(

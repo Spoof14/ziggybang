@@ -2,17 +2,19 @@
 
 import { useState, type Ref } from "react";
 import { api } from "~/trpc/react";
+import { useI18n } from "~/lib/i18n/react";
 import {
   formatArea,
   formatFloor,
   formatKrwFromManwon,
   formatPriceLines,
   formatRoomType,
-  propertyTypeLabel,
-  salesTypeHint,
-  salesTypeLabel,
-  sourceLabel,
+  propertyTypeText,
+  salesTypeHintText,
+  salesTypeText,
+  sourceText,
 } from "~/lib/listings/copy";
+import { glossText } from "~/lib/listings/glossary";
 import {
   englishAddressLine,
   englishCardTitle,
@@ -25,18 +27,19 @@ import { listingGalleryUrls } from "~/lib/listings/photo";
 import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { ListingAgeLine } from "./ListingAgeLine";
+import { LandlordNotes } from "./LandlordNotes";
 import { ListingGallery } from "./ListingGallery";
 import { ListingLocationCard } from "./ListingLocationCard";
 import { ListingPageLink } from "./ListingPageLink";
 import { ListingPrice } from "./ListingPrice";
 import { ListingShareButton } from "./ListingShareButton";
 
-async function copyText(value: string) {
+async function copyText(value: string, promptText: string) {
   try {
     await navigator.clipboard.writeText(value);
     return true;
   } catch {
-    window.prompt("Copy this", value);
+    window.prompt(promptText, value);
     return false;
   }
 }
@@ -59,6 +62,7 @@ export function ListingPanel({
    */
   modal?: { labelId: string; closeLabel: string; asideRef?: Ref<HTMLElement> };
 }) {
+  const { lang, t } = useI18n();
   const [copied, setCopied] = useState<"address" | "link" | null>(null);
   const detailQuery = api.listings.getDetail.useQuery(
     {
@@ -74,21 +78,21 @@ export function ListingPanel({
     thumbnail: detail.thumbnail ?? listing.thumbnail,
     photos: detail.photos ?? listing.photos,
   });
-  const priceLines = formatPriceLines(detail);
-  const area = formatArea(detail.areaM2);
-  const floor = formatFloor(detail.floor);
-  const roomType = formatRoomType(detail.roomType);
-  const manageCost = formatKrwFromManwon(detail.manageCost);
-  const englishTitle = englishCardTitle(detail);
-  const where = englishAddressLine(detail);
+  const priceLines = formatPriceLines(detail, lang);
+  const area = formatArea(detail.areaM2, lang);
+  const floor = formatFloor(detail.floor, lang);
+  const roomType = formatRoomType(detail.roomType, lang);
+  const manageCost = formatKrwFromManwon(detail.manageCost, lang);
+  const englishTitle = englishCardTitle(detail, lang);
+  const where = englishAddressLine(detail, lang);
   const taxiAddress = koreanAddressForTaxi(detail.address);
   const description = detail.description?.trim();
   const foreignerOk =
     detail.foreignerOk ?? detectForeignerOk(detail.title, detail.description);
-  const agencyFee = agencyFeeCopy(detail);
+  const agencyFee = agencyFeeCopy(detail, lang);
 
   async function copy(kind: "address" | "link", value: string) {
-    const ok = await copyText(value);
+    const ok = await copyText(value, t("panel.copyPrompt"));
     if (!ok) return;
     setCopied(kind);
     window.setTimeout(() => setCopied(null), 1600);
@@ -112,20 +116,22 @@ export function ListingPanel({
       <div className="flex items-start justify-between gap-3 p-4">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wide text-slate-400">
-            {sourceLabel[listing.source]} · {propertyTypeLabel[listing.propertyType]}
-            {detail.salesType ? ` · ${salesTypeLabel[detail.salesType]}` : ""}
+            {sourceText(lang, listing.source)} · {propertyTypeText(lang, listing.propertyType)}
+            {detail.salesType ? ` · ${salesTypeText(lang, detail.salesType)}` : ""}
           </p>
           <h2 id={modal?.labelId} className="mt-1 text-lg font-semibold leading-snug">
             {englishTitle !== ""
               ? englishTitle
-              : (detail.title ?? `${propertyTypeLabel[listing.propertyType]} ${listing.sourceId}`)}
+              : (detail.title ?? `${propertyTypeText(lang, listing.propertyType)} ${listing.sourceId}`)}
           </h2>
           {detail.title && detail.title !== englishTitle ? (
-            <p className="mt-1 text-xs text-slate-400">{detail.title}</p>
+            <p lang="ko" className="mt-1 text-xs text-slate-400">
+              {lang === "en" ? glossText(detail.title, lang) : detail.title}
+            </p>
           ) : null}
           {detail.salesType ? (
             <p className="mt-1 text-xs text-slate-400">
-              {salesTypeHint[detail.salesType]}
+              {salesTypeHintText(lang, detail.salesType)}
             </p>
           ) : null}
           <ForeignerBadge ok={foreignerOk} className="mt-2 inline-flex" />
@@ -136,7 +142,7 @@ export function ListingPanel({
               type="button"
               onClick={() => onToggleSave(detail)}
               className="rounded-full bg-white/10 px-2 py-1 text-sm hover:bg-white/20"
-              aria-label={saved ? "Remove from saved" : "Save listing"}
+              aria-label={saved ? t("card.unsave") : t("card.save")}
               aria-pressed={saved}
             >
               {saved ? "♥" : "♡"}
@@ -152,17 +158,17 @@ export function ListingPanel({
             onClick={onClose}
             className="rounded-full bg-white/10 px-2 py-1 text-sm text-slate-300 hover:bg-white/20"
           >
-            {modal?.closeLabel ?? "Close"}
+            {modal?.closeLabel ?? t("panel.close")}
           </button>
         </div>
       </div>
 
-      <ListingGallery urls={photos} alt={detail.title ?? "listing"} />
+      <ListingGallery urls={photos} alt={detail.title ?? t("panel.galleryAlt")} />
 
       <dl className="grid grid-cols-2 gap-2 p-4 text-sm">
         {priceLines.length ? (
           <div className="col-span-2">
-            <dt className="text-slate-400">Price</dt>
+            <dt className="text-slate-400">{t("panel.price")}</dt>
             <dd id={modal ? `${modal.labelId}-price` : undefined} className="font-medium">
               <ListingPrice listing={detail} />
             </dd>
@@ -170,30 +176,30 @@ export function ListingPanel({
         ) : null}
         {agencyFee ? (
           <div className="col-span-2">
-            <dt className="text-slate-400">Agency fee cap</dt>
+            <dt className="text-slate-400">{t("panel.agencyCap")}</dt>
             <dd>
-              {agencyFee.vatLabel} incl. VAT
+              {t("panel.agencyIncl", { amount: agencyFee.vatLabel })}
               <span className="mt-0.5 block text-[11px] font-normal text-slate-500">
-                Legal maximum at {agencyFee.ratePct}%. Who pays is negotiable.
+                {t("panel.agencyMax", { pct: agencyFee.ratePct })}
               </span>
             </dd>
           </div>
         ) : null}
         {area ? (
           <div>
-            <dt className="text-slate-400">Exclusive area</dt>
+            <dt className="text-slate-400">{t("panel.exclusiveArea")}</dt>
             <dd>{area}</dd>
           </div>
         ) : null}
         {floor ? (
           <div>
-            <dt className="text-slate-400">Floor</dt>
+            <dt className="text-slate-400">{t("panel.floor")}</dt>
             <dd>{floor}</dd>
           </div>
         ) : null}
         {detail.updatedAt ? (
           <div className="col-span-2">
-            <dt className="text-slate-400">Listed</dt>
+            <dt className="text-slate-400">{t("panel.listed")}</dt>
             <dd>
               <ListingAgeLine updatedAt={detail.updatedAt} />
             </dd>
@@ -201,25 +207,25 @@ export function ListingPanel({
         ) : null}
         {roomType ? (
           <div>
-            <dt className="text-slate-400">Layout</dt>
+            <dt className="text-slate-400">{t("panel.layout")}</dt>
             <dd>{roomType}</dd>
           </div>
         ) : null}
         {manageCost ? (
           <div>
-            <dt className="text-slate-400">Maintenance</dt>
-            <dd>{manageCost} / month</dd>
+            <dt className="text-slate-400">{t("panel.maintenance")}</dt>
+            <dd>{t("panel.perMonth", { amount: manageCost })}</dd>
           </div>
         ) : null}
         {where ? (
           <div className="col-span-2">
-            <dt className="text-slate-400">Area</dt>
+            <dt className="text-slate-400">{t("panel.area")}</dt>
             <dd>{where}</dd>
           </div>
         ) : null}
         {taxiAddress ? (
           <div className="col-span-2">
-            <dt className="text-slate-400">Korean address (for taxis)</dt>
+            <dt className="text-slate-400">{t("panel.taxi")}</dt>
             <dd className="flex items-start justify-between gap-2">
               <span>{taxiAddress}</span>
               <button
@@ -227,25 +233,27 @@ export function ListingPanel({
                 onClick={() => void copy("address", taxiAddress)}
                 className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-sky-300 hover:bg-white/20"
               >
-                {copied === "address" ? "Copied" : "Copy"}
+                {copied === "address" ? t("panel.copiedShort") : t("panel.copy")}
               </button>
             </dd>
           </div>
         ) : null}
         {listing.count && listing.count > 1 ? (
           <div>
-            <dt className="text-slate-400">Listings here</dt>
+            <dt className="text-slate-400">{t("panel.listingsHere")}</dt>
             <dd>{listing.count.toLocaleString("en-US")}</dd>
           </div>
         ) : null}
       </dl>
 
       {description ? (
-        <p className="px-4 pb-2 text-sm leading-relaxed text-slate-300">{description}</p>
+        <div className="px-4 pb-2">
+          <LandlordNotes text={description} source={listing.source} showTitle={false} />
+        </div>
       ) : null}
 
       {detailQuery.isLoading ? (
-        <p className="px-4 text-sm text-slate-400">Loading listing details…</p>
+        <p className="px-4 text-sm text-slate-400">{t("panel.loadingDetails")}</p>
       ) : null}
 
       <div className="mt-auto">
@@ -259,7 +267,7 @@ export function ListingPanel({
             listing={detail}
             className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
           >
-            Open full page
+            {t("panel.openFull")}
           </ListingPageLink>
           <a
             href={detail.url}
@@ -267,14 +275,14 @@ export function ListingPanel({
             rel="noopener noreferrer"
             className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/20"
           >
-            Open on {sourceLabel[listing.source]}
+            {t("card.openOn", { source: sourceText(lang, listing.source) })}
           </a>
           <button
             type="button"
             onClick={() => void copy("link", `${window.location.origin}${listingPagePath(detail)}`)}
             className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/20"
           >
-            {copied === "link" ? "Page link copied" : "Copy page link"}
+            {copied === "link" ? t("panel.pageLinkCopied") : t("panel.copyPageLink")}
           </button>
         </div>
       </div>

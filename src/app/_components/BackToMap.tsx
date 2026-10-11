@@ -1,18 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useI18n } from "~/lib/i18n/react";
 import { cameFromApp } from "~/lib/listings/path";
 
 export function BackToMap({
   href,
   className,
-  children = "Back to map",
+  children,
 }: {
   href: string;
   className?: string;
   children?: string;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
 
   return (
     <button
@@ -26,7 +28,7 @@ export function BackToMap({
       }}
       className={className}
     >
-      {children}
+      {children ?? t("page.backToMap")}
     </button>
   );
 }

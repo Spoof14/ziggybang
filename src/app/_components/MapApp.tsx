@@ -7,14 +7,16 @@ import { isValidBounds } from "~/lib/geo/bounds";
 import { type CircleFilter, type LatLng, formatRadius } from "~/lib/geo/shape";
 import {
   areaBuckets,
+  areaBucketHint,
+  areaBucketLabel,
   isAllAreaBuckets,
   type AreaBucketId,
 } from "~/lib/listings/area";
 import {
   friendlySourceError,
-  propertyTypeLabel,
-  salesTypeFilterLabel,
-  sourceLabel,
+  propertyTypeText,
+  salesTypeFilterText,
+  sourceText,
 } from "~/lib/listings/copy";
 import {
   isAllPropertyTypes,
@@ -26,8 +28,6 @@ import { describeActiveFilters, filterKeyOf, mapLayersForFilters } from "~/lib/l
 import { loadPrefs, savePrefs, type SavedPrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
 import { type PriceFilter } from "~/lib/listings/price";
 import {
-  DISTRICT_ONLY_HINT,
-  ROAD_LEVEL_HINT,
   circleForPlaceSearch,
   looksLikeStreetAddress,
   isStationQuery,
@@ -37,8 +37,11 @@ import {
   unrefinedPlaceLeftover,
 } from "~/lib/listings/search";
 import { listingCardMeta } from "~/lib/listings/english";
-import { ageFilterLabel, ageFilters, type AgeFilter } from "~/lib/listings/age";
-import { floorFilterLabel, floorFilters, type FloorFilter } from "~/lib/listings/floor";
+import { formatCount, keepLangParam } from "~/lib/i18n";
+import { useI18n } from "~/lib/i18n/react";
+import { ageFilterText, ageFilterTitle, ageFilters, type AgeFilter } from "~/lib/listings/age";
+import { floorFilterText, floorFilters, type FloorFilter } from "~/lib/listings/floor";
+import { LanguageSwitch } from "./LanguageSwitch";
 import { type SearchSnapshot } from "~/lib/listings/ai-search";
 import { rankListings, type PhotoScoreInput } from "~/lib/listings/recommend";
 import {
@@ -120,6 +123,7 @@ function boundsCenter(bounds: Bounds): LatLng {
 }
 
 export default function MapApp() {
+  const { lang, t } = useI18n();
   const [bounds, setBounds] = useState<Bounds>({
     south: 37.53,
     west: 126.94,
@@ -364,7 +368,8 @@ export default function MapApp() {
       maxBuildingAge,
     });
     const preview = new URLSearchParams(window.location.search).get("preview");
-    const url = `${window.location.pathname}${preview ? withPreviewParam(next, preview) : next}`;
+    const withPreview = preview ? withPreviewParam(next, preview) : next;
+    const url = `${window.location.pathname}${keepLangParam(withPreview, window.location.search)}`;
     if (`${window.location.pathname}${window.location.search}` !== url) {
       window.history.replaceState(window.history.state, "", url);
     }
@@ -410,7 +415,7 @@ export default function MapApp() {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       // The Ask listing preview (or its photo viewer) handles its own Escape first.
-      if (document.querySelector("[data-ask-preview], [aria-label='Fullscreen photo']")) return;
+      if (document.querySelector("[data-ask-preview], [data-photo-lightbox]")) return;
       if (askOpen) {
         setAskOpen(false);
         return;
@@ -834,12 +839,13 @@ export default function MapApp() {
     const href = `${window.location.origin}${window.location.pathname}${next}`;
     try {
       await navigator.clipboard.writeText(href);
-      setShareHint("Copied");
+      setShareHint(t("header.copied"));
     } catch {
-      window.prompt("Copy this search link", href);
+      window.prompt(t("header.copySearchPrompt"), href);
     }
     window.setTimeout(() => setShareHint(null), 1600);
   }, [
+    t,
     areaBucketIds,
     circle,
     urlView,
@@ -992,7 +998,7 @@ export default function MapApp() {
     floorFilter,
     ageFilter,
     maxBuildingAge,
-  });
+  }, lang);
   const visibleHomeCount = visible.clusters.length
     ? visible.clusters.reduce((sum, cluster) => sum + cluster.count, 0)
     : visible.listings.length;
@@ -1025,7 +1031,10 @@ export default function MapApp() {
   const naverInventory = visible.stats.naverAvailable ?? visible.stats.naver;
   const listNote =
     sources.includes("naver") && naverInventory > naverListed
-      ? `Naver reports ${naverInventory.toLocaleString("en-US")} homes here, but only ${naverListed.toLocaleString("en-US")} can be listed individually. The rest are grouped on the map; zoom in or narrow the area to list more.`
+      ? t("list.naverNote", {
+          inventory: formatCount(naverInventory, lang),
+          listed: formatCount(naverListed, lang),
+        })
       : undefined;
   const photoScores = usePhotoQuality(
     viewMode === "best" ? listListings.map((item) => item.thumbnail) : [],
@@ -1098,19 +1107,19 @@ export default function MapApp() {
     : visible.errors.find((error) => error.source === "naver");
 
   const statusLabel = waitingForFirst
-    ? "Loading homes… first load can take a few seconds"
+    ? t("status.loading")
     : [
         sources.includes("zigbang")
-          ? `Zigbang ${visible.stats.zigbang.toLocaleString("en-US")}`
+          ? t("status.source", { source: sourceText(lang, "zigbang"), n: formatCount(visible.stats.zigbang, lang) })
           : null,
         sources.includes("naver")
           ? visible.stats.naverAvailable &&
             visible.stats.naverAvailable > visible.stats.naver
-            ? `Naver ${visible.stats.naver.toLocaleString("en-US")} of ${visible.stats.naverAvailable.toLocaleString("en-US")}`
-            : `Naver ${visible.stats.naver.toLocaleString("en-US")}`
+            ? t("status.sourceOf", { source: sourceText(lang, "naver"), n: formatCount(visible.stats.naver, lang), total: formatCount(visible.stats.naverAvailable, lang) })
+            : t("status.source", { source: sourceText(lang, "naver"), n: formatCount(visible.stats.naver, lang) })
           : null,
         sources.includes("peterpan")
-          ? `Peterpan ${visible.stats.peterpan.toLocaleString("en-US")}`
+          ? t("status.source", { source: sourceText(lang, "peterpan"), n: formatCount(visible.stats.peterpan, lang) })
           : null,
       ]
         .filter(Boolean)
@@ -1125,21 +1134,21 @@ export default function MapApp() {
       !geocodeQuery.data &&
       Boolean(parsedSearch.place));
   const areaHint = districtOnlyAddress
-    ? DISTRICT_ONLY_HINT
+    ? t("hint.district")
     : place?.roadLevel
-    ? ROAD_LEVEL_HINT
+    ? t("hint.road")
     : place
     ? circle
       ? `${placeLabel} · ${formatRadius(circle.radiusM)}`
       : placeLabel
     : circle
-      ? `Within ${formatRadius(radiusM)}`
+      ? t("hint.within", { radius: formatRadius(radiusM) })
       : polygon
-        ? "Inside drawn area"
+        ? t("hint.drawn")
         : geocodeQuery.isFetching
-          ? `Looking up ${debouncedQuery}…`
+          ? t("hint.lookup", { query: debouncedQuery })
           : geoToken && geocodeQuery.isFetched && !geocodeQuery.data
-            ? `No neighborhood named “${debouncedQuery}”. Try the Korean name, or drop a radius.`
+            ? t("hint.none", { query: debouncedQuery })
             : null;
 
   return (
@@ -1155,15 +1164,15 @@ export default function MapApp() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] uppercase tracking-[0.18em] text-sky-300">
-                Ziggybang
+                {t("app.name")}
                 {refreshing && !waitingForFirst ? (
                   <span className="ml-2 tracking-normal text-slate-400">
-                    Updating…
+                    {t("header.updating")}
                   </span>
                 ) : null}
               </p>
               <p className="text-sm font-semibold sm:text-lg">
-                Korea rentals, in English
+                {t("header.tagline")}
               </p>
               {statusLabel ? (
                 <p className={`mt-0.5 text-[11px] leading-snug text-slate-400 sm:truncate ${waitingForFirst ? "animate-pulse" : ""}`}>
@@ -1177,15 +1186,16 @@ export default function MapApp() {
                 onClick={() => void copySearchLink()}
                 className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
               >
-                {shareHint ?? "Copy link"}
+                {shareHint ?? t("header.copyLink")}
               </button>
               <button
                 type="button"
                 onClick={() => setUiCompact((current) => !current)}
                 className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
               >
-                {uiCompact ? "Show filters" : "Hide filters"}
+                {uiCompact ? t("header.showFilters") : t("header.hideFilters")}
               </button>
+              <LanguageSwitch />
             </div>
           </div>
 
@@ -1213,7 +1223,7 @@ export default function MapApp() {
                     : "bg-white/10 text-slate-300"
                 }`}
               >
-                {sourceLabel[source]}
+                {sourceText(lang, source)}
               </button>
             ))}
             {ALL_TYPES.map((type) => (
@@ -1233,7 +1243,7 @@ export default function MapApp() {
                     : "bg-white/10 text-slate-300"
                 }`}
               >
-                {propertyTypeLabel[type]}
+                {propertyTypeText(lang, type)}
               </button>
             ))}
           </div>
@@ -1255,34 +1265,34 @@ export default function MapApp() {
                     : "bg-white/10 text-slate-300"
                 }`}
               >
-                {salesTypeFilterLabel[type]}
+                {salesTypeFilterText(lang, type)}
               </button>
             ))}
             <button
               type="button"
               aria-pressed={foreignerOk}
               onClick={() => setForeignerOk((current) => !current)}
-              title="Only ads that mention foreigners are welcome. Most landlords never write it."
+              title={t("chip.foreigner.title")}
               className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
                 foreignerOk
                   ? "bg-emerald-400 text-slate-950"
                   : "bg-white/10 text-slate-300"
               }`}
             >
-              Foreigners welcome
+              {t("chip.foreigner")}
             </button>
             <button
               type="button"
               aria-pressed={hasPhotos}
               onClick={() => setHasPhotos((current) => !current)}
-              title="Hide listings that have no photos."
+              title={t("chip.photos.title")}
               className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
                 hasPhotos
                   ? "bg-sky-400 text-slate-950"
                   : "bg-white/10 text-slate-300"
               }`}
             >
-              Has photos
+              {t("chip.photos")}
             </button>
             {floorFilters.map((filter) => (
               <button
@@ -1298,7 +1308,7 @@ export default function MapApp() {
                     : "bg-white/10 text-slate-300"
                 }`}
               >
-                {floorFilterLabel[filter]}
+                {floorFilterText(lang, filter)}
               </button>
             ))}
             {ageFilters.map((filter) => (
@@ -1306,11 +1316,7 @@ export default function MapApp() {
                 key={filter}
                 type="button"
                 aria-pressed={ageFilter === filter}
-                title={
-                  filter === "week"
-                    ? "Listed in the last 7 days"
-                    : "Listed in the last 30 days"
-                }
+                title={ageFilterTitle(lang, filter)}
                 onClick={() =>
                   setAgeFilter((current) => (current === filter ? undefined : filter))
                 }
@@ -1322,7 +1328,7 @@ export default function MapApp() {
                     : "bg-white/10 text-slate-300"
                 }`}
               >
-                {ageFilterLabel[filter]}
+                {ageFilterText(lang, filter)}
               </button>
             ))}
           </div>
@@ -1330,14 +1336,14 @@ export default function MapApp() {
           ) : null}
 
           <label className="relative mt-2 block">
-            <span className="sr-only">Search neighborhoods or listings</span>
+            <span className="sr-only">{t("search.label")}</span>
             <input
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") setDebouncedQuery(searchInput);
               }}
-              placeholder="Search Hongdae, Dangsan station, studio…"
+              placeholder={t("search.placeholder")}
               autoComplete="off"
               spellCheck={false}
               className="search-input w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-1.5 pr-16 text-sm text-slate-100 caret-white outline-none focus:border-sky-400"
@@ -1345,14 +1351,14 @@ export default function MapApp() {
             {searchInput ? (
               <button
                 type="button"
-                aria-label="Clear search"
+                aria-label={t("search.clear.aria")}
                 onClick={() => {
                   setSearchInput("");
                   setDebouncedQuery("");
                 }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-0.5 text-xs text-slate-400 hover:bg-white/10 hover:text-white"
               >
-                Clear
+                {t("search.clear")}
               </button>
             ) : null}
           </label>
@@ -1362,9 +1368,9 @@ export default function MapApp() {
           {uiCompact ? (
             <p className="mt-1 flex items-center justify-between gap-2 text-[11px] text-violet-200">
               <span className="min-w-0 truncate">
-                {filterSummary ?? "No filters"}
+                {filterSummary ?? t("summary.none")}
                 {visibleHomeCount
-                  ? ` · ${visibleHomeCount.toLocaleString("en-US")} on map`
+                  ? t("summary.onMap", { n: formatCount(visibleHomeCount, lang) })
                   : ""}
               </span>
               <button
@@ -1372,7 +1378,7 @@ export default function MapApp() {
                 onClick={clearChipFilters}
                 className="shrink-0 text-slate-400 hover:text-white"
               >
-                Clear filters
+                {t("summary.clear")}
               </button>
             </p>
           ) : null}
@@ -1389,19 +1395,19 @@ export default function MapApp() {
                     viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
                   }`}
                 >
-                  {mode === "saved"
-                    ? `Saved${savedHomes.length ? ` ${savedHomes.length}` : ""}`
-                    : mode}
+                  {mode === "saved" && savedHomes.length
+                    ? t("view.savedN", { n: savedHomes.length })
+                    : t(`view.${mode}`)}
                 </button>
               ))}
             </div>
             <button
               type="button"
-              aria-label="Ask a question about listings"
+              aria-label={t("ask.open.aria")}
               onClick={() => setAskOpen(true)}
               className="shrink-0 rounded-full bg-sky-400 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-sky-300 sm:text-sm"
             >
-              Ask
+              {t("ask.open")}
             </button>
           </div>
 
@@ -1415,7 +1421,7 @@ export default function MapApp() {
                   key={bucket.id}
                   type="button"
                 aria-pressed={active}
-                  title={bucket.hint}
+                  title={areaBucketHint(lang, bucket.id)}
                   onClick={() =>
                     setAreaBucketIds((current) => toggleValue(current, bucket.id))
                   }
@@ -1423,7 +1429,7 @@ export default function MapApp() {
                     active ? "bg-violet-400 text-slate-950" : "bg-white/10 text-slate-300"
                   }`}
                 >
-                  {bucket.label}
+                  {areaBucketLabel(lang, bucket.id)}
                 </button>
               );
             })}
@@ -1445,9 +1451,9 @@ export default function MapApp() {
           {!uiCompact ? (
             <div className="mt-1.5 flex items-center justify-between gap-2">
               <p className="min-w-0 truncate text-[11px] text-violet-200">
-                {filterSummary ?? "No filters"}
+                {filterSummary ?? t("summary.none")}
                 {visibleHomeCount
-                  ? ` · ${visibleHomeCount.toLocaleString("en-US")} on map`
+                  ? t("summary.onMap", { n: formatCount(visibleHomeCount, lang) })
                   : ""}
               </p>
               <button
@@ -1455,7 +1461,7 @@ export default function MapApp() {
                 onClick={clearChipFilters}
                 className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
               >
-                Clear filters
+                {t("summary.clear")}
               </button>
             </div>
           ) : null}
@@ -1471,7 +1477,7 @@ export default function MapApp() {
                   tool === nextTool ? "bg-sky-400 text-slate-950" : "bg-white/10 text-slate-300"
                 }`}
               >
-                {nextTool === "pan" ? "Move" : nextTool === "radius" ? "Radius" : "Draw"}
+                {t(`tool.${nextTool}`)}
               </button>
             ))}
             {tool === "radius" ? (
@@ -1484,7 +1490,7 @@ export default function MapApp() {
                 }}
                 className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
               >
-                Use map center
+                {t("tool.useCenter")}
               </button>
             ) : null}
             {draftPoints.length ? (
@@ -1493,7 +1499,7 @@ export default function MapApp() {
                 onClick={() => setDraftPoints((current) => current.slice(0, -1))}
                 className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
               >
-                Undo point
+                {t("tool.undo")}
               </button>
             ) : null}
             {draftPoints.length >= 3 ? (
@@ -1502,7 +1508,7 @@ export default function MapApp() {
                 onClick={finishDraw}
                 className="rounded-full bg-emerald-400 px-2.5 py-1 text-xs text-slate-950 sm:text-sm"
               >
-                Finish shape
+                {t("tool.finish")}
               </button>
             ) : null}
             {Boolean(circle ?? polygon) || draftPoints.length > 0 ? (
@@ -1511,14 +1517,14 @@ export default function MapApp() {
                 onClick={clearArea}
                 className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
               >
-                Clear area
+                {t("tool.clear")}
               </button>
             ) : null}
           </div>
 
           {tool === "radius" || circle ? (
             <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-300">
-              Radius
+              {t("tool.radius")}
               <input
                 type="range"
                 min={250}
@@ -1534,13 +1540,12 @@ export default function MapApp() {
 
           {tool === "draw" ? (
             <p className="mt-1.5 text-[11px] text-slate-400">
-              Tap the map to add corners, then Finish shape. Double-tap also
-              closes it.
+              {t("tool.drawHelp")}
             </p>
           ) : null}
           {tool === "radius" && !circle ? (
             <p className="mt-1.5 text-[11px] text-slate-400">
-              Tap the map to drop a search radius, or use map center.
+              {t("tool.radiusHelp")}
             </p>
           ) : null}
           </>
@@ -1548,14 +1553,14 @@ export default function MapApp() {
 
           {naverError ? (
             <p className="mt-1.5 flex items-start justify-between gap-2 text-[11px] text-amber-300">
-              <span>{friendlySourceError(naverError.source, naverError.message)}</span>
+              <span>{friendlySourceError(naverError.source, naverError.message, lang)}</span>
               <span className="flex shrink-0 gap-2">
                 <button
                   type="button"
                   className="text-slate-400 hover:text-white"
                   onClick={() => hideNaverError(true)}
                 >
-                  Turn off
+                  {t("err.turnOff")}
                 </button>
                 <button
                   type="button"
@@ -1635,24 +1640,24 @@ export default function MapApp() {
                 viewMode !== "best"
                   ? undefined
                   : zoom < 14 && !circle && !polygon
-                    ? "Search a neighborhood or zoom in. Best ranks homes by ₩/m², popular areas, and photo quality."
+                    ? t("list.bestZoom")
                     : recommendAi.data?.openai
-                      ? "Ranked by neighborhood, ₩/m², and listing photos. OpenAI is double-checking the top interiors."
-                      : "Ranked by neighborhood, ₩/m², and listing photos scored on this device."
+                      ? t("list.bestAi")
+                      : t("list.bestLocal")
               }
               emptyHint={
                 viewMode === "saved"
-                  ? "No saved homes yet. Tap the heart on a listing to keep it here."
+                  ? t("list.emptySaved")
                   : viewMode === "best" && zoom < 14 && !circle && !polygon
-                    ? "Search Hongdae, Dangsan station, or zoom in so Best has homes to rank."
-                    : listListings.length === 0 && groupedHomesHint(groupedHomes)
-                      ? groupedHomesHint(groupedHomes)
+                    ? t("list.emptyBest")
+                    : listListings.length === 0 && groupedHomesHint(groupedHomes, lang)
+                      ? groupedHomesHint(groupedHomes, lang)
                     : zoom < 15 && listListings.length === 0
-                      ? "Zoom in to load individual homes. The map shows how many listings are in each area."
+                      ? t("list.emptyZoom")
                     : hasPhotos
-                      ? "Every remaining home has no photos. Turn that chip off to see them."
+                      ? t("list.emptyPhotos")
                       : foreignerOk
-                        ? "Few ads say foreigners are welcome in the title. Widen the area, or turn that chip off."
+                        ? t("list.emptyForeigner")
                         : undefined
               }
               onSort={setListSort}
@@ -1688,7 +1693,7 @@ export default function MapApp() {
             }`}
           >
             {carouselListings.map((listing) => {
-              const meta = listingCardMeta(listing);
+              const meta = listingCardMeta(listing, lang);
               return (
                 <button
                   key={listing.id}
@@ -1703,16 +1708,16 @@ export default function MapApp() {
                 >
                   <ListingPhoto
                     url={listing.thumbnail}
-                    alt={listing.title ?? "Listing photo"}
+                    alt={listing.title ?? t("card.photo")}
                     width={240}
                     className="h-16 w-full object-cover"
                   />
                   <span className="block bg-slate-950 px-3 py-2">
                     <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-300">
                       <ListingAgeDot updatedAt={listing.updatedAt} />
-                      {propertyTypeLabel[listing.propertyType]}
+                      {propertyTypeText(lang, listing.propertyType)}
                       {listing.salesType
-                        ? ` · ${salesTypeFilterLabel[listing.salesType]}`
+                        ? ` · ${salesTypeFilterText(lang, listing.salesType)}`
                         : ""}
                     </span>
                     <ListingPrice

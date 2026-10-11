@@ -4,17 +4,18 @@ import "leaflet/dist/leaflet.css";
 import { type Map as LeafletMap } from "leaflet";
 import { CircleMarker, MapContainer, TileLayer } from "react-leaflet";
 import { leafletBasemap } from "~/lib/geo/basemap";
+import { useI18n } from "~/lib/i18n/react";
 import { MetroLayer } from "./MetroLayer";
 
 const BASEMAP = leafletBasemap();
 
 /** The preview map is decorative context: named, and out of the tab order. */
-function describeMap(map: LeafletMap | null) {
+function describeMap(map: LeafletMap | null, label: string) {
   const container = map?.getContainer();
   if (!container) return;
   container.setAttribute("tabindex", "-1");
   container.setAttribute("role", "img");
-  container.setAttribute("aria-label", "Map showing listing location");
+  container.setAttribute("aria-label", label);
 }
 
 export function ListingMiniMap({
@@ -26,9 +27,10 @@ export function ListingMiniMap({
   lng: number;
   className?: string;
 }) {
+  const { t } = useI18n();
   return (
     <MapContainer
-      ref={describeMap}
+      ref={(map) => describeMap(map, t("map.locationAria"))}
       key={`${lat},${lng}`}
       center={[lat, lng]}
       zoom={16}
