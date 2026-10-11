@@ -99,7 +99,9 @@ export function ListingPanel({
       ref={modal?.asideRef}
       role={modal ? "dialog" : undefined}
       aria-modal={modal ? "true" : undefined}
-      aria-labelledby={modal?.labelId}
+      aria-labelledby={
+        modal ? (priceLines.length ? `${modal.labelId} ${modal.labelId}-price` : modal.labelId) : undefined
+      }
       tabIndex={modal ? -1 : undefined}
       className={
         modal
@@ -161,7 +163,7 @@ export function ListingPanel({
         {priceLines.length ? (
           <div className="col-span-2">
             <dt className="text-slate-400">Price</dt>
-            <dd className="font-medium">
+            <dd id={modal ? `${modal.labelId}-price` : undefined} className="font-medium">
               <ListingPrice listing={detail} />
             </dd>
           </div>

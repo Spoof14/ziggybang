@@ -1,11 +1,21 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
+import { type Map as LeafletMap } from "leaflet";
 import { CircleMarker, MapContainer, TileLayer } from "react-leaflet";
 import { leafletBasemap } from "~/lib/geo/basemap";
 import { MetroLayer } from "./MetroLayer";
 
 const BASEMAP = leafletBasemap();
+
+/** The preview map is decorative context: named, and out of the tab order. */
+function describeMap(map: LeafletMap | null) {
+  const container = map?.getContainer();
+  if (!container) return;
+  container.setAttribute("tabindex", "-1");
+  container.setAttribute("role", "img");
+  container.setAttribute("aria-label", "Map showing listing location");
+}
 
 export function ListingMiniMap({
   lat,
@@ -18,6 +28,7 @@ export function ListingMiniMap({
 }) {
   return (
     <MapContainer
+      ref={describeMap}
       key={`${lat},${lng}`}
       center={[lat, lng]}
       zoom={16}

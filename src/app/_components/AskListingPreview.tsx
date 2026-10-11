@@ -75,7 +75,7 @@ export function AskListingPreview({
       <button
         type="button"
         tabIndex={-1}
-        aria-label="Back to picks"
+        aria-hidden="true"
         className="fixed inset-0 z-[1499] hidden cursor-default bg-slate-950/50 md:block"
         onClick={onClose}
       />

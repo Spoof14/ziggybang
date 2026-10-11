@@ -343,6 +343,8 @@ export function AskSearch({
 
   const picks = result?.status === "ok" ? result.picks : [];
   const hasResult = Boolean(result);
+  // While the listing preview is open, everything behind it is inert and hidden from AT.
+  const behind = preview ? ({ inert: "", "aria-hidden": true } as Record<string, unknown>) : {};
 
   return (
     <>
@@ -351,11 +353,13 @@ export function AskSearch({
         aria-label="Close ask search"
         className="fixed inset-0 z-[1400] bg-slate-950/40 md:hidden"
         onClick={onClose}
+        {...behind}
       />
       <div
         role="dialog"
         aria-label="Ask Ziggybang"
-        className={`fixed inset-x-0 bottom-0 z-[1401] flex w-auto max-w-none flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-slate-950 shadow-2xl sm:inset-x-3 sm:bottom-3 sm:rounded-2xl md:inset-auto md:bottom-3 md:left-3 md:right-auto md:top-3 md:max-h-none md:w-[calc(var(--desktop-panel)-1.5rem)] md:max-w-[calc(40%-1.5rem)] ${
+        {...behind}
+        className={`${preview ? "max-md:invisible " : ""}fixed inset-x-0 bottom-0 z-[1401] flex w-auto max-w-none flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-slate-950 shadow-2xl sm:inset-x-3 sm:bottom-3 sm:rounded-2xl md:inset-auto md:bottom-3 md:left-3 md:right-auto md:top-3 md:max-h-none md:w-[calc(var(--desktop-panel)-1.5rem)] md:max-w-[calc(40%-1.5rem)] ${
           hasResult || pending ? "max-h-[92dvh] sm:max-h-[88dvh]" : "max-h-[min(28rem,58dvh)]"
         }`}
       >
@@ -364,7 +368,7 @@ export function AskSearch({
             <p className="hidden text-[10px] uppercase tracking-[0.18em] text-sky-300 sm:block">
               Ask Ziggybang
             </p>
-            <h2 className="truncate text-sm font-semibold">
+            <h2 className="truncate text-sm font-semibold sm:whitespace-normal sm:break-words sm:leading-snug">
               <span className="text-sky-300 sm:hidden">Ask · </span>
               <span className="sm:hidden">10 picks</span>
               <span className="hidden sm:inline">Describe your ideal home — get 10 picks</span>
