@@ -37,6 +37,7 @@ import {
 } from "~/lib/listings/english";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
 import { listingGalleryUrls } from "~/lib/listings/photo";
+import { withLangPath } from "~/lib/i18n/lang";
 import {
   listingMapHref,
   mergeListingDetail,
@@ -118,7 +119,7 @@ export function ListingDetailView({
           {t("page.notFoundBody")}
         </p>
         <BackToMap
-          href="/"
+          href={withLangPath("/", lang)}
           className="mt-6 inline-flex rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
         />
       </main>
@@ -149,7 +150,7 @@ export function ListingDetailView({
   const moveIn = formatMoveIn(listing.moveIn, lang);
   const built = formatApproveYear(listing.approveDate, lang);
   const listed = listing.updatedAt;
-  const mapHref = listingMapHref(listing);
+  const mapHref = listingMapHref(listing, lang);
   const saved = isSavedHome(savedHomes, listing.id);
   const officePhone = formatKoreanPhone(listing.agent?.phone);
   const mobilePhone = formatKoreanPhone(listing.agent?.mobile);
@@ -171,7 +172,7 @@ export function ListingDetailView({
           </div>
           <div className="flex shrink-0 gap-2">
             <BackToMap
-              href={mapHref ?? "/"}
+              href={mapHref ?? withLangPath("/", lang)}
               className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/20"
             />
             <button
@@ -481,7 +482,7 @@ export function ListingDetailView({
             </a>
             <button
               type="button"
-              onClick={() => void copy("page", window.location.href)}
+              onClick={() => void copy("page", `${window.location.origin}${withLangPath(window.location.pathname, lang)}`)}
               className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/20"
             >
               {copied === "page" ? t("panel.pageLinkCopied") : t("page.copyThisPage")}

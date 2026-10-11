@@ -1,3 +1,4 @@
+import { DEFAULT_LANG, withLangPath, type Lang } from "~/lib/i18n/lang";
 import {
   propertyTypes,
   sources,
@@ -28,8 +29,9 @@ export function listingPageUrl(
     sourceId: string;
   },
   origin: string,
+  lang: Lang = DEFAULT_LANG,
 ): string {
-  return `${origin.replace(/\/$/, "")}${listingPagePath(listing)}`;
+  return `${origin.replace(/\/$/, "")}${withLangPath(listingPagePath(listing), lang)}`;
 }
 
 /** True when the listing page was opened from Ziggybang, so history.back() returns to the map. */
@@ -48,14 +50,14 @@ export function cameFromApp(
   }
 }
 
-export function listingMapHref(listing: Pick<MapListing, "lat" | "lng">): string | null {
+export function listingMapHref(listing: Pick<MapListing, "lat" | "lng">, lang: Lang = DEFAULT_LANG): string | null {
   if (!hasListingCoords(listing)) return null;
   const params = new URLSearchParams({
     lat: listing.lat.toFixed(4),
     lng: listing.lng.toFixed(4),
     z: "16",
   });
-  return `/?${params.toString()}`;
+  return withLangPath(`/?${params.toString()}`, lang);
 }
 
 export function parseListingPath(input: {

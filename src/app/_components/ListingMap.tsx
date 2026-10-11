@@ -120,7 +120,7 @@ function emitViewport(
   const center = map.getCenter();
   const zoom = map.getZoom();
   // Report the focal point (see panelOffsetPx), so the URL lines up with the place.
-  const shift = panelOffsetPx(size.x, window.innerWidth);
+  const shift = panelOffsetPx(size.x, window.innerWidth, window.innerHeight);
   onViewport({
     ...bounds,
     zoom,
@@ -182,7 +182,7 @@ function MapEvents({
     if (!focus) return;
     if (focus.bounds) {
       const size = map.getSize();
-      const shift = panelOffsetPx(size.x, window.innerWidth);
+      const shift = panelOffsetPx(size.x, window.innerWidth, window.innerHeight);
       map.flyToBounds(
         [
           [focus.bounds.south, focus.bounds.west],
@@ -203,7 +203,7 @@ function MapEvents({
       // aim at the middle of the uncovered area so a radius circle is not
       // hidden underneath it. Phones use a top sheet, so no shift there.
       const size = map.getSize();
-      const shift = panelOffsetPx(size.x, window.innerWidth);
+      const shift = panelOffsetPx(size.x, window.innerWidth, window.innerHeight);
       let center = latLng(focus.lat, focus.lng);
       if (shift) {
         const projected = map.project(center, focus.zoom);

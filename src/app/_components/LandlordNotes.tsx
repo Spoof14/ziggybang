@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "~/lib/i18n/react";
 import { sourceText } from "~/lib/listings/copy";
 import { hasHangul } from "~/lib/listings/foreigner";
@@ -41,10 +41,21 @@ export function LandlordNotes({
     },
   );
 
+  const busy = requested && (query.isLoading || query.isFetching);
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    if (!busy) {
+      setSecs(0);
+      return;
+    }
+    const started = Date.now();
+    const timer = setInterval(() => setSecs(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [busy]);
+
   if (!trimmed) return null;
 
   const translation = query.data?.source === "openai" ? query.data.english?.trim() : undefined;
-  const busy = requested && (query.isLoading || query.isFetching);
   const failed = requested && !busy && !translation;
   const terms = english ? glossaryTerms(trimmed).slice(0, 8) : [];
   const canTranslate = english && korean && status.data?.openai === true;
@@ -85,15 +96,23 @@ export function LandlordNotes({
             <button
               type="button"
               disabled={busy}
-              onClick={() => setRequested(true)}
+              onClick={() => (requested ? void query.refetch() : setRequested(true))}
               className="mt-2 rounded-full bg-white/10 px-3 py-1 text-[11px] text-sky-300 hover:bg-white/20 disabled:opacity-60"
             >
-              {busy ? t("notes.translating") : t("notes.translate")}
+              {busy
+                ? secs >= 2
+                  ? t("notes.translatingSecs", { s: secs })
+                  : t("notes.translating")
+                : failed
+                  ? t("notes.retry")
+                  : t("notes.translate")}
             </button>
           ) : null}
           {failed ? (
             <p role="status" className="mt-2 text-[11px] text-slate-500">
-              {t("notes.failed", { source: sourceText(lang, source) })}
+              {query.data?.reason === "timeout"
+                ? t("notes.timeout")
+                : t("notes.failed", { source: sourceText(lang, source) })}
             </p>
           ) : !canTranslate ? (
             <p className="mt-2 text-[11px] text-slate-500">

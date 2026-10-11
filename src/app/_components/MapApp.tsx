@@ -37,7 +37,7 @@ import {
   unrefinedPlaceLeftover,
 } from "~/lib/listings/search";
 import { listingCardMeta } from "~/lib/listings/english";
-import { formatCount, keepLangParam } from "~/lib/i18n";
+import { formatCount, keepLangParam, syncLangParam } from "~/lib/i18n";
 import { useI18n } from "~/lib/i18n/react";
 import { ageFilterText, ageFilterTitle, ageFilters, type AgeFilter } from "~/lib/listings/age";
 import { floorFilterText, floorFilters, type FloorFilter } from "~/lib/listings/floor";
@@ -78,6 +78,8 @@ import { ListingAgeDot } from "./ListingAgeDot";
 import { ListingPrice } from "./ListingPrice";
 import { BuildingAgeSlider } from "./BuildingAgeSlider";
 import { PriceFilters } from "./PriceFilters";
+import { isDeskViewport } from "~/lib/geo/layout";
+import { listingSheetInHistory } from "~/lib/listings/overlay-history";
 import { useHistoryOverlay } from "./useHistoryOverlay";
 import { usePhotoQuality } from "./usePhotoQuality";
 
@@ -262,10 +264,11 @@ export default function MapApp() {
         : (base?.circle ?? null),
     );
     setPolygon(url.circleCenter ? null : (base?.polygon ?? null));
-    if (typeof base?.uiCompact === "boolean") {
+    if (isDeskViewport() && typeof base?.uiCompact === "boolean") {
+      // The stored choice only applies to the side-panel layout; narrow/short windows start collapsed.
       setUiCompact(base.uiCompact);
     } else {
-      setUiCompact(window.innerWidth < 768);
+      setUiCompact(!isDeskViewport());
     }
     try {
       setDismissedNaver(window.localStorage.getItem(NAVER_HIDE_KEY) === "1");
@@ -408,7 +411,9 @@ export default function MapApp() {
   useEffect(() => {
     const ui = loadAskUi();
     const sharedPreview =
-      Boolean(previewFromSearch(window.location.search)) && loadAskSession()?.result?.status === "ok";
+      Boolean(previewFromSearch(window.location.search)) &&
+      !listingSheetInHistory(window.history.state) &&
+      loadAskSession()?.result?.status === "ok";
     if (ui?.open === true || sharedPreview) setAskOpen(true);
     askUiReady.current = true;
   }, []);
@@ -842,7 +847,7 @@ export default function MapApp() {
       ageFilter,
       maxBuildingAge,
     });
-    const href = `${window.location.origin}${window.location.pathname}${next}`;
+    const href = `${window.location.origin}${window.location.pathname}${syncLangParam(next, lang)}`;
     try {
       await navigator.clipboard.writeText(href);
       setShareHint(t("header.copied"));
@@ -852,6 +857,7 @@ export default function MapApp() {
     window.setTimeout(() => setShareHint(null), 1600);
   }, [
     t,
+    lang,
     areaBucketIds,
     circle,
     urlView,
@@ -1028,6 +1034,33 @@ export default function MapApp() {
     observer.observe(node);
     return () => observer.disconnect();
   }, [showList, uiCompact, filterSummary]);
+  // The map attribution/controls sit above the carousel, whatever its real height is
+  // (cards grow with text size and zoom), so measure it instead of guessing a margin.
+  const mapChromeRef = useRef<HTMLDivElement>(null);
+  const carouselShown = viewMode === "map" && visible.listings.length > 0;
+  useEffect(() => {
+    const chrome = mapChromeRef.current;
+    const node = carouselRef.current;
+    if (!chrome) return;
+    if (!carouselShown || !node) {
+      chrome.style.removeProperty("--carousel-h");
+      return;
+    }
+    const update = () => {
+      const rect = node.getBoundingClientRect();
+      const covered = node.offsetParent === null || getComputedStyle(node).visibility === "hidden" ? 0 : rect.height;
+      if (covered > 0) chrome.style.setProperty("--carousel-h", `${Math.round(covered + 16 + 8)}px`);
+      else chrome.style.removeProperty("--carousel-h");
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [carouselShown, uiCompact, selected, viewMode, carouselListings.length]);
   const listListings = viewMode === "saved" ? savedHomes : visible.listings;
   // Naver's count includes grouped inventory that has no individual home to
   // show. Say so instead of leaving "Naver 1,643" next to a short list.
@@ -1164,15 +1197,15 @@ export default function MapApp() {
     >
       <header
         ref={headerRef}
-        className="pointer-events-none absolute inset-x-0 top-0 z-[1300] p-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:right-auto md:w-[var(--desktop-panel)] md:max-h-[calc(100dvh-0.5rem)]"
+        className="pointer-events-none absolute inset-x-0 top-0 z-[1300] p-3 pt-[max(0.75rem,env(safe-area-inset-top))] desk:right-auto desk:w-[var(--desktop-panel)] desk:max-h-[calc(100dvh-0.5rem)]"
       >
-        <div className="pointer-events-auto mx-auto max-h-[min(62dvh,calc(100dvh-1.5rem))] w-full md:max-h-[calc(100dvh-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-slate-950/75 p-2.5 shadow-xl backdrop-blur-md md:mx-0 md:max-w-none">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-sky-300">
+        <div className="pointer-events-auto mx-auto max-h-[min(62dvh,calc(100dvh-1.5rem))] short:max-h-[50dvh] tiny:max-h-[calc(100dvh-1.5rem)] w-full desk:max-h-[calc(100dvh-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-slate-950/75 p-2.5 shadow-xl backdrop-blur-md desk:mx-0 desk:max-w-none">
+          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+            <div className="min-w-[11rem] flex-1">
+              <p className="flex flex-wrap items-baseline gap-x-2 text-[10px] uppercase tracking-[0.18em] text-sky-300">
                 {t("app.name")}
                 {refreshing && !waitingForFirst ? (
-                  <span className="ml-2 tracking-normal text-slate-400">
+                  <span className="whitespace-nowrap tracking-normal text-slate-400">
                     {t("header.updating")}
                   </span>
                 ) : null}
@@ -1186,7 +1219,7 @@ export default function MapApp() {
                 </p>
               ) : null}
             </div>
-            <div className="flex shrink-0 flex-wrap items-start justify-end gap-1.5">
+            <div className="flex shrink-0 flex-wrap items-start justify-end gap-1.5 narrow:w-full narrow:justify-start">
               <button
                 type="button"
                 onClick={() => void copySearchLink()}
@@ -1583,13 +1616,14 @@ export default function MapApp() {
 
       <div className="absolute inset-0 flex">
         <div
+          ref={mapChromeRef}
           data-map-chrome={
             viewMode === "map" && visible.listings.length ? "carousel" : undefined
           }
           data-filters={uiCompact ? "compact" : "open"}
           className={
             showList
-              ? "pointer-events-none invisible absolute inset-0 z-0 h-full md:visible md:pointer-events-auto md:static md:z-auto md:w-[46%]"
+              ? "pointer-events-none invisible absolute inset-0 z-0 h-full desk:visible desk:pointer-events-auto desk:static desk:z-auto desk:w-[46%]"
               : "h-full min-h-0 min-w-0 flex-1"
           }
         >
@@ -1612,7 +1646,7 @@ export default function MapApp() {
         {showList ? (
           <div
             data-list-panel="portrait"
-            className="relative z-[1200] h-full min-h-0 w-full min-w-0 flex-1 bg-slate-950 max-md:pt-[var(--header-h)] md:pt-0"
+            className="relative z-[1200] h-full min-h-0 w-full min-w-0 flex-1 bg-slate-950 mobile:pt-[var(--header-h)] desk:pt-0"
             style={{ ["--header-h" as string]: `${headerHeight}px` }}
           >
             <ListingList
@@ -1694,10 +1728,10 @@ export default function MapApp() {
         {viewMode === "map" && visible.listings.length ? (
           <div
             ref={carouselRef}
-            className={`pointer-events-auto absolute bottom-4 left-4 right-4 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar md:left-[calc(var(--desktop-panel)+1.25rem)] ${
-              selected ? "md:right-[calc(var(--desktop-panel)+1rem)]" : ""
-            } ${uiCompact ? "" : "max-md:hidden"} ${
-              selected ? "max-md:invisible max-md:pointer-events-none" : ""
+            className={`pointer-events-auto absolute bottom-4 left-4 right-4 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar desk:left-[calc(var(--desktop-panel)+1.25rem)] ${
+              selected ? "desk:right-[calc(var(--desktop-panel)+1rem)]" : ""
+            } ${uiCompact ? "" : "mobile:hidden"} tiny:hidden ${
+              selected ? "mobile:invisible mobile:pointer-events-none" : ""
             }`}
           >
             {carouselListings.map((listing) => {
@@ -1718,9 +1752,9 @@ export default function MapApp() {
                     url={listing.thumbnail}
                     alt={listing.title ?? t("card.photo")}
                     width={240}
-                    className="h-16 w-full object-cover"
+                    className="h-16 w-full object-cover short:hidden"
                   />
-                  <span className="block bg-slate-950 px-3 py-2">
+                  <span className="block bg-slate-950 px-3 py-2 short:py-1.5">
                     <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-300">
                       <ListingAgeDot updatedAt={listing.updatedAt} />
                       {propertyTypeText(lang, listing.propertyType)}
@@ -1747,7 +1781,7 @@ export default function MapApp() {
       {askPins ? (
         <div
           role="status"
-          className="pointer-events-auto absolute right-3 z-[1150] flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 rounded-2xl border border-sky-400/40 bg-slate-950/95 px-3 py-2 text-xs text-slate-100 shadow-xl top-[var(--ask-top)] max-md:left-3 md:left-[calc(var(--desktop-panel)+1.25rem)] md:right-auto md:top-3"
+          className="pointer-events-auto absolute right-3 z-[1150] flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 rounded-2xl border border-sky-400/40 bg-slate-950/95 px-3 py-2 text-xs text-slate-100 shadow-xl top-[var(--ask-top)] mobile:left-3 desk:left-[calc(var(--desktop-panel)+1.25rem)] desk:right-auto desk:top-3"
           style={{ ["--ask-top" as string]: `${headerHeight + 8}px` }}
         >
           <span>

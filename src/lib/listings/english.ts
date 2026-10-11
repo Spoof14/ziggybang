@@ -6,6 +6,7 @@ import {
   propertyTypeText,
   salesTypeFilterText,
 } from "./copy";
+import { placeEn, placeKo, type Place } from "~/lib/geo/places";
 import { hasHangul } from "./foreigner";
 import { matchPlaceInAddress } from "./search";
 import { type MapListing } from "./types";
@@ -52,44 +53,58 @@ const DISTRICT_LABEL: Record<string, string> = {
   부산광역시: "Busan",
 };
 
-function titleCase(value: string): string {
-  return value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+/** The Korean 구 named in an address ("마포구", or Latin "Mapo-gu" mapped back), if any. */
+export function addressGu(address?: string): string | null {
+  if (!address) return null;
+  const korean = /[가-힣]+구/.exec(address)?.[0];
+  if (korean) return korean;
+  const latin = /([A-Za-z]+)-gu/i.exec(address)?.[0]?.toLowerCase();
+  if (!latin) return null;
+  for (const [ko, en] of Object.entries(DISTRICT_LABEL)) if (en.toLowerCase() === latin) return ko;
+  return null;
+}
+
+/**
+ * Neighbourhood from the place table, but never one that contradicts the
+ * address's own district (a "Seongsu" hit inside a 강남구 address is dropped).
+ */
+function consistentPlace(address?: string): Place | undefined {
+  if (!address) return undefined;
+  const place = matchPlaceInAddress(address);
+  if (!place) return undefined;
+  const gu = addressGu(address);
+  if (place.gu && gu && place.gu !== gu) return undefined;
+  return place;
 }
 
 export function englishNeighborhood(address?: string): string | null {
-  if (!address) return null;
-  const place = matchPlaceInAddress(address);
-  if (!place) return null;
-  return titleCase(place.names[0] ?? place.id);
+  const place = consistentPlace(address);
+  return place ? placeEn(place) : null;
 }
 
 export function englishDistrict(address?: string): string | null {
   if (!address) return null;
-  let best: { label: string; length: number } | undefined;
+  let best: { label: string; length: number; gu: boolean } | undefined;
   for (const [korean, label] of Object.entries(DISTRICT_LABEL)) {
     if (!address.includes(korean)) continue;
-    if (!best || korean.length > best.length) {
-      best = { label, length: korean.length };
+    // A 구 beats a city ("서울특별시 성동구" is Seongdong-gu, not "Seoul").
+    const gu = korean.endsWith("구");
+    if (!best || (gu && !best.gu) || (gu === best.gu && korean.length > best.length)) {
+      best = { label, length: korean.length, gu };
     }
   }
   const latin = (/[A-Za-z-]+-gu/i.exec(address))?.[0];
   if (latin) {
     const label = `${latin.charAt(0).toUpperCase()}${latin.slice(1).toLowerCase()}`;
-    if (!best || latin.length > best.length) return label;
+    if (!best?.gu || latin.length > best.length) return label;
   }
   return best?.label ?? null;
 }
 
 /** Korean neighborhood name for a listing ("홍대"), when the place table knows it. */
 export function koreanNeighborhood(address?: string): string | null {
-  if (!address) return null;
-  const place = matchPlaceInAddress(address);
-  if (!place) return null;
-  return place.names.find((name) => hasHangul(name)) ?? null;
+  const place = consistentPlace(address);
+  return place ? placeKo(place) : null;
 }
 
 function localNeighborhood(address: string | undefined, lang: Lang): string | null {

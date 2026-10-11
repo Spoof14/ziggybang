@@ -91,8 +91,9 @@ export function padBoundsByMeters(bounds: Bounds, meters: number): Bounds {
 export function panelOffsetPx(
   mapWidthPx: number,
   windowWidthPx: number,
+  windowHeightPx = Number.POSITIVE_INFINITY,
 ): number {
-  const panelCovers = windowWidthPx >= 768 && mapWidthPx >= windowWidthPx * 0.8;
+  const panelCovers = windowWidthPx >= 1024 && windowHeightPx >= 540 && mapWidthPx >= windowWidthPx * 0.8;
   return panelCovers ? mapWidthPx * 0.2 : 0;
 }
 

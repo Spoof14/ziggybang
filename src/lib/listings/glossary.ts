@@ -12,12 +12,34 @@ const GLOSSARY: ReadonlyArray<readonly [string, string]> = [
   ["반려견", "dogs"],
   ["반려묘", "cats"],
   ["엘리베이터", "elevator"],
+  ["엘베", "elevator"],
   ["주차가능", "parking available"],
   ["주차불가", "no parking"],
   ["주차", "parking"],
   ["풀옵션", "fully furnished"],
   ["옵션", "furnished (options)"],
   ["신축", "new build"],
+  ["몰세권", "near a shopping mall"],
+  ["숲세권", "near a forest/park"],
+  ["초품아", "elementary school next door"],
+  ["반려동물가능", "pets allowed"],
+  ["보안시설", "security facilities"],
+  ["보안", "security"],
+  ["방범창", "security window bars"],
+  ["무인택배함", "parcel locker"],
+  ["풀옵", "fully furnished"],
+  ["에어컨", "air conditioner"],
+  ["세탁기", "washing machine"],
+  ["냉장고", "fridge"],
+  ["인덕션", "induction cooktop"],
+  ["베란다", "balcony"],
+  ["테라스", "terrace"],
+  ["공원", "park"],
+  ["학세권", "near schools"],
+  ["병세권", "near a hospital"],
+  ["스세권", "near a Starbucks"],
+  ["맥세권", "near a McDonald's"],
+  ["CCTV", "CCTV"],
   ["올수리", "fully renovated"],
   ["리모델링", "renovated"],
   ["역세권", "near a subway station"],
@@ -39,6 +61,7 @@ const GLOSSARY: ReadonlyArray<readonly [string, string]> = [
   ["옥탑방", "rooftop unit"],
   ["옥탑", "rooftop"],
   ["도보", "walk"],
+  ["협의", "negotiable"],
   ["가능", "OK"],
   ["불가", "not allowed"],
 ];
@@ -63,13 +86,16 @@ export function glossaryTerms(text: string | undefined | null): GlossaryTerm[] {
 }
 
 /**
- * Normalises a Korean title for English readers by swapping glossary terms
- * and leaving every other word untouched. Korean users get the text unchanged.
+ * English label for a short structured tag ("몰세권", "분리형 복층"): only when
+ * every Korean word in it is a glossary term. Anything else (a free-text
+ * sentence, a neighbourhood name) is returned untouched, never half-translated.
  */
 export function glossText(text: string | undefined | null, lang: Lang = DEFAULT_LANG): string {
   const value = text?.trim() ?? "";
   if (!value || lang === "ko" || !hasHangul(value)) return value;
   let out = value;
   for (const [ko, en] of ORDERED) out = out.split(ko).join(` ${en} `);
-  return out.replace(/\s+/g, " ").trim();
+  // Particles/words the glossary does not know would leave Korean behind: keep the original.
+  if (hasHangul(out)) return value;
+  return out.replace(/\s+/g, " ").replace(/\s+([,.;·])/g, "$1").trim();
 }

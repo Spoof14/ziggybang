@@ -23,8 +23,10 @@ body {
   margin-right: 0.75rem;
 }
 
+/* MapApp measures the bottom carousel and sets --carousel-h (its height + gap), so the
+   attribution and map buttons always sit just above it. */
 [data-map-chrome="carousel"] .leaflet-bottom.leaflet-right {
-  margin-bottom: 9.75rem;
+  margin-bottom: var(--carousel-h, 0.75rem);
 }
 
 @media (max-width: 639px) {
@@ -32,20 +34,11 @@ body {
     max-width: 70%;
     font-size: 9px;
   }
-  /* Keep map buttons and attribution clear of the bottom listing carousel. */
-  [data-map-chrome="carousel"] .leaflet-bottom.leaflet-right {
-    margin-bottom: 10.5rem;
-  }
-  [data-filters="open"][data-map-chrome="carousel"]
-    .leaflet-bottom.leaflet-right {
-    margin-bottom: 0.75rem;
-  }
 }
 
-@media (max-width: 767px) {
-  [data-filters="open"][data-map-chrome="carousel"]
-    .leaflet-bottom.leaflet-right {
-    margin-bottom: 0.75rem;
+@media (max-height: 539px) {
+  .leaflet-control-attribution {
+    font-size: 9px;
   }
 }
 

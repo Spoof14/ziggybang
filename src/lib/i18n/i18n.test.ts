@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LANGS, messages, resolveLang, parseLang, syncLangParam, keepLangParam, t, tn, formatCount } from "./index";
+import { LANGS, messages, resolveLang, parseLang, syncLangParam, keepLangParam, withLangPath, resolveServerLang, t, tn, formatCount } from "./index";
 
 const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!).sort();
 
@@ -71,9 +71,20 @@ describe("language resolution", () => {
   });
   it("syncs and keeps the lang param", () => {
     expect(syncLangParam("?a=1&lang=en", "ko")).toBe("?a=1&lang=ko");
-    expect(syncLangParam("?a=1", "ko")).toBe("?a=1");
+    expect(syncLangParam("?a=1", "ko")).toBe("?a=1&lang=ko");
+    expect(syncLangParam("", "ko")).toBe("?lang=ko");
+    expect(syncLangParam("?a=1&lang=ko", "en")).toBe("?a=1");
+    expect(syncLangParam("?lang=ko", "en")).toBe("");
+    expect(withLangPath("/listing/a/b/c", "ko")).toBe("/listing/a/b/c?lang=ko");
+    expect(withLangPath("/?z=1#x", "ko")).toBe("/?z=1&lang=ko#x");
+    expect(withLangPath("/listing/a", "en")).toBe("/listing/a");
+    expect(resolveServerLang(undefined, "ko")).toBe("ko");
+    expect(resolveServerLang("en", "ko")).toBe("en");
+    expect(resolveServerLang(["ko"], undefined)).toBe("ko");
+    expect(resolveServerLang("xx", "zz")).toBe("en");
     expect(keepLangParam("?a=2", "?lang=ko")).toBe("?a=2&lang=ko");
     expect(keepLangParam("?a=2", "?x=1")).toBe("?a=2");
+    expect(keepLangParam("?a=2", "?lang=en")).toBe("?a=2");
   });
   it("formats counts per locale", () => {
     expect(formatCount(1234567, "en")).toBe("1,234,567");

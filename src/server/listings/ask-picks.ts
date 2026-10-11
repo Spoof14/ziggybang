@@ -135,8 +135,8 @@ function languageInstruction(lang: Lang): string {
     : "English";
 }
 
-function describeForPrompt(c: AskConstraints): string {
-  const chips = constraintChips(c).map((chip) => chip.label);
+function describeForPrompt(c: AskConstraints, lang: Lang = DEFAULT_LANG): string {
+  const chips = constraintChips(c, lang).map((chip) => chip.label);
   if (!c.place || c.place.kind === "viewport") chips.unshift("Around the current map view");
   return chips.join("; ") || "none stated";
 }
@@ -164,7 +164,7 @@ async function rankWithAi(
         role: "user",
         content: JSON.stringify({
           ...(lastRequest ? { latestRequest: lastRequest } : {}),
-          appliedConstraints: describeForPrompt(c),
+          appliedConstraints: describeForPrompt(c, lang),
           preferences: c.preferences ?? [],
           candidates,
         }),
@@ -382,7 +382,7 @@ export async function computeAskPicks(
 }
 
 function basicSummary(picks: MapListing[], candidates: number, c: AskConstraints, lang: Lang): string {
-  const placeName = c.place?.kind === "place" ? displayPlace(c.place.name) : undefined;
+  const placeName = c.place?.kind === "place" ? displayPlace(c.place.name, lang) : undefined;
   const typeWord =
     c.propertyTypes?.length === 1
       ? propertyTypeText(lang, c.propertyTypes[0]!).toLowerCase()

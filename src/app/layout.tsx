@@ -4,6 +4,8 @@ import { Analytics } from "@vercel/analytics/next";
 import { GeistSans } from "geist/font/sans";
 import { type Metadata, type Viewport } from "next";
 
+import { headers } from "next/headers";
+import { LANG_HEADER, parseLang, DEFAULT_LANG } from "~/lib/i18n/lang";
 import { LangProvider } from "~/lib/i18n/react";
 import { TRPCReactProvider } from "~/trpc/react";
 import { canonicalSiteUrl } from "~/lib/site-url";
@@ -47,13 +49,15 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Resolved by middleware from ?lang= / the lang cookie.
+  const lang = parseLang((await headers()).get(LANG_HEADER)) ?? DEFAULT_LANG;
   return (
-    <html lang="en" className={`${GeistSans.variable}`}>
+    <html lang={lang} className={`${GeistSans.variable}`}>
       <body className="bg-slate-950">
-        <LangProvider>
+        <LangProvider initialLang={lang}>
           <TRPCReactProvider>{children}</TRPCReactProvider>
         </LangProvider>
         {process.env.VERCEL ? <Analytics /> : null}

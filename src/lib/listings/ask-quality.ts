@@ -3,12 +3,11 @@
  * floor/size classes, duplicate collapsing, honest area labels, grounding of
  * AI reasons, and the deterministic summary.
  */
-import { places } from "~/lib/geo/places";
+import { placeEn, placeKo, places } from "~/lib/geo/places";
 import { distanceM } from "~/lib/geo/shape";
 import { DEFAULT_LANG, t, tn, type Lang } from "~/lib/i18n";
 import { formatKrwFromManwon, formatFloor } from "./copy";
 import { englishDistrict, englishNeighborhood, koreanNeighborhood } from "./english";
-import { hasHangul } from "./foreigner";
 import { type MapListing } from "./types";
 
 /** Deposit → monthly conversion used when comparing "cheap" homes (5% a year). */
@@ -190,20 +189,17 @@ export function areaLabel(
   l: Pick<MapListing, "lat" | "lng" | "address">,
   lang: Lang = DEFAULT_LANG,
 ): string | null {
-  let best: { name: string; korean: string | undefined; d: number } | undefined;
+  let best: { place: (typeof LANDMARKS)[number]; d: number } | undefined;
   for (const p of LANDMARKS) {
     const d = distanceM(l, p);
-    if (d <= 700 && (!best || d < best.d)) {
-      best = { name: p.names[0]!, korean: p.names.find((n) => hasHangul(n)), d };
-    }
+    if (d <= 700 && (!best || d < best.d)) best = { place: p, d };
   }
-  const title = (s: string) => s.replace(/(^|[\s-])([a-z])/g, (_, a: string, b: string) => `${a}${b.toUpperCase()}`);
   if (lang === "ko") {
-    if (best?.korean) return t(lang, "ask.area.near", { name: best.korean });
+    if (best) return t(lang, "ask.area.near", { name: placeKo(best.place) });
     return koreanAddressForArea(l.address);
   }
   const district = englishDistrict(l.address);
-  if (best) return t(lang, "ask.area.near", { name: title(best.name) });
+  if (best) return t(lang, "ask.area.near", { name: placeEn(best.place) });
   const hood = englishNeighborhood(l.address);
   if (hood && district) return `${hood} · ${district}`;
   return hood ?? district ?? null;

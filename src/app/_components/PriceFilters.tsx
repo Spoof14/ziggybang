@@ -93,7 +93,7 @@ export function PriceFilters({
   const hint = describePriceFilter(value, lang);
   return (
     <div className="mt-1.5">
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-2">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 desk:grid-cols-2">
         <WonField
           label={t("price.minDeposit")}
           ariaLabel={t("price.minDeposit.aria")}

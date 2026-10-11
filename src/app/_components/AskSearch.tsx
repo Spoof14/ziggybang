@@ -9,6 +9,8 @@ import {
   similarConstraints,
   stripNearWrapper,
 } from "~/lib/listings/ask-followup";
+import { listingSheetInHistory } from "~/lib/listings/overlay-history";
+import { isDeskViewport } from "~/lib/geo/layout";
 import { areaLabel } from "~/lib/listings/ask-quality";
 import { useI18n } from "~/lib/i18n/react";
 import {
@@ -67,7 +69,7 @@ function similarLabel(listing: MapListing, lang: Lang): string {
 }
 
 function isMobile(): boolean {
-  return typeof window !== "undefined" && window.innerWidth < 768;
+  return typeof window !== "undefined" && !isDeskViewport();
 }
 
 export function AskSearch({
@@ -147,8 +149,8 @@ export function AskSearch({
       const ref = previewFromSearch(window.location.search);
       const pick = findPreviewListing(restoredPicks, ref);
       if (pick) setPreview(pick.listing);
-      else if (ref) dropPreviewParam();
-    } else if (previewFromSearch(window.location.search)) {
+      else if (ref && !listingSheetInHistory(window.history.state)) dropPreviewParam();
+    } else if (previewFromSearch(window.location.search) && !listingSheetInHistory(window.history.state)) {
       dropPreviewParam();
     }
   }, []);
@@ -248,7 +250,7 @@ export function AskSearch({
   );
   const where =
     constraints?.place?.kind === "place"
-      ? displayPlace(constraints.place.name)
+      ? displayPlace(constraints.place.name, lang)
       : undefined;
 
   /**
@@ -342,14 +344,22 @@ export function AskSearch({
 
   // Switching language re-ranks the same constraints so the summary and
   // reasons are rewritten in the new UI language.
+  // Runs when the panel is open (also right after opening with a stale stored result).
+  const regenFor = useRef<Lang | null>(null);
   useEffect(() => {
-    if (!result || !constraints || resultLang === lang || inFlight.current) return;
+    if (resultLang === lang) {
+      regenFor.current = null;
+      return;
+    }
+    if (!open || !result || !constraints || inFlight.current || regenFor.current === lang) return;
+    regenFor.current = lang;
     rerun(constraints);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang]);
+  }, [lang, open, result, resultLang, constraints]);
 
   function runSimilar(listing: MapListing, rank?: number) {
-    const label = rank ? t("ask.similar.label", { rank }) : similarLabel(listing, lang);
+    void rank;
+    const label = similarLabel(listing, lang);
     const next = similarConstraints(priorPickFromListing(rank ?? 0, listing, similarLabel(listing, lang)));
     next.similarTo = { id: listing.id, label };
     setMessages([]);
@@ -412,7 +422,7 @@ export function AskSearch({
       <button
         type="button"
         aria-label={t("ask.closeAria")}
-        className="fixed inset-0 z-[1400] bg-slate-950/40 md:hidden"
+        className="fixed inset-0 z-[1400] bg-slate-950/40 desk:hidden"
         onClick={onClose}
         {...behind}
       />
@@ -420,7 +430,7 @@ export function AskSearch({
         role="dialog"
         aria-label={t("ask.dialog")}
         {...behind}
-        className={`${preview ? "max-md:invisible " : ""}fixed inset-x-0 bottom-0 z-[1401] flex w-auto max-w-none flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-slate-950 shadow-2xl sm:inset-x-3 sm:bottom-3 sm:rounded-2xl md:inset-auto md:bottom-3 md:left-3 md:right-auto md:top-3 md:max-h-none md:w-[calc(var(--desktop-panel)-1.5rem)] md:max-w-[calc(40%-1.5rem)] ${
+        className={`${preview ? "mobile:invisible " : ""}fixed inset-x-0 bottom-0 z-[1401] flex w-auto max-w-none flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-slate-950 shadow-2xl sm:inset-x-3 sm:bottom-3 sm:rounded-2xl desk:inset-auto desk:bottom-3 desk:left-3 desk:right-auto desk:top-3 desk:max-h-none desk:w-[calc(var(--desktop-panel)-1.5rem)] desk:max-w-[calc(40%-1.5rem)] ${
           hasResult || pending ? "max-h-[92dvh] sm:max-h-[88dvh]" : "max-h-[min(28rem,58dvh)]"
         }`}
       >

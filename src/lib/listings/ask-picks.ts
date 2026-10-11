@@ -4,6 +4,7 @@
  * validation of whatever the AI hands back.
  */
 import { distanceM, pointInCircle } from "~/lib/geo/shape";
+import { placeDisplayName } from "~/lib/geo/places";
 import { type SearchSnapshot } from "./ai-search";
 import { DEFAULT_LANG, t, type Lang, type MessageKey } from "~/lib/i18n";
 import { ageFilterText, type AgeFilter } from "./age";
@@ -166,8 +167,8 @@ export function salesOf(c: AskConstraints): SalesType[] {
 }
 
 /** "guro digital" → "Guro Digital"; Hangul and mixed names pass through. */
-export function displayPlace(name: string): string {
-  return name.replace(/(^|[\s-])([a-z])/g, (_, sep: string, ch: string) => `${sep}${ch.toUpperCase()}`);
+export function displayPlace(name: string, lang: Lang = DEFAULT_LANG): string {
+  return placeDisplayName(name, lang);
 }
 
 function formatRadius(radiusM: number): string {
@@ -192,7 +193,7 @@ export function constraintChips(c: AskConstraints, lang: Lang = DEFAULT_LANG): A
     chips.push({
       key: "place",
       label: t(lang, "ask.chip.near", {
-        place: displayPlace(c.place.name),
+        place: displayPlace(c.place.name, lang),
         radius: formatRadius(c.place.radiusM),
       }),
     });
@@ -230,11 +231,11 @@ export function constraintChips(c: AskConstraints, lang: Lang = DEFAULT_LANG): A
   if (c.commute) {
     chips.push({
       key: "commute",
-      label: t(lang, "ask.chip.commute", { min: c.commute.maxMin, dest: displayPlace(c.commute.name) }),
+      label: t(lang, "ask.chip.commute", { min: c.commute.maxMin, dest: displayPlace(c.commute.name, lang) }),
     });
   }
   if (c.similarTo) {
-    chips.push({ key: "similar", label: t(lang, "ask.chip.similar", { label: c.similarTo.label }) });
+    chips.push({ key: "similar", label: t(lang, "ask.chip.similar", { label: displayPlace(c.similarTo.label, lang) }) });
   }
   for (const pref of c.preferences ?? []) {
     chips.push({ key: `pref:${pref}`, label: t(lang, "ask.chip.prefer", { pref: preferenceText(pref, lang) }) });
@@ -562,7 +563,7 @@ function genericReason(
   if (money && parts.price >= 0.6) {
     phrases.push([parts.price, pick(l.salesType === "jeonse" ? "ask.r.jeonseLow" : "ask.r.rentLow", 3, { money })]);
   }
-  const where = c.place?.kind === "place" ? displayPlace(c.place.name) : t(lang, "ask.r.center");
+  const where = c.place?.kind === "place" ? displayPlace(c.place.name, lang) : t(lang, "ask.r.center");
   const meters = Math.round(dist / 10) * 10;
   if (parts.dist >= 0.5) {
     phrases.push([parts.dist * 0.9, pick("ask.r.near", 3, { m: meters, where })]);
