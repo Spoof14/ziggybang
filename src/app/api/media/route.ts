@@ -1,16 +1,9 @@
 import { NextResponse } from "next/server";
+import { allowedMediaHost, isAllowedMediaUrl } from "~/lib/listings/media-host";
 
 /** Naver listing photos are also geo-blocked outside Korea. */
 export const preferredRegion = "icn1";
 export const runtime = "nodejs";
-
-const ALLOWED_HOSTS = new Set([
-  "ic.zigbang.com",
-  "landthumb-phinf.pstatic.net",
-  "ssl.pstatic.net",
-  "img.peterpanz.com",
-  "peterpanz.com",
-]);
 
 export async function GET(request: Request) {
   const raw = new URL(request.url).searchParams.get("u");
@@ -26,7 +19,7 @@ export async function GET(request: Request) {
   }
 
   const host = target.hostname.replace(/^www\./, "");
-  if (![...ALLOWED_HOSTS].some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) {
+  if (!isAllowedMediaUrl(target)) {
     return NextResponse.json({ error: "Host not allowed" }, { status: 400 });
   }
 
@@ -72,7 +65,7 @@ async function fetchWithRetry(url: string, referer: string): Promise<Response | 
   let last: Response | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const response = await fetch(url, {
+      const response = await fetchFollowingAllowed(url, {
         headers: {
           accept: "image/avif,image/webp,image/*,*/*;q=0.8",
           referer,
@@ -81,7 +74,7 @@ async function fetchWithRetry(url: string, referer: string): Promise<Response | 
         },
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
         next: { revalidate: 86400 },
-      });
+      } as RequestInit);
       if (response.ok || response.status < 500) return response;
       last = response;
     } catch {
@@ -89,4 +82,21 @@ async function fetchWithRetry(url: string, referer: string): Promise<Response | 
     }
   }
   return last;
+}
+
+/** Follows redirects by hand so a redirect can never leave the allowlist (SSRF). */
+async function fetchFollowingAllowed(url: string, init: RequestInit): Promise<Response> {
+  let current = url;
+  for (let hop = 0; hop < 3; hop++) {
+    const response = await fetch(current, { ...init, redirect: "manual" });
+    if (response.status < 300 || response.status >= 400) return response;
+    const location = response.headers.get("location");
+    if (!location) return response;
+    const next = new URL(location, current);
+    if (!isAllowedMediaUrl(next) || !allowedMediaHost(next.hostname)) {
+      throw new Error("redirect target not allowed");
+    }
+    current = next.toString();
+  }
+  throw new Error("too many redirects");
 }
