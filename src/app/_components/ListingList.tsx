@@ -55,6 +55,7 @@ export function ListingList({
   onSort,
   onSelect,
   onToggleSave,
+  onSimilar,
   onLoadMore,
   scrollToId,
   scrollToAt,
@@ -79,6 +80,8 @@ export function ListingList({
   onSort: (sort: ListSort) => void;
   onSelect: (listing: MapListing) => void;
   onToggleSave: (listing: MapListing) => void;
+  /** "Similar to this": runs Ask anchored on the listing. */
+  onSimilar?: (listing: MapListing) => void;
   onLoadMore?: () => void;
   scrollToId?: string;
   scrollToAt?: number;
@@ -269,6 +272,16 @@ export function ListingList({
                       >
                         {t("list.page")}
                       </ListingPageLink>
+                      {onSimilar ? (
+                        <button
+                          type="button"
+                          onClick={() => onSimilar(listing)}
+                          aria-label={t("ask.similar.aria")}
+                          className="rounded-full bg-white/10 px-2 py-1 text-center text-[11px] text-sky-300"
+                        >
+                          {t("ask.similar.btn")}
+                        </button>
+                      ) : null}
                       <a
                         href={listing.url}
                         target="_blank"

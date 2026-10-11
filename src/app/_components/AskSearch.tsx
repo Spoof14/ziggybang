@@ -3,6 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type SearchSnapshot } from "~/lib/listings/ai-search";
 import { formatCount, type Lang } from "~/lib/i18n";
+import {
+  FOLLOWUP_CHIPS,
+  priorPickFromListing,
+  similarConstraints,
+  stripNearWrapper,
+} from "~/lib/listings/ask-followup";
+import { areaLabel } from "~/lib/listings/ask-quality";
 import { useI18n } from "~/lib/i18n/react";
 import {
   askSuggestions,
@@ -54,6 +61,11 @@ function progressText(
   return t("ask.progress3", { s: elapsed });
 }
 
+function similarLabel(listing: MapListing, lang: Lang): string {
+  const area = areaLabel(listing, lang);
+  return (area ? stripNearWrapper(area) : (listing.title ?? listing.id)).slice(0, 40);
+}
+
 function isMobile(): boolean {
   return typeof window !== "undefined" && window.innerWidth < 768;
 }
@@ -69,7 +81,10 @@ export function AskSearch({
   onApplyFilters,
   onClearFilters,
   onShowPicks,
+  similarRequest,
 }: {
+  /** "Similar to this" from a card or panel: runs Ask anchored on that listing. */
+  similarRequest?: { listing: MapListing; nonce: number } | null;
   open: boolean;
   viewport: { lat: number; lng: number };
   currentSnapshot: SearchSnapshot;
@@ -224,6 +239,13 @@ export function AskSearch({
     () => (constraints ? constraintChips(constraints, lang) : []),
     [constraints, lang],
   );
+  const priorPicks = useMemo(
+    () =>
+      (result?.status === "ok" ? result.picks : []).slice(0, 10).map((pick) =>
+        priorPickFromListing(pick.rank, pick.listing, similarLabel(pick.listing, lang)),
+      ),
+    [result, lang],
+  );
   const where =
     constraints?.place?.kind === "place"
       ? displayPlace(constraints.place.name)
@@ -234,7 +256,7 @@ export function AskSearch({
    *  - "new"/"refine": interpret the text (with previous constraints for a refine), then rank.
    *  - "rerun": rank the given (edited) constraints directly.
    */
-  async function run(options: { text?: string; edited?: AskConstraints }) {
+  async function run(options: { text?: string; edited?: AskConstraints; label?: string }) {
     // Double submit / Enter-then-click is ignored while a request runs.
     if (inFlight.current) return;
     const text = options.text?.trim();
@@ -248,9 +270,12 @@ export function AskSearch({
     setNotice(null);
     setApplied(false);
 
+    // ~5 turns of memory (user + assistant), kept in sessionStorage with the result.
     const history = text
-      ? [...messages, { role: "user" as const, content: text }].slice(-8)
-      : messages;
+      ? [...messages, { role: "user" as const, content: text }].slice(-10)
+      : messages.length
+        ? messages
+        : [{ role: "user" as const, content: options.label ?? "similar homes" }];
     try {
       // One round trip: the server interprets (merging into the previous
       // constraints for a refine) and ranks. Chip edits send constraints.
@@ -263,6 +288,7 @@ export function AskSearch({
               previous: result ? (constraints ?? undefined) : undefined,
               viewport,
               lang,
+              ...(priorPicks.length ? { priorPicks } : {}),
             }
           : { messages: history, constraints: options.edited, viewport, lang },
         { signal: controller.signal },
@@ -321,6 +347,25 @@ export function AskSearch({
     rerun(constraints);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
+
+  function runSimilar(listing: MapListing, rank?: number) {
+    const label = rank ? t("ask.similar.label", { rank }) : similarLabel(listing, lang);
+    const next = similarConstraints(priorPickFromListing(rank ?? 0, listing, similarLabel(listing, lang)));
+    next.similarTo = { id: listing.id, label };
+    setMessages([]);
+    setConstraints(next);
+    lastRequest.current = () => void run({ edited: next, label: t("ask.chip.similar", { label }) });
+    void run({ edited: next, label: t("ask.chip.similar", { label }) });
+  }
+
+  // "Similar to this" requested from outside (list card / listing panel).
+  const lastSimilar = useRef(0);
+  useEffect(() => {
+    if (!open || !similarRequest || similarRequest.nonce === lastSimilar.current) return;
+    lastSimilar.current = similarRequest.nonce;
+    runSimilar(similarRequest.listing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, similarRequest]);
 
   function newSearch() {
     cancel();
@@ -624,6 +669,8 @@ export function AskSearch({
                 onShowOnMap={(pick) => showOnMap(picks, pick.listing.id)}
                 onPreview={(pick) => openPreview(pick.listing)}
                 initialIndex={startIndex}
+                commute={constraints?.commute}
+                onSimilar={(pick) => runSimilar(pick.listing, pick.rank)}
                 onActiveChange={(index) => {
                   activeIndex.current = index;
                   patchAskUi({ index });
@@ -639,6 +686,23 @@ export function AskSearch({
                       picks: picks.length,
                     })}
               </p>
+              {result?.status === "ok" && !pending ? (
+                <div className="mt-2" role="group" aria-label={t("ask.followups")}>
+                  <p className="mb-1 text-[11px] text-slate-400">{t("ask.followups")}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {FOLLOWUP_CHIPS.map((chip) => (
+                      <button
+                        key={chip.key}
+                        type="button"
+                        onClick={() => submit(chip.message)}
+                        className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-100 hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+                      >
+                        {t(chip.label)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {result?.assumptions.length ? (
                 <details className="mt-1 text-[11px] text-slate-400">
                   <summary className="cursor-pointer select-none hover:text-slate-200">
@@ -695,6 +759,10 @@ export function AskSearch({
           saved={savedIds.includes(preview.id)}
           onClose={closePreview}
           onToggleSave={onToggleSave}
+          onSimilar={(item) => {
+            closePreview();
+            runSimilar(item);
+          }}
         />
       ) : null}
     </>

@@ -29,6 +29,16 @@ import { propertyTypes, salesTypes } from "~/lib/listings/types";
 import { type Place } from "~/lib/geo/places";
 import { distanceM } from "~/lib/geo/shape";
 import { detectRoomCount } from "~/lib/listings/ask-quality";
+import {
+  anchoredFollowup,
+  commuteRadiusM,
+  MAX_COMMUTE_RADIUS_M,
+  parseCommute,
+  parseOrdinalRef,
+  type AskCommute,
+  type PriorPick,
+} from "~/lib/listings/ask-followup";
+import { sanitizeConstraints } from "~/lib/listings/ask-picks";
 import { geocodeKorea } from "./geocode";
 import { withTimeout } from "./http";
 import { callOpenAiJson, classifyOpenAiFailure, isOpenAiConfigured } from "./openai";
@@ -291,6 +301,8 @@ export async function interpretAsk(
     previous?: AskConstraints;
     viewport?: { lat: number; lng: number };
     lang?: Lang;
+    /** Earlier picks (rank → listing), so "the second one but cheaper" can resolve. */
+    priorPicks?: PriorPick[];
     signal?: AbortSignal;
   },
   deps: InterpretDeps = {},
@@ -298,8 +310,24 @@ export async function interpretAsk(
   const { messages, previous, viewport } = input;
   const lang = input.lang ?? DEFAULT_LANG;
   const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  // "The second one but cheaper": anchor on an earlier pick, no model needed.
+  const ordinal = input.priorPicks?.length ? parseOrdinalRef(lastUser) : null;
+  const anchorPick = ordinal ? input.priorPicks?.find((p) => p.rank === ordinal) : undefined;
+  if (anchorPick) {
+    return {
+      status: "ok",
+      constraints: sanitizeConstraints(anchoredFollowup(anchorPick, lastUser, previous)),
+      assumptions: [t(lang, "ask.assume.anchor", { n: anchorPick.rank })],
+      provider: "local",
+    };
+  }
   const current = constraintsToSnapshot(previous ?? {});
-  const local = interpretSearch(lastUser, current);
+  const commuteReq = parseCommute(lastUser);
+  // "20분 이내" is a commute time, not a rent amount.
+  const local = interpretSearch(
+    commuteReq ? lastUser.replace(/\d{1,3}\s*(?:분|min(?:ute)?s?)\s*(?:이내)?/gi, " ") : lastUser,
+    current,
+  );
   const localPrefs = detectPreferences(lastUser);
   const rooms = detectRoomCount(lastUser);
   const configured = isOpenAiConfigured();
@@ -338,7 +366,8 @@ export async function interpretAsk(
   }
   const preferences = groundPreferences(aiOk && !aiOk.offTopic ? aiOk.preferences : [], lastUser, localPrefs);
 
-  const stated = hasConstraintIntent(intent) || preferences.length > 0 || rooms !== undefined;
+  const stated =
+    hasConstraintIntent(intent) || preferences.length > 0 || rooms !== undefined || commuteReq !== null;
   if (!stated) {
     // A follow-up the model judged on-topic ("make it brighter") just informs ranking.
     if (previous && aiOk && !aiOk.offTopic) {
@@ -360,12 +389,38 @@ export async function interpretAsk(
   const base = fresh ? emptyAskSnapshot({ radiusM: current.radiusM }) : current;
   const snapshot = mergeSearchIntent(base, { ...intent, viewMode: undefined, listingQuery: undefined });
   const assumptions: string[] = [];
+  // Commute: "within 30 min of Gangnam Station" names a destination, not the search area.
+  let commute: AskCommute | undefined = fresh ? undefined : previous?.commute;
+  let commuteAsArea = false;
+  if (commuteReq) {
+    const found = await (resolver ?? defaultResolvePlace)(commuteReq.destination);
+    if (found) {
+      const name = found.id.startsWith("geo:") ? commuteReq.destination : (found.names[0] ?? commuteReq.destination);
+      commute = { name, lat: found.lat, lng: found.lng, maxMin: commuteReq.maxMin };
+      const prevAreaIsCommute =
+        !fresh && previous?.commute && previous.place?.kind === "place" && previous.place.name === previous.commute.name;
+      if (prevAreaIsCommute) snapshot.searchInput = "";
+      const said = normalizeSearch(snapshot.searchInput);
+      const dest = normalizeSearch(commuteReq.destination);
+      const sameCatalogPlace = Boolean(said) && matchPlace(snapshot.searchInput)?.id === found.id;
+      if (said && (sameCatalogPlace || said.includes(dest) || dest.includes(said) || normalizeSearch(name) === said)) {
+        snapshot.searchInput = "";
+      }
+      commuteAsArea = snapshot.searchInput === "" && (fresh === true || Boolean(prevAreaIsCommute) || previous?.place?.kind !== "place");
+    } else {
+      assumptions.push(t(lang, "ask.assume.commuteNoDest", { text: commuteReq.destination.slice(0, 40) }));
+    }
+  }
   // A catalog station's default walk radius is not something the user said.
   const statedRadius =
     typeof intent.radiusM === "number" && EXPLICIT_DISTANCE.test(lastUser) ? snapshot.radiusM : undefined;
   const keepPrevPlace = fresh && !snapshot.searchInput ? undefined : previous?.place;
   let place: AskPlace;
-  if (
+  if (commute && commuteAsArea) {
+    const radiusM = Math.min(MAX_COMMUTE_RADIUS_M, Math.max(500, Math.round(commuteRadiusM(commute.maxMin) / 100) * 100));
+    place = { name: commute.name, lat: commute.lat, lng: commute.lng, radiusM, kind: "place" };
+    assumptions.push(t(lang, "ask.assume.commuteArea", { km: (radiusM / 1000).toFixed(1), dest: commute.name }));
+  } else if (
     speculativePlace &&
     localPlaceGuess &&
     normalizeSearch(localPlaceGuess) === normalizeSearch(snapshot.searchInput) &&
@@ -391,6 +446,7 @@ export async function interpretAsk(
   if (snapshot.areaBucketIds.length) redundant.add(PREFERENCE_LABEL.spacious!);
   const merged = [...new Set([...carried, ...preferences])].filter((p) => !redundant.has(p)).slice(0, 5);
   const constraints = snapshotToConstraints(snapshot, place, merged);
+  if (commute) constraints.commute = commute;
   const nextRooms = rooms ?? (fresh ? undefined : previous?.rooms);
   if (nextRooms) constraints.rooms = nextRooms;
   return {

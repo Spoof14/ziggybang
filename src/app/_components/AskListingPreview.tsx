@@ -18,11 +18,13 @@ export function AskListingPreview({
   saved,
   onClose,
   onToggleSave,
+  onSimilar,
 }: {
   listing: MapListing;
   saved: boolean;
   onClose: () => void;
   onToggleSave: (listing: MapListing) => void;
+  onSimilar?: (listing: MapListing) => void;
 }) {
   const { t } = useI18n();
   const labelId = useId();
@@ -86,6 +88,7 @@ export function AskListingPreview({
         saved={saved}
         onClose={onClose}
         onToggleSave={onToggleSave}
+        onSimilar={onSimilar}
         modal={{ labelId, closeLabel: t("ask.backToPicks"), asideRef: aside }}
       />
     </div>

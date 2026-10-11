@@ -38,7 +38,7 @@ export function loadAskSession(): AskSession | null {
     const validResult = okShape(data.result) ? data.result : null;
     if (!validResult) return null;
     return {
-      messages: Array.isArray(data.messages) ? data.messages.slice(-8) : [],
+      messages: Array.isArray(data.messages) ? data.messages.slice(-10) : [],
       constraints: data.constraints ?? validResult.constraints,
       result: validResult,
       ...(isLang(data.lang) ? { lang: data.lang } : {}),
