@@ -28,7 +28,7 @@ import {
   MAX_NEAR_DUPLICATES,
 } from "./ask-quality";
 import { approxCommuteMin, commuteRadiusM, MAX_COMMUTE_RADIUS_M, type AskCommute, type SimilarAnchor } from "./ask-followup";
-import { medianOf, priceText, reasonPriceConsistent, relocalizeAssumption, type ReasonContext } from "./ask-reason";
+import { priceText, reasonPriceConsistent, relocalizeAssumption, type ReasonContext } from "./ask-reason";
 import { filterListings, isNaverClusterListing } from "./filter";
 import { floorFilterText, type FloorFilter } from "./floor";
 import { listingHasPhotos } from "./photo";

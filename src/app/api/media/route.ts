@@ -74,7 +74,7 @@ async function fetchWithRetry(url: string, referer: string): Promise<Response | 
         },
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
         next: { revalidate: 86400 },
-      } as RequestInit);
+      });
       if (response.ok || response.status < 500) return response;
       last = response;
     } catch {
