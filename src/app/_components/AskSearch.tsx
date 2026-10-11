@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type SearchSnapshot } from "~/lib/listings/ai-search";
+import { formatCount, type Lang } from "~/lib/i18n";
+import { useI18n } from "~/lib/i18n/react";
 import {
-  ASK_SUGGESTIONS,
+  askSuggestions,
   applySuggestion,
   askFallbackNotice,
   constraintChips,
@@ -41,11 +43,15 @@ const ASK_TIMEOUT_MS = 45_000;
 
 type Phase = "searching";
 
-function progressText(_phase: Phase, elapsed: number, where?: string): string {
-  const area = where ? ` near ${where}` : "";
-  if (elapsed < 3) return `Searching Zigbang, Peterpan and Naver${area}…`;
-  if (elapsed < 12) return "Ranking the best matches…";
-  return `Still working (${elapsed}s) — live listing sites can be slow.`;
+function progressText(
+  t: ReturnType<typeof useI18n>["t"],
+  elapsed: number,
+  where?: string,
+): string {
+  const area = where ? t("ask.progressNear", { where }) : "";
+  if (elapsed < 3) return t("ask.progress1", { area });
+  if (elapsed < 12) return t("ask.progress2");
+  return t("ask.progress3", { s: elapsed });
 }
 
 function isMobile(): boolean {
@@ -78,7 +84,10 @@ export function AskSearch({
   /** Plot picks on the map (and optionally pan to / highlight one). */
   onShowPicks: (picks: AskPick[], focusId?: string) => void;
 }) {
+  const { lang, t } = useI18n();
   const [messages, setMessages] = useState<AskMessage[]>([]);
+  /** Language the current result text was produced in. */
+  const [resultLang, setResultLang] = useState<Lang>(lang);
   const [constraints, setConstraints] = useState<AskConstraints | null>(null);
   const [result, setResult] = useState<AskStoredResult | null>(null);
   const [draft, setDraft] = useState("");
@@ -111,6 +120,7 @@ export function AskSearch({
       setMessages(saved.messages);
       setConstraints(saved.constraints);
       setResult(saved.result);
+      if (saved.lang) setResultLang(saved.lang);
       const ui = loadAskUi();
       const restoredPicks = saved.result?.status === "ok" ? saved.result.picks : [];
       if (ui && restoredPicks.length) {
@@ -177,8 +187,8 @@ export function AskSearch({
 
   useEffect(() => {
     if (!restored.current) return;
-    saveAskSession({ messages, constraints, result });
-  }, [messages, constraints, result]);
+    saveAskSession({ messages, constraints, result, lang: resultLang });
+  }, [messages, constraints, result, resultLang]);
 
   useEffect(() => {
     if (!pending) {
@@ -211,8 +221,8 @@ export function AskSearch({
   }
 
   const chips = useMemo(
-    () => (constraints ? constraintChips(constraints) : []),
-    [constraints],
+    () => (constraints ? constraintChips(constraints, lang) : []),
+    [constraints, lang],
   );
   const where =
     constraints?.place?.kind === "place"
@@ -252,8 +262,9 @@ export function AskSearch({
               messages: history,
               previous: result ? (constraints ?? undefined) : undefined,
               viewport,
+              lang,
             }
-          : { messages: history, constraints: options.edited, viewport },
+          : { messages: history, constraints: options.edited, viewport, lang },
         { signal: controller.signal },
       );
       if (!live()) return;
@@ -265,6 +276,7 @@ export function AskSearch({
         return;
       }
       setResult(answer);
+      setResultLang(lang);
       setStartIndex(0);
       activeIndex.current = 0;
       patchAskUi({ index: 0 });
@@ -277,13 +289,9 @@ export function AskSearch({
       setDraft("");
     } catch {
       if (controller.signal.reason === "timeout") {
-        setError(
-          "That took too long. The listing sites may be slow right now — please try again.",
-        );
+        setError(t("ask.timeout"));
       } else if (!controller.signal.aborted) {
-        setError(
-          "Couldn't get picks just now. Check your connection and try again.",
-        );
+        setError(t("ask.failed"));
       }
       // Cancelled by the user (close / Cancel): nothing is applied.
     } finally {
@@ -350,14 +358,14 @@ export function AskSearch({
     <>
       <button
         type="button"
-        aria-label="Close ask search"
+        aria-label={t("ask.closeAria")}
         className="fixed inset-0 z-[1400] bg-slate-950/40 md:hidden"
         onClick={onClose}
         {...behind}
       />
       <div
         role="dialog"
-        aria-label="Ask Ziggybang"
+        aria-label={t("ask.dialog")}
         {...behind}
         className={`${preview ? "max-md:invisible " : ""}fixed inset-x-0 bottom-0 z-[1401] flex w-auto max-w-none flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-slate-950 shadow-2xl sm:inset-x-3 sm:bottom-3 sm:rounded-2xl md:inset-auto md:bottom-3 md:left-3 md:right-auto md:top-3 md:max-h-none md:w-[calc(var(--desktop-panel)-1.5rem)] md:max-w-[calc(40%-1.5rem)] ${
           hasResult || pending ? "max-h-[92dvh] sm:max-h-[88dvh]" : "max-h-[min(28rem,58dvh)]"
@@ -366,12 +374,12 @@ export function AskSearch({
         <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2 sm:items-start sm:gap-3 sm:px-4 sm:py-3">
           <div className="min-w-0">
             <p className="hidden text-[10px] uppercase tracking-[0.18em] text-sky-300 sm:block">
-              Ask Ziggybang
+              {t("ask.eyebrow")}
             </p>
             <h2 className="truncate text-sm font-semibold sm:whitespace-normal sm:break-words sm:leading-snug">
-              <span className="text-sky-300 sm:hidden">Ask · </span>
-              <span className="sm:hidden">10 picks</span>
-              <span className="hidden sm:inline">Describe your ideal home — get 10 picks</span>
+              <span className="text-sky-300 sm:hidden">{t("ask.titleAsk")}</span>
+              <span className="sm:hidden">{t("ask.titleShort")}</span>
+              <span className="hidden sm:inline">{t("ask.titleLong")}</span>
             </h2>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -381,7 +389,7 @@ export function AskSearch({
                 onClick={newSearch}
                 className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
               >
-                New search
+                {t("ask.newSearch")}
               </button>
             ) : null}
             <button
@@ -389,7 +397,7 @@ export function AskSearch({
               onClick={onClose}
               className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
             >
-              Close
+              {t("ask.close")}
             </button>
           </div>
         </div>
@@ -398,11 +406,9 @@ export function AskSearch({
           {!hasResult && !pending && !error ? (
             <div className="space-y-2">
               <p className="text-sm text-slate-300">
-                Tell me the area, budget, type and what matters — I&apos;ll pick
-                the 10 best live listings and say why. Your map filters stay as
-                they are.
+                {t("ask.intro")}
               </p>
-              {ASK_SUGGESTIONS.map((suggestion) => (
+              {askSuggestions(lang).map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
@@ -435,7 +441,7 @@ export function AskSearch({
                 onClick={() => lastRequest.current?.()}
                 className="rounded-full bg-white/10 px-3 py-1 text-xs hover:bg-white/20"
               >
-                Try again
+                {t("ask.tryAgain")}
               </button>
             </div>
           ) : null}
@@ -458,14 +464,14 @@ export function AskSearch({
                       aria-expanded={summaryOpen}
                       className="text-[11px] text-sky-300 hover:underline sm:hidden"
                     >
-                      {summaryOpen ? "less" : "more"}
+                      {summaryOpen ? t("ask.less") : t("ask.more")}
                     </button>
                   ) : null}
                 </div>
               ) : null}
               {chips.length ? (
                 <ul
-                  aria-label="Interpreted constraints"
+                  aria-label={t("ask.chipsLabel")}
                   className="no-scrollbar -mx-3 flex gap-1.5 overflow-x-auto px-3 pb-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
                 >
                   {chips.map((chip) => (
@@ -477,8 +483,8 @@ export function AskSearch({
                           constraints &&
                           rerun(removeConstraint(constraints, chip.key))
                         }
-                        aria-label={`Remove ${chip.label}`}
-                        title="Remove this constraint and re-rank"
+                        aria-label={t("ask.chipRemove", { label: chip.label })}
+                        title={t("ask.chipRemoveTitle")}
                         className="inline-flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-400/10 px-2.5 py-1 text-[11px] text-sky-100 hover:bg-sky-400/20 disabled:opacity-50"
                       >
                         {chip.label}
@@ -492,7 +498,7 @@ export function AskSearch({
               ) : null}
               {result?.fallbackReason ? (
                 <p role="status" className="text-[11px] text-amber-300">
-                  {askFallbackNotice(result.fallbackReason)}
+                  {askFallbackNotice(result.fallbackReason, lang)}
                 </p>
               ) : null}
               {picks.length ? (
@@ -503,7 +509,7 @@ export function AskSearch({
                     disabled={pending}
                     className="shrink-0 whitespace-nowrap rounded-full bg-sky-400 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-300 disabled:opacity-50"
                   >
-                    Show these on the map
+                    {t("ask.showOnMap")}
                   </button>
                   <button
                     type="button"
@@ -511,7 +517,7 @@ export function AskSearch({
                     disabled={pending}
                     className="shrink-0 whitespace-nowrap rounded-full bg-white/10 px-3 py-1.5 text-xs text-slate-100 hover:bg-white/20"
                   >
-                    Apply as filters
+                    {t("ask.applyFilters")}
                   </button>
                   <button
                     type="button"
@@ -522,7 +528,7 @@ export function AskSearch({
                     disabled={pending}
                     className="shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs text-slate-300 underline-offset-2 hover:text-white hover:underline"
                   >
-                    Clear map filters
+                    {t("ask.clearMapFilters")}
                   </button>
                 </div>
               ) : null}
@@ -542,14 +548,14 @@ export function AskSearch({
                       />
                     ))}
                   </span>
-                  {progressText(phase, elapsed, where)}
+                  {progressText(t, elapsed, where)}
                 </span>
                 <button
                   type="button"
                   onClick={cancel}
                   className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-200 hover:bg-white/20"
                 >
-                  Cancel
+                  {t("ask.cancel")}
                 </button>
               </div>
               {!picks.length ? (
@@ -575,7 +581,7 @@ export function AskSearch({
           {result?.status === "empty" && !pending ? (
             <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-3">
               <p className="text-sm font-medium text-slate-100">
-                No homes matched — try widening your budget or area.
+                {t("ask.noMatch")}
               </p>
               <p className="text-xs text-slate-400">{result.summary}</p>
               <div className="flex flex-wrap gap-1.5">
@@ -618,14 +624,17 @@ export function AskSearch({
               <p className="mt-1.5 text-[11px] text-slate-500" role="status">
                 {applied
                   ? constraints
-                    ? describeAppliedFilters(constraints)
-                    : "Filters applied to the map."
-                  : `${result?.status === "ok" ? result.candidateCount : 0} homes matched; these are the best ${picks.length}. Your map filters are unchanged.`}
+                    ? describeAppliedFilters(constraints, lang)
+                    : t("ask.filtersApplied")
+                  : t("ask.matched", {
+                      n: formatCount(result?.status === "ok" ? result.candidateCount : 0, lang),
+                      picks: picks.length,
+                    })}
               </p>
               {result?.assumptions.length ? (
                 <details className="mt-1 text-[11px] text-slate-400">
                   <summary className="cursor-pointer select-none hover:text-slate-200">
-                    Notes ({result.assumptions.length})
+                    {t("ask.notes", { n: result.assumptions.length })}
                   </summary>
                   <ul className="mt-1 list-disc space-y-0.5 pl-4">
                     {result.assumptions.map((note) => (
@@ -647,16 +656,14 @@ export function AskSearch({
         >
           <label className="block min-w-0 flex-1">
             <span className="sr-only">
-              {hasResult ? "Refine your picks" : "Describe the home you want"}
+              {hasResult ? t("ask.refineLabel") : t("ask.describeLabel")}
             </span>
             <input
               ref={input}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               placeholder={
-                hasResult
-                  ? "Refine: “only with elevator”, “cheaper”…"
-                  : "e.g. cheap studio near Hongdae under 700k monthly, quiet"
+                hasResult ? t("ask.refinePh") : t("ask.describePh")
               }
               autoComplete="off"
               maxLength={500}
@@ -669,7 +676,7 @@ export function AskSearch({
               disabled={pending || !draft.trim()}
               className="rounded-full bg-sky-400 px-3 py-1.5 text-xs font-medium text-slate-950 disabled:opacity-40"
             >
-              {hasResult ? "Refine" : "Find 10 homes"}
+              {hasResult ? t("ask.refine") : t("ask.find")}
             </button>
           </div>
         </form>

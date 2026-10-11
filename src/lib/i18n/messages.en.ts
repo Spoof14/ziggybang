@@ -285,6 +285,7 @@ export const en = {
   "notes.from": "From {source}.",
   "notes.machine": "Machine translation — check details with the agent.",
   "notes.glossary": "Common terms",
+  "gallery.fullscreenBtn": "Fullscreen",
   "gallery.view": "View photo fullscreen",
   "gallery.prev": "Previous photo",
   "gallery.next": "Next photo",

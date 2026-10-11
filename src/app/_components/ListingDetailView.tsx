@@ -2,16 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "~/trpc/react";
+import { formatCount } from "~/lib/i18n";
+import { useI18n } from "~/lib/i18n/react";
 import {
   formatArea,
   formatFloor,
   formatKrwFromManwon,
   formatRoomType,
-  propertyTypeLabel,
-  salesTypeHint,
-  salesTypeLabel,
-  sourceLabel,
+  propertyTypeText,
+  salesTypeHintText,
+  salesTypeText,
+  sourceText,
 } from "~/lib/listings/copy";
+import { glossText } from "~/lib/listings/glossary";
 import {
   formatApproveYear,
   formatKoreanPhone,
@@ -56,12 +59,12 @@ import { ListingLocationCard } from "./ListingLocationCard";
 import { ListingPrice } from "./ListingPrice";
 import { ListingShareButton } from "./ListingShareButton";
 
-async function copyText(value: string) {
+async function copyText(value: string, promptText: string) {
   try {
     await navigator.clipboard.writeText(value);
     return true;
   } catch {
-    window.prompt("Copy this", value);
+    window.prompt(promptText, value);
     return false;
   }
 }
@@ -73,6 +76,7 @@ export function ListingDetailView({
   path: ListingPath;
   initial: ListingDetail | null;
 }) {
+  const { lang, t } = useI18n();
   const [stashed, setStashed] = useState<MapListing | null>(null);
   const [savedHomes, setSavedHomes] = useState<MapListing[]>([]);
   const [copied, setCopied] = useState<"address" | "page" | null>(null);
@@ -100,7 +104,7 @@ export function ListingDetailView({
   );
 
   async function copy(kind: "address" | "page", value: string) {
-    const ok = await copyText(value);
+    const ok = await copyText(value, t("panel.copyPrompt"));
     if (!ok) return;
     setCopied(kind);
     window.setTimeout(() => setCopied(null), 1600);
@@ -109,9 +113,9 @@ export function ListingDetailView({
   if (!listing) {
     return (
       <main className="mx-auto max-w-lg px-4 py-16 text-center text-slate-300">
-        <h1 className="text-xl font-semibold text-white">Listing not found</h1>
+        <h1 className="text-xl font-semibold text-white">{t("page.notFound")}</h1>
         <p className="mt-2 text-sm">
-          This home may have been taken down. Back to the map still works.
+          {t("page.notFoundBody")}
         </p>
         <BackToMap
           href="/"
@@ -122,27 +126,28 @@ export function ListingDetailView({
   }
 
   const photos = listingGalleryUrls(listing);
-  const deposit = formatKrwFromManwon(listing.deposit);
-  const rent = formatKrwFromManwon(listing.rent);
-  const salePrice = formatKrwFromManwon(listing.price);
-  const manageCost = formatKrwFromManwon(listing.manageCost);
+  const deposit = formatKrwFromManwon(listing.deposit, lang);
+  const rent = formatKrwFromManwon(listing.rent, lang);
+  const salePrice = formatKrwFromManwon(listing.price, lang);
+  const manageCost = formatKrwFromManwon(listing.manageCost, lang);
   const firstMonth =
     listing.salesType === "wolse"
       ? formatKrwFromManwon(
           (listing.deposit ?? 0) + (listing.rent ?? 0) + (listing.manageCost ?? 0),
+          lang,
         )
       : null;
-  const area = formatArea(listing.areaM2);
-  const floor = formatFloor(listing.floor);
-  const roomType = formatRoomType(listing.roomType);
-  const where = englishAddressLine(listing);
+  const area = formatArea(listing.areaM2, lang);
+  const floor = formatFloor(listing.floor, lang);
+  const roomType = formatRoomType(listing.roomType, lang);
+  const where = englishAddressLine(listing, lang);
   const taxiAddress = koreanAddressForTaxi(listing.address);
-  const englishTitle = englishCardTitle(listing);
-  const parking = translateParking(listing.parking);
-  const direction = translateDirection(listing.direction);
-  const residence = translateResidence(listing.residenceType);
-  const moveIn = formatMoveIn(listing.moveIn);
-  const built = formatApproveYear(listing.approveDate);
+  const englishTitle = englishCardTitle(listing, lang);
+  const parking = translateParking(listing.parking, lang);
+  const direction = translateDirection(listing.direction, lang);
+  const residence = translateResidence(listing.residenceType, lang);
+  const moveIn = formatMoveIn(listing.moveIn, lang);
+  const built = formatApproveYear(listing.approveDate, lang);
   const listed = listing.updatedAt;
   const mapHref = listingMapHref(listing);
   const saved = isSavedHome(savedHomes, listing.id);
@@ -150,7 +155,7 @@ export function ListingDetailView({
   const mobilePhone = formatKoreanPhone(listing.agent?.mobile);
   const foreignerOk =
     listing.foreignerOk ?? detectForeignerOk(listing.title, listing.description);
-  const agencyFee = agencyFeeCopy(listing);
+  const agencyFee = agencyFeeCopy(listing, lang);
 
   return (
     <div className="min-h-[100dvh] bg-slate-950 text-slate-100">
@@ -161,7 +166,7 @@ export function ListingDetailView({
               Ziggybang
             </p>
             <h1 className="truncate text-sm font-semibold sm:text-lg">
-              {englishTitle.trim() ? englishTitle : (listing.title ?? "Listing")}
+              {englishTitle.trim() ? englishTitle : (listing.title ?? t("app.listingTitle"))}
             </h1>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -178,7 +183,7 @@ export function ListingDetailView({
               }}
               className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] hover:bg-white/20"
             >
-              {saved ? "Saved ♥" : "Save ♡"}
+              {saved ? t("page.saved") : t("page.save")}
             </button>
             <ListingShareButton
               listing={listing}
@@ -199,19 +204,21 @@ export function ListingDetailView({
           />
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">
-              {sourceLabel[listing.source]} · {propertyTypeLabel[listing.propertyType]}
-              {listing.salesType ? ` · ${salesTypeLabel[listing.salesType]}` : ""}
+              {sourceText(lang, listing.source)} · {propertyTypeText(lang, listing.propertyType)}
+              {listing.salesType ? ` · ${salesTypeText(lang, listing.salesType)}` : ""}
             </p>
             <h2 className="mt-1 text-2xl font-semibold leading-snug">
               {englishTitle.trim() ? englishTitle : listing.title}
             </h2>
             <ForeignerBadge ok={foreignerOk} className="mt-2 inline-flex" />
             {listing.title && listing.title !== englishTitle ? (
-              <p className="mt-1 text-sm text-slate-400">{listing.title}</p>
+              <p lang="ko" className="mt-1 text-sm text-slate-400">
+                {lang === "en" ? glossText(listing.title, lang) : listing.title}
+              </p>
             ) : null}
             {listing.salesType ? (
               <p className="mt-1 text-sm text-slate-400">
-                {salesTypeHint[listing.salesType]}
+                {salesTypeHintText(lang, listing.salesType)}
               </p>
             ) : null}
             <ListingPrice
@@ -226,14 +233,14 @@ export function ListingDetailView({
 
           {listing.options?.length ? (
             <div>
-              <h3 className="text-sm font-semibold text-white">Included furniture</h3>
+              <h3 className="text-sm font-semibold text-white">{t("page.included")}</h3>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {listing.options.map((option) => (
                   <span
                     key={option}
                     className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-200"
                   >
-                    {translateOption(option)}
+                    {translateOption(option, lang)}
                   </span>
                 ))}
               </div>
@@ -242,14 +249,14 @@ export function ListingDetailView({
 
           {listing.amenities?.length ? (
             <div>
-              <h3 className="text-sm font-semibold text-white">Neighborhood</h3>
+              <h3 className="text-sm font-semibold text-white">{t("page.neighborhood")}</h3>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {listing.amenities.map((item) => (
                   <span
                     key={item}
                     className="rounded-full bg-sky-400/15 px-2.5 py-1 text-xs text-sky-200"
                   >
-                    {translateAmenity(item)}
+                    {translateAmenity(item, lang)}
                   </span>
                 ))}
               </div>
@@ -258,14 +265,14 @@ export function ListingDetailView({
 
           {listing.nearby?.length ? (
             <div>
-              <h3 className="text-sm font-semibold text-white">Walk from the door</h3>
+              <h3 className="text-sm font-semibold text-white">{t("page.walk")}</h3>
               <ul className="mt-2 space-y-1 text-sm text-slate-300">
                 {listing.nearby.map((item) => (
                   <li key={`${item.type}-${item.meters}`}>
-                    {translatePoi(item.type)}
+                    {translatePoi(item.type, lang)}
                     {item.walkMinutes
-                      ? ` · ${item.walkMinutes} min walk`
-                      : ` · ${item.meters.toLocaleString("en-US")} m`}
+                      ? ` · ${t("page.walkMin", { n: item.walkMinutes })}`
+                      : ` · ${t("page.walkMeters", { n: formatCount(item.meters, lang) })}`}
                   </li>
                 ))}
               </ul>
@@ -275,49 +282,49 @@ export function ListingDetailView({
 
         <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
           <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
-            <h3 className="text-sm font-semibold text-white">At a glance</h3>
+            <h3 className="text-sm font-semibold text-white">{t("page.glance")}</h3>
             <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
               {listing.salesType === "wolse" && deposit ? (
-                <Fact label="Deposit" value={deposit} />
+                <Fact label={t("page.deposit")} value={deposit} />
               ) : null}
               {listing.salesType === "wolse" && rent ? (
-                <Fact label="Monthly rent" value={`${rent} / month`} />
+                <Fact label={t("page.monthlyRent")} value={t("panel.perMonth", { amount: rent })} />
               ) : null}
               {listing.salesType === "jeonse" && deposit ? (
-                <Fact label="Jeonse deposit" value={deposit} wide />
+                <Fact label={t("page.jeonseDeposit")} value={deposit} wide />
               ) : null}
               {listing.salesType === "sale" && salePrice ? (
-                <Fact label="Sale price" value={salePrice} wide />
+                <Fact label={t("page.salePrice")} value={salePrice} wide />
               ) : null}
               {manageCost ? (
-                <Fact label="Maintenance" value={`${manageCost} / month`} />
+                <Fact label={t("panel.maintenance")} value={t("panel.perMonth", { amount: manageCost })} />
               ) : null}
               {firstMonth ? (
-                <Fact label="Move-in cash" value={firstMonth} wide />
+                <Fact label={t("page.moveInCash")} value={firstMonth} wide />
               ) : null}
-              {area ? <Fact label="Exclusive area" value={area} /> : null}
-              {floor ? <Fact label="Floor" value={floor} /> : null}
-              {roomType ? <Fact label="Layout" value={roomType} /> : null}
+              {area ? <Fact label={t("panel.exclusiveArea")} value={area} /> : null}
+              {floor ? <Fact label={t("panel.floor")} value={floor} /> : null}
+              {roomType ? <Fact label={t("panel.layout")} value={roomType} /> : null}
               {listing.bathrooms ? (
                 <Fact
-                  label="Bathrooms"
+                  label={t("page.bathrooms")}
                   value={String(listing.bathrooms)}
                 />
               ) : null}
-              {parking ? <Fact label="Parking" value={parking} /> : null}
+              {parking ? <Fact label={t("page.parking")} value={parking} /> : null}
               {listing.elevator != null ? (
                 <Fact
-                  label="Elevator"
-                  value={listing.elevator ? "Yes" : "No"}
+                  label={t("page.elevator")}
+                  value={listing.elevator ? t("page.yes") : t("page.no")}
                 />
               ) : null}
-              {direction ? <Fact label="Faces" value={direction} /> : null}
-              {residence ? <Fact label="Building" value={residence} /> : null}
-              {moveIn ? <Fact label="Move-in" value={moveIn} wide /> : null}
-              {built ? <Fact label="Age" value={built} /> : null}
+              {direction ? <Fact label={t("page.faces")} value={direction} /> : null}
+              {residence ? <Fact label={t("page.building")} value={residence} /> : null}
+              {moveIn ? <Fact label={t("page.moveIn")} value={moveIn} wide /> : null}
+              {built ? <Fact label={t("page.age")} value={built} /> : null}
               {listed ? (
                 <div className="col-span-2">
-                  <dt className="text-slate-400">Listed</dt>
+                  <dt className="text-slate-400">{t("panel.listed")}</dt>
                   <dd className="font-medium text-slate-100">
                     <ListingAgeLine updatedAt={listing.updatedAt} />
                   </dd>
@@ -325,15 +332,15 @@ export function ListingDetailView({
               ) : null}
               {listing.count && listing.count > 1 ? (
                 <Fact
-                  label="Homes in this complex"
-                  value={listing.count.toLocaleString("en-US")}
+                  label={t("page.complexHomes")}
+                  value={formatCount(listing.count, lang)}
                   wide
                 />
               ) : null}
-              {where ? <Fact label="Area" value={where} wide /> : null}
+              {where ? <Fact label={t("panel.area")} value={where} wide /> : null}
               {taxiAddress ? (
                 <div className="col-span-2">
-                  <dt className="text-slate-400">Korean address (for taxis)</dt>
+                  <dt className="text-slate-400">{t("panel.taxi")}</dt>
                   <dd className="mt-0.5 flex items-start justify-between gap-2">
                     <span>{taxiAddress}</span>
                     <button
@@ -341,7 +348,7 @@ export function ListingDetailView({
                       onClick={() => void copy("address", taxiAddress)}
                       className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-sky-300 hover:bg-white/20"
                     >
-                      {copied === "address" ? "Copied" : "Copy"}
+                      {copied === "address" ? t("panel.copiedShort") : t("panel.copy")}
                     </button>
                   </dd>
                 </div>
@@ -353,22 +360,23 @@ export function ListingDetailView({
               <div className="mt-3 space-y-1 text-xs text-slate-400">
                 {listing.manageIncludes?.length ? (
                   <p>
-                    Maintenance includes{" "}
-                    {listing.manageIncludes.map(translateUtility).join(", ")}.
+                    {t("page.mgmtIncludes", {
+                      items: listing.manageIncludes.map((item) => translateUtility(item, lang)).join(", "),
+                    })}
                   </p>
                 ) : null}
                 {listing.manageExcludes?.length ? (
                   <p>
-                    Not included:{" "}
-                    {listing.manageExcludes.map(translateUtility).join(", ")}.
+                    {t("page.mgmtExcludes", {
+                      items: listing.manageExcludes.map((item) => translateUtility(item, lang)).join(", "),
+                    })}
                   </p>
                 ) : null}
               </div>
             ) : null}
             {listing.salesType === "wolse" && firstMonth ? (
               <p className="mt-3 text-[11px] text-slate-500">
-                Move-in cash is deposit + first month + maintenance, before agency
-                fees.
+                {t("page.moveInCashNote")}
               </p>
             ) : null}
           </section>
@@ -376,14 +384,17 @@ export function ListingDetailView({
           {agencyFee ? (
             <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
               <h3 className="text-sm font-semibold text-white">
-                Agency fee (est.)
+                {t("page.agencyTitle")}
               </h3>
               <p className="mt-2 text-lg font-semibold text-sky-300">
-                {agencyFee.vatLabel} incl. VAT
+                {t("panel.agencyIncl", { amount: agencyFee.vatLabel })}
               </p>
               <p className="mt-1 text-sm text-slate-300">
-                Cap {agencyFee.feeLabel} at {agencyFee.ratePct}% of the deal
-                {agencyFee.kind === "officetel" ? " (officetel midpoint)" : ""}.
+                {t("page.agencyCap", {
+                  fee: agencyFee.feeLabel,
+                  pct: agencyFee.ratePct,
+                  officetel: agencyFee.kind === "officetel" ? t("page.agencyOfficetel") : "",
+                })}
               </p>
               <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
                 {agencyFee.hint}
@@ -393,18 +404,18 @@ export function ListingDetailView({
 
           <ListingLocationCard
             listing={listing}
-            title={englishTitle.trim() ? englishTitle : "Home"}
+            title={englishTitle.trim() ? englishTitle : t("page.homeFallback")}
           />
 
           {listing.subways?.length ? (
             <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
-              <h3 className="text-sm font-semibold text-white">Nearby subway</h3>
+              <h3 className="text-sm font-semibold text-white">{t("page.nearbySubway")}</h3>
               <ul className="mt-2 space-y-1 text-sm text-slate-300">
                 {listing.subways.map((station) => (
                   <li key={station.name}>
                     {station.name}
                     {station.line
-                      ? ` · ${translateSubwayLine(station.line)}`
+                      ? ` · ${translateSubwayLine(station.line, lang)}`
                       : ""}
                   </li>
                 ))}
@@ -414,7 +425,7 @@ export function ListingDetailView({
 
           {listing.agent?.name ?? listing.agent?.office ? (
             <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
-              <h3 className="text-sm font-semibold text-white">Agent</h3>
+              <h3 className="text-sm font-semibold text-white">{t("page.agent")}</h3>
               <p className="mt-2 text-sm">
                 {listing.agent.office ?? listing.agent.name}
               </p>
@@ -428,7 +439,7 @@ export function ListingDetailView({
               ) : null}
               {officePhone ? (
                 <p className="mt-2 text-sm">
-                  Office{" "}
+                  {t("page.office")}{" "}
                   {telHref(listing.agent.phone) ? (
                     <a
                       href={telHref(listing.agent.phone)!}
@@ -443,7 +454,7 @@ export function ListingDetailView({
               ) : null}
               {mobilePhone && mobilePhone !== officePhone ? (
                 <p className="text-sm">
-                  Mobile{" "}
+                  {t("page.mobile")}{" "}
                   {telHref(listing.agent.mobile) ? (
                     <a
                       href={telHref(listing.agent.mobile)!}
@@ -466,19 +477,18 @@ export function ListingDetailView({
               rel="noopener noreferrer"
               className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-400"
             >
-              Open on {sourceLabel[listing.source]}
+              {t("card.openOn", { source: sourceText(lang, listing.source) })}
             </a>
             <button
               type="button"
               onClick={() => void copy("page", window.location.href)}
               className="inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/20"
             >
-              {copied === "page" ? "Page link copied" : "Copy this page"}
+              {copied === "page" ? t("panel.pageLinkCopied") : t("page.copyThisPage")}
             </button>
             {detailQuery.isError ? (
               <p className="text-[11px] text-amber-300">
-                Live details did not load. Showing what we already had from the
-                map.
+                {t("page.liveFailed")}
               </p>
             ) : null}
           </section>

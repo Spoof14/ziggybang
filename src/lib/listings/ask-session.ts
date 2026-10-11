@@ -1,3 +1,4 @@
+import { isLang, type Lang } from "~/lib/i18n";
 import { type AskConstraints, type AskPicksResult } from "./ask-picks";
 
 export type AskMessage = { role: "user" | "assistant"; content: string };
@@ -7,6 +8,8 @@ export type AskSession = {
   messages: AskMessage[];
   constraints: AskConstraints | null;
   result: AskStoredResult | null;
+  /** UI language the stored result text (summary, reasons) was written in. */
+  lang?: Lang;
 };
 
 const KEY = "ziggybang:ask:v1";
@@ -38,6 +41,7 @@ export function loadAskSession(): AskSession | null {
       messages: Array.isArray(data.messages) ? data.messages.slice(-8) : [],
       constraints: data.constraints ?? validResult.constraints,
       result: validResult,
+      ...(isLang(data.lang) ? { lang: data.lang } : {}),
     };
   } catch {
     return null;

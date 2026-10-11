@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "~/lib/i18n/react";
 import { listingPhotoUrl } from "~/lib/listings/photo";
 
 export function ListingPhoto({
@@ -14,6 +15,7 @@ export function ListingPhoto({
   width?: number;
   className?: string;
 }) {
+  const { t } = useI18n();
   const src = listingPhotoUrl(url, width);
   const [failed, setFailed] = useState(false);
   if (!src || failed) {
@@ -21,7 +23,7 @@ export function ListingPhoto({
     return (
       <span
         role="img"
-        aria-label="No photo available"
+        aria-label={t("card.noPhoto")}
         className={`flex items-center justify-center bg-slate-800 text-slate-500 ${className ?? ""}`}
       >
         <svg

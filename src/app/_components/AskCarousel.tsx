@@ -4,23 +4,27 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "re
 import { activeSlideIndex, stepSlide, visibleSlideRange, type AskPick } from "~/lib/listings/ask-picks";
 import { areaLabel } from "~/lib/listings/ask-quality";
 import { buildingAgeYears } from "~/lib/listings/building-age";
-import { formatFloor, propertyTypeLabel, salesTypeFilterLabel, sourceLabel } from "~/lib/listings/copy";
+import { formatCount, t as translate, tn, type Lang } from "~/lib/i18n";
+import { useI18n } from "~/lib/i18n/react";
+import { formatFloor, propertyTypeText, salesTypeFilterText, sourceText } from "~/lib/listings/copy";
 import { englishAddressLine } from "~/lib/listings/english";
 import { toPyeong } from "~/lib/listings/area";
 import { type MapListing } from "~/lib/listings/types";
 import { ListingPhoto } from "./ListingPhoto";
 import { ListingPrice } from "./ListingPrice";
 
-function builtLabel(listing: MapListing): string | null {
+function builtLabel(listing: MapListing, lang: Lang): string | null {
   const age = buildingAgeYears(listing.approveDate);
   const year = (listing.approveDate ?? "").replace(/\D/g, "").slice(0, 4);
   if (age == null || !/^\d{4}$/.test(year)) return null;
-  return age <= 0 ? `Built ${year} · new` : `Built ${year} · ${age} yr${age === 1 ? "" : "s"} old`;
+  return age <= 0 ? translate(lang, "meta.built", { year }) : tn(lang, "meta.builtAge", age, { year });
 }
 
-function distanceLabel(meters?: number): string | null {
+function distanceLabel(meters: number | undefined, lang: Lang): string | null {
   if (meters == null) return null;
-  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km away` : `${Math.max(10, Math.round(meters / 10) * 10)} m away`;
+  return meters >= 1000
+    ? translate(lang, "dist.km", { v: (meters / 1000).toFixed(1) })
+    : translate(lang, "dist.m", { v: formatCount(Math.max(10, Math.round(meters / 10) * 10), lang) });
 }
 
 export function AskPickCard({
@@ -41,16 +45,17 @@ export function AskPickCard({
   /** Open the in-app listing preview (card click or View). */
   onPreview: (pick: AskPick) => void;
 }) {
+  const { lang, t } = useI18n();
   const { listing } = pick;
   const facts = [
-    listing.areaM2 ? `${listing.areaM2} m² · ${toPyeong(listing.areaM2).toFixed(1)} pyeong` : null,
-    formatFloor(listing.floor),
-    builtLabel(listing),
+    listing.areaM2 ? t("area.short", { m2: listing.areaM2, py: toPyeong(listing.areaM2).toFixed(1) }) : null,
+    formatFloor(listing.floor, lang),
+    builtLabel(listing, lang),
   ].filter(Boolean);
-  const where = areaLabel(listing) ?? englishAddressLine(listing);
+  const where = areaLabel(listing, lang) ?? englishAddressLine(listing, lang);
   const kind = [
-    propertyTypeLabel[listing.propertyType],
-    listing.salesType ? salesTypeFilterLabel[listing.salesType] : null,
+    propertyTypeText(lang, listing.propertyType),
+    listing.salesType ? salesTypeFilterText(lang, listing.salesType) : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -58,7 +63,7 @@ export function AskPickCard({
     <li
       role="group"
       aria-roledescription="slide"
-      aria-label={`${pick.rank} of ${total}: ${kind}${where ? `, ${where}` : ""}`}
+      aria-label={`${t("ask.slideLabel", { rank: pick.rank, total, kind })}${where ? `, ${where}` : ""}`}
       aria-current={highlighted ? "true" : undefined}
       data-pick-id={listing.id}
       onClick={(event) => {
@@ -73,7 +78,7 @@ export function AskPickCard({
       <div className="relative">
         <ListingPhoto
           url={listing.thumbnail ?? listing.photos?.[0]}
-          alt={listing.title ? `Photo: ${listing.title}` : `${kind} photo`}
+          alt={listing.title ? t("card.photoOf", { title: listing.title }) : t("card.kindPhoto", { kind })}
           width={480}
           className="h-32 w-full object-cover [@media(max-height:520px)]:h-24"
         />
@@ -81,13 +86,13 @@ export function AskPickCard({
           #{pick.rank}
         </span>
         <span className="absolute right-2 top-2 rounded-full bg-slate-950/85 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-200">
-          {sourceLabel[listing.source]}
+          {sourceText(lang, listing.source)}
         </span>
         <button
           type="button"
           onClick={() => onToggleSave(listing)}
           aria-pressed={saved}
-          aria-label={saved ? "Remove from saved" : "Save listing"}
+          aria-label={saved ? t("card.unsave") : t("card.save")}
           className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-slate-950/85 text-base text-rose-300 hover:bg-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
         >
           <span aria-hidden="true">{saved ? "♥" : "♡"}</span>
@@ -98,16 +103,16 @@ export function AskPickCard({
         <ListingPrice listing={listing} className="text-sm font-semibold leading-snug text-slate-50" />
         {facts.length ? <p className="text-[11px] leading-snug text-slate-300">{facts.join(" · ")}</p> : null}
         <p className="text-[11px] leading-snug text-slate-400">
-          {[where, distanceLabel(pick.distanceM)].filter(Boolean).join(" · ")}
+          {[where, distanceLabel(pick.distanceM, lang)].filter(Boolean).join(" · ")}
         </p>
         <p
           className={`mt-0.5 rounded-lg px-2 py-1.5 text-xs leading-snug ${
             pick.reasonSource === "ai" ? "bg-sky-400/10 text-sky-100" : "bg-white/5 text-slate-300"
           }`}
         >
-          <span className="sr-only">Why this one: </span>
+          <span className="sr-only">{t("ask.why")}</span>
           {pick.reason}
-          {pick.similar ? <span className="ml-1 whitespace-nowrap text-slate-400">· +{pick.similar} similar</span> : null}
+          {pick.similar ? <span className="ml-1 whitespace-nowrap text-slate-400">· {t("ask.similar", { n: pick.similar })}</span> : null}
         </p>
         <div className="mt-auto flex gap-2 pt-2">
           <button
@@ -116,16 +121,16 @@ export function AskPickCard({
             aria-haspopup="dialog"
             className="flex-1 rounded-full bg-sky-400 px-3 py-1.5 text-center text-xs font-medium text-slate-950 hover:bg-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
           >
-            View
-            <span className="sr-only"> listing {pick.rank}</span>
+            {t("ask.view")}
+            <span className="sr-only">{t("ask.viewSr", { rank: pick.rank })}</span>
           </button>
           <button
             type="button"
             onClick={() => onShowOnMap(pick)}
             className="flex-1 rounded-full bg-white/10 px-3 py-1.5 text-xs text-slate-100 hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
           >
-            Show on map
-            <span className="sr-only"> for listing {pick.rank}</span>
+            {t("ask.showMap")}
+            <span className="sr-only">{t("ask.showMapSr", { rank: pick.rank })}</span>
           </button>
         </div>
       </div>
@@ -153,6 +158,7 @@ export function AskCarousel({
   initialIndex?: number;
   onActiveChange?: (index: number) => void;
 }) {
+  const { t } = useI18n();
   const scroller = useRef<HTMLUListElement>(null);
   const [active, setActive] = useState(0);
   const [range, setRange] = useState({ first: 0, last: 0 });
@@ -229,18 +235,18 @@ export function AskCarousel({
     "flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-base text-slate-100 hover:bg-white/20 disabled:opacity-30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400";
 
   return (
-    <section role="region" aria-roledescription="carousel" aria-label={`Top ${picks.length} picks`}>
+    <section role="region" aria-roledescription="carousel" aria-label={t("ask.carousel", { n: picks.length })}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-xs text-slate-400" aria-live="polite">
           {range.last > range.first
-            ? `Showing ${range.first + 1}–${range.last + 1} of ${picks.length}`
-            : `Pick ${Math.min(active + 1, picks.length)} of ${picks.length}`}
+            ? t("ask.showingRange", { a: range.first + 1, b: range.last + 1, n: picks.length })
+            : t("ask.pickOf", { a: Math.min(active + 1, picks.length), n: picks.length })}
         </p>
         <div className="flex gap-1.5">
           <button
             type="button"
             className={arrow}
-            aria-label="Previous pick"
+            aria-label={t("ask.prev")}
             disabled={edges.start}
             onClick={() => goTo(stepSlide(active, -1, picks.length))}
           >
@@ -249,7 +255,7 @@ export function AskCarousel({
           <button
             type="button"
             className={arrow}
-            aria-label="Next pick"
+            aria-label={t("ask.next")}
             disabled={edges.end}
             onClick={() => goTo(stepSlide(active, 1, picks.length))}
           >
@@ -261,7 +267,7 @@ export function AskCarousel({
       <ul
         ref={scroller}
         tabIndex={0}
-        aria-label="Picks. Use the left and right arrow keys to move between them."
+        aria-label={t("ask.listLabel")}
         onKeyDown={onKeyDown}
         onScroll={() => {
           cancelAnimationFrame(frame.current);

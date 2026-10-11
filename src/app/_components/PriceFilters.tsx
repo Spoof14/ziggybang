@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "~/lib/i18n/react";
 import { formatKrwFromManwon } from "~/lib/listings/copy";
 import {
   describePriceFilter,
@@ -22,6 +23,7 @@ function WonField({
   value?: number;
   onChange: (next?: number) => void;
 }) {
+  const { lang } = useI18n();
   const [draft, setDraft] = useState(formatWonInput(value));
   const focused = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,7 +73,7 @@ function WonField({
       />
       {value != null ? (
         <span className="mt-0.5 block text-[10px] text-slate-500">
-          {formatKrwFromManwon(value)}
+          {formatKrwFromManwon(value, lang)}
         </span>
       ) : (
         <span className="mt-0.5 block text-[10px] text-transparent">0</span>
@@ -87,48 +89,49 @@ export function PriceFilters({
   value: PriceFilter;
   onChange: (next: PriceFilter) => void;
 }) {
-  const hint = describePriceFilter(value);
+  const { lang, t } = useI18n();
+  const hint = describePriceFilter(value, lang);
   return (
     <div className="mt-1.5">
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-2">
         <WonField
-          label="Min deposit ₩"
-          ariaLabel="Minimum deposit in won"
-          placeholder="e.g. 5,000,000"
+          label={t("price.minDeposit")}
+          ariaLabel={t("price.minDeposit.aria")}
+          placeholder={t("price.minDeposit.ph")}
           value={value.minDeposit}
           onChange={(minDeposit) => onChange({ ...value, minDeposit })}
         />
         <WonField
-          label="Max deposit ₩"
-          ariaLabel="Maximum deposit in won"
-          placeholder="e.g. 20,000,000"
+          label={t("price.maxDeposit")}
+          ariaLabel={t("price.maxDeposit.aria")}
+          placeholder={t("price.maxDeposit.ph")}
           value={value.maxDeposit}
           onChange={(maxDeposit) => onChange({ ...value, maxDeposit })}
         />
         <WonField
-          label="Min monthly ₩"
-          ariaLabel="Minimum monthly rent in won"
-          placeholder="e.g. 500,000"
+          label={t("price.minRent")}
+          ariaLabel={t("price.minRent.aria")}
+          placeholder={t("price.minRent.ph")}
           value={value.minRent}
           onChange={(minRent) => onChange({ ...value, minRent })}
         />
         <WonField
-          label="Max monthly ₩"
-          ariaLabel="Maximum monthly rent in won"
-          placeholder="e.g. 800,000"
+          label={t("price.maxRent")}
+          ariaLabel={t("price.maxRent.aria")}
+          placeholder={t("price.maxRent.ph")}
           value={value.maxRent}
           onChange={(maxRent) => onChange({ ...value, maxRent })}
         />
       </div>
       <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-slate-500">
-        <span>Korean won · monthly often ₩500,000–1,500,000 · deposit ₩5–50 million</span>
+        <span>{t("price.note")}</span>
         {hint ? (
           <button
             type="button"
             onClick={() => onChange({})}
             className="shrink-0 text-slate-400 hover:text-white"
           >
-            Clear prices
+            {t("price.clear")}
           </button>
         ) : null}
       </div>

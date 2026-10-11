@@ -283,6 +283,7 @@ export const ko: Record<MessageKey, string> = {
   "notes.from": "출처: {source}",
   "notes.machine": "기계 번역입니다. 세부 내용은 중개사에게 확인하세요.",
   "notes.glossary": "자주 쓰이는 용어",
+  "gallery.fullscreenBtn": "전체 화면",
   "gallery.view": "사진 전체 화면으로 보기",
   "gallery.prev": "이전 사진",
   "gallery.next": "다음 사진",

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { formatCount } from "~/lib/i18n";
+import { useI18n } from "~/lib/i18n/react";
 import {
-  propertyTypeLabel,
-  salesTypeFilterLabel,
-  sourceLabel,
+  propertyTypeText,
+  salesTypeFilterText,
+  sourceText,
 } from "~/lib/listings/copy";
 import { englishCardTitle, listingCardMeta } from "~/lib/listings/english";
 import { detectForeignerOk } from "~/lib/listings/foreigner";
@@ -18,13 +20,7 @@ import { ListingPageLink } from "./ListingPageLink";
 import { ListingPhoto } from "./ListingPhoto";
 import { ListingPrice } from "./ListingPrice";
 
-const SORT_OPTIONS: Array<{ id: ListSort; label: string }> = [
-  { id: "featured", label: "Featured" },
-  { id: "newest", label: "Newest" },
-  { id: "deposit", label: "Deposit" },
-  { id: "monthly", label: "Monthly" },
-  { id: "size", label: "Size" },
-];
+const SORT_OPTIONS: ListSort[] = ["featured", "newest", "deposit", "monthly", "size"];
 
 function sortValue(listing: MapListing, sort: ListSort): number {
   if (sort === "newest") {
@@ -87,6 +83,7 @@ export function ListingList({
   scrollToId?: string;
   scrollToAt?: number;
 }) {
+  const { lang, t } = useI18n();
   const sorted = useMemo(() => {
     if (ranked?.length) return ranked.map((item) => item.listing);
     if (sort === "featured") return sortByDistanceTo(listings, center);
@@ -137,12 +134,12 @@ export function ListingList({
   }, [scrollToId, scrollToAt, sorted.length]);
 
   const countLabel = loading
-    ? "Loading homes…"
+    ? t("list.loading")
     : truncated && totalCount && totalCount > sorted.length
-      ? `${sorted.length.toLocaleString("en-US")} of ${totalCount.toLocaleString("en-US")} homes`
+      ? t("list.homesOf", { n: formatCount(sorted.length, lang), total: formatCount(totalCount, lang) })
       : sorted.length === 0 && groupedCount
-        ? `0 homes listed · ${groupedCount.toLocaleString("en-US")} grouped on the map`
-        : `${sorted.length.toLocaleString("en-US")} homes`;
+        ? t("list.grouped", { grouped: formatCount(groupedCount, lang) })
+        : t("list.homes", { n: formatCount(sorted.length, lang) });
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-950">
@@ -160,15 +157,15 @@ export function ListingList({
         <div className="flex flex-wrap gap-1">
           {SORT_OPTIONS.map((option) => (
             <button
-              key={option.id}
+              key={option}
               type="button"
-              aria-pressed={sort === option.id}
-              onClick={() => onSort(option.id)}
+              aria-pressed={sort === option}
+              onClick={() => onSort(option)}
               className={`rounded-full px-2 py-0.5 text-[11px] ${
-                sort === option.id ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
+                sort === option ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
               }`}
             >
-              {option.label}
+              {t(`list.sort.${option}`)}
             </button>
           ))}
         </div>
@@ -177,16 +174,15 @@ export function ListingList({
       {!sorted.length ? (
         <div className="flex flex-1 items-center justify-center p-6 text-sm text-slate-400">
           {loading
-            ? "Loading homes in this area…"
-            : emptyHint ??
-              "No homes in the current map area. Search a neighborhood, draw a shape, or zoom in."}
+            ? t("list.loadingArea")
+            : emptyHint ?? t("list.empty")}
         </div>
       ) : (
         <div ref={listRoot} data-list-scroll className="min-h-0 flex-1 overflow-auto p-3">
           <ul className="space-y-2">
             {sorted.map((listing, index) => {
-              const title = englishCardTitle(listing);
-              const meta = listingCardMeta(listing);
+              const title = englishCardTitle(listing, lang);
+              const meta = listingCardMeta(listing, lang);
               const saved = savedIds.includes(listing.id);
               const rankedItem = reasonsById.get(listing.id);
               const foreignerOk =
@@ -194,7 +190,7 @@ export function ListingList({
                 detectForeignerOk(listing.title, listing.description);
               const showForeignerBadge =
                 foreignerOk === true &&
-                !rankedItem?.reasons.includes("Foreigners welcome");
+                !rankedItem?.reasons.includes(t("list.reason.foreigner"));
               return (
                 <li key={listing.id} data-listing-id={listing.id}>
                   <div
@@ -212,7 +208,7 @@ export function ListingList({
                       <span className="relative h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-white/5">
                         <ListingPhoto
                           url={listing.thumbnail}
-                          alt={title.trim() ? title : (listing.title ?? "Listing photo")}
+                          alt={title.trim() ? title : (listing.title ?? t("card.photo"))}
                           width={400}
                           className="h-20 w-24 object-cover"
                         />
@@ -226,9 +222,9 @@ export function ListingList({
                         <span className="flex flex-wrap items-center gap-1">
                           <ListingAgeDot updatedAt={listing.updatedAt} />
                           <span className="text-[11px] uppercase tracking-wide text-slate-400">
-                            {propertyTypeLabel[listing.propertyType]}
+                            {propertyTypeText(lang, listing.propertyType)}
                             {listing.salesType
-                              ? ` · ${salesTypeFilterLabel[listing.salesType]}`
+                              ? ` · ${salesTypeFilterText(lang, listing.salesType)}`
                               : ""}
                           </span>
                           {showForeignerBadge ? <ForeignerBadge ok /> : null}
@@ -241,7 +237,7 @@ export function ListingList({
                           {title}
                         </span>
                         <span className="mt-0.5 block truncate text-xs text-slate-500">
-                          {meta || "Tap for details"}
+                          {meta || t("list.tapDetails")}
                         </span>
                         {rankedItem?.reasons.length ? (
                           <span className="mt-1 flex flex-wrap gap-1">
@@ -262,7 +258,7 @@ export function ListingList({
                         type="button"
                         onClick={() => onToggleSave(listing)}
                         className="rounded-full bg-white/10 px-2 py-1 text-sm"
-                        aria-label={saved ? "Remove from saved" : "Save listing"}
+                        aria-label={saved ? t("card.unsave") : t("card.save")}
                         aria-pressed={saved}
                       >
                         {saved ? "♥" : "♡"}
@@ -271,7 +267,7 @@ export function ListingList({
                         listing={listing}
                         className="rounded-full bg-white/10 px-2 py-1 text-center text-[11px] text-sky-300"
                       >
-                        Page
+                        {t("list.page")}
                       </ListingPageLink>
                       <a
                         href={listing.url}
@@ -279,7 +275,7 @@ export function ListingList({
                         rel="noopener noreferrer"
                         className="rounded-full bg-white/10 px-2 py-1 text-center text-[11px] text-slate-300"
                       >
-                        {sourceLabel[listing.source]} ↗
+                        {sourceText(lang, listing.source)} ↗
                       </a>
                     </span>
                   </div>
@@ -295,7 +291,7 @@ export function ListingList({
                 onClick={onLoadMore}
                 className="mt-3 w-full rounded-xl bg-white/10 px-3 py-2 text-sm text-white"
               >
-                {loadingMore ? "Loading more…" : "Load more homes"}
+                {loadingMore ? t("list.loadingMore") : t("list.loadMore")}
               </button>
             </>
           ) : null}

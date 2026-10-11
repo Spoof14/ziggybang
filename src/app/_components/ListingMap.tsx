@@ -27,7 +27,9 @@ import {
 import { leafletBasemap } from "~/lib/geo/basemap";
 import { isUsableMapViewport, offsetLngByPx, panelOffsetPx } from "~/lib/geo/bounds";
 import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
-import { formatPrice, propertyTypeLabel } from "~/lib/listings/copy";
+import { type Lang } from "~/lib/i18n";
+import { useI18n } from "~/lib/i18n/react";
+import { formatPrice, propertyTypeText } from "~/lib/listings/copy";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
 import { MetroLayer } from "./MetroLayer";
 
@@ -87,9 +89,9 @@ function listingStroke(source: MapListing["source"]) {
   return sourceColor({ [source]: 1 });
 }
 
-function listingTooltip(listing: MapListing) {
-  const price = formatPrice(listing);
-  const kind = propertyTypeLabel[listing.propertyType];
+function listingTooltip(listing: MapListing, lang: Lang) {
+  const price = formatPrice(listing, lang);
+  const kind = propertyTypeText(lang, listing.propertyType);
   return price ? `${kind} · ${price}` : kind;
 }
 
@@ -282,6 +284,7 @@ function LocateIcon({ spinning }: { spinning: boolean }) {
 }
 
 function LocateMeControl() {
+  const { t } = useI18n();
   const map = useMap();
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [status, setStatus] = useState<
@@ -348,12 +351,12 @@ function LocateMeControl() {
 
   const title =
     status === "denied"
-      ? "Location permission denied"
+      ? t("map.locateDenied")
       : status === "unavailable"
-        ? "Location unavailable"
+        ? t("map.locateUnavailable")
         : status === "locating"
-          ? "Finding your location…"
-          : "Center on me";
+          ? t("map.locating")
+          : t("map.locate");
 
   return (
     <>
@@ -382,7 +385,7 @@ function LocateMeControl() {
             }}
           >
             <Tooltip direction="top" offset={[0, -8]}>
-              You are here
+              {t("map.youAreHere")}
             </Tooltip>
           </CircleMarker>
         </>
@@ -467,6 +470,7 @@ function MarkerLayer({
   tool: "pan" | "radius" | "draw";
   onSelect: (listing: MapListing) => void;
 }) {
+  const { lang } = useI18n();
   return (
     <>
       {listings.map((listing) => (
@@ -489,7 +493,7 @@ function MarkerLayer({
           }}
         >
           <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
-            {listingTooltip(listing)}
+            {listingTooltip(listing, lang)}
           </Tooltip>
         </CircleMarker>
       ))}
