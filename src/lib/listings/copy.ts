@@ -161,7 +161,9 @@ export function formatFloor(value?: string, lang: Lang = DEFAULT_LANG): string |
 
 export function formatRoomType(value?: string, lang: Lang = DEFAULT_LANG): string | null {
   if (!value) return null;
-  const key = ROOM_TYPE_KEY[value];
+  const compact = value.replace(/\s+/g, "");
+  const variant = /^원룸\((오픈|분리|복층)형?\)$/.exec(compact);
+  const key = ROOM_TYPE_KEY[variant ? `${variant[1]}${variant[1] === "복층" ? "" : "형"}원룸` : compact];
   // Korean users keep the original wording; English users get a plain-English label.
   if (lang === "ko" || !key) return value;
   return t(lang, `room.${key}`);
