@@ -76,8 +76,8 @@ export function parseAskUi(raw: string | null, now = Date.now()): AskUiState | n
     const data = JSON.parse(raw) as Partial<AskUiState> | null;
     if (!data || typeof data !== "object") return null;
     if (typeof data.at !== "number" || now - data.at > ASK_UI_TTL_MS) return null;
-    const raw = data.index;
-    const index = typeof raw === "number" && Number.isInteger(raw) && raw >= 0 ? raw : 0;
+    const rawIndex = data.index;
+    const index = typeof rawIndex === "number" && Number.isInteger(rawIndex) && rawIndex >= 0 ? rawIndex : 0;
     return { open: data.open === true, index, at: data.at };
   } catch {
     return null;
