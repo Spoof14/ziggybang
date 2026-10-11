@@ -13,6 +13,7 @@ import { buildingAgeYears, describeBuildingAgeFilter } from "./building-age";
 import { formatFloor, formatKrwFromManwon, propertyTypeText, salesTypeText } from "./copy";
 import {
   BASEMENT_OR_ROOFTOP_WORDS,
+  buildAskSummary,
   CHEAP_WORDS,
   collapseDuplicates,
   diversify,
@@ -27,6 +28,7 @@ import {
   MAX_NEAR_DUPLICATES,
 } from "./ask-quality";
 import { approxCommuteMin, commuteRadiusM, MAX_COMMUTE_RADIUS_M, type AskCommute, type SimilarAnchor } from "./ask-followup";
+import { medianOf, priceText, reasonPriceConsistent, relocalizeAssumption, type ReasonContext } from "./ask-reason";
 import { filterListings, isNaverClusterListing } from "./filter";
 import { floorFilterText, type FloorFilter } from "./floor";
 import { listingHasPhotos } from "./photo";
@@ -88,6 +90,8 @@ export type AskPick = {
   commuteMin?: number;
   /** Other listings of the same complex/price/size that were folded into or left out of this pick. */
   similar?: number;
+  /** What the full listing stated (tags, subway walk) before it was slimmed; lets a language switch rewrite the reason without re-fetching. */
+  facts?: { tags: string[]; subwayWalkMin?: number };
 };
 
 export type AskFallbackReason =
@@ -618,6 +622,18 @@ function genericReason(
   return top.join(" · ");
 }
 
+/**
+ * Does the listing plausibly have the requested room count? "mismatch" = it
+ * says it is a one-room/open studio, or (when it states nothing) is far too
+ * small for two rooms; those only fill leftover slots.
+ */
+export function roomMatch(l: MapListing, rooms: number): "match" | "mismatch" | "unknown" {
+  const stated = listingRooms(l);
+  if (stated != null) return stated === rooms ? "match" : stated < rooms ? "mismatch" : "unknown";
+  if (rooms >= 2 && l.areaM2 != null && l.areaM2 < 25) return "mismatch";
+  return "unknown";
+}
+
 /** Messages the user typed mention these → don't penalise basement / rooftop units. */
 export function asksForBasementOrRooftop(text: string): boolean {
   return BASEMENT_OR_ROOFTOP_WORDS.test(text);
@@ -693,7 +709,7 @@ export function fallbackRank(
         parts.prefs * weights.prefs) /
       total;
     const kind = floorKind(l.floor);
-    if (c.rooms) score += listingRooms(l) === c.rooms ? 0.12 : -0.04;
+    if (c.rooms) score += roomMatch(l, c.rooms) === "match" ? 0.12 : roomMatch(l, c.rooms) === "mismatch" ? -1 : -0.04;
     if (kind !== "normal" && !allowsBasement && !c.floorFilter) score -= cheap ? 0.1 : 0.5;
     // Listings with a photo win ties; a card with a placeholder is a weaker pick.
     score += hasAnyPhoto(l) ? 0.02 : -0.02;
@@ -725,6 +741,8 @@ export type CompactCandidate = {
   id: string;
   type: string;
   deal: string;
+  /** Ready-made price line in the answer language (deal type + amounts). Quote it as-is. */
+  price: string;
   /** Pre-formatted KRW, e.g. "₩80 million". Quote these as-is. */
   deposit?: string;
   monthlyRent?: string;
@@ -739,6 +757,8 @@ export type CompactCandidate = {
   floor?: string;
   rooms?: number;
   builtYear?: number;
+  /** Only present when true for this listing against the other candidates: the deposit is below their median. */
+  depositBelowMedian?: boolean;
   /** Straight-line distance from the search center (not from a subway). */
   metersFromCenter: number;
   subwayWalkMin?: number;
@@ -755,6 +775,7 @@ export function compactCandidate(
   center: { lat: number; lng: number },
   lang: Lang = DEFAULT_LANG,
   commute?: AskCommute,
+  ctx: ReasonContext = {},
 ): CompactCandidate {
   const year = builtYear(listing);
   const tags = listingTags(listing);
@@ -763,6 +784,11 @@ export function compactCandidate(
     id: listing.id,
     type: propertyTypeText(lang, listing.propertyType).toLowerCase(),
     deal: listing.salesType ?? "unknown",
+    price: priceText(listing, lang),
+    depositBelowMedian:
+      listing.salesType !== "sale" && listing.deposit != null && ctx.medianDeposit != null && listing.deposit < ctx.medianDeposit
+        ? true
+        : undefined,
     deposit: listing.salesType === "sale" ? undefined : (formatKrwFromManwon(listing.deposit, lang) ?? undefined),
     monthlyRent:
       listing.salesType === "wolse" && listing.rent != null ? (formatKrwFromManwon(listing.rent, lang) ?? undefined) : undefined,
@@ -829,8 +855,10 @@ export function validateAiRanking(
   return { picks, summary: cleanLine(data.summary, 300), assumptions, dropped };
 }
 
-function groundedReason(reason: string | undefined, listing: MapListing): string | undefined {
+export function groundedReason(reason: string | undefined, listing: MapListing, ctx: ReasonContext = {}): string | undefined {
   if (!reason) return undefined;
+  // Price wording must agree with the structured deal type and amounts.
+  if (!reasonPriceConsistent(reason, listing, ctx)) return undefined;
   const tags = listingTags(listing);
   const ok = reasonIsGrounded(reason, {
     builtYear: builtYear(listing),
@@ -856,6 +884,10 @@ export function assemblePicks(
     avoidBadFloors?: boolean;
     /** Ignore the model's order and keep our score order (cheap requests). */
     orderByScore?: boolean;
+    /** Median deposit of the candidate set: the only yardstick for calling a deposit "low". */
+    medianDeposit?: number;
+    /** Listings that do not really match a stated room count; they only fill leftover slots. */
+    weakIds?: ReadonlySet<string>;
   } = {},
 ): AskPick[] {
   const groups = dupes.groups ?? new Map<string, string>();
@@ -874,6 +906,7 @@ export function assemblePicks(
       reason: reason ?? item.reason,
       reasonSource: reason ? "ai" : "basic",
       distanceM: Math.round(item.distanceM),
+      facts: { tags: listingTags(item.listing), ...(subwayWalkMinutes(item.listing) != null ? { subwayWalkMin: subwayWalkMinutes(item.listing)! } : {}) },
       ...(item.commuteMin != null ? { commuteMin: item.commuteMin } : {}),
     });
   };
@@ -881,13 +914,14 @@ export function assemblePicks(
   const rankIndex = new Map(ranked.map((r, index) => [r.listing.id, index]));
   const aiPicks = [...(ai?.picks ?? [])];
   if (dupes.orderByScore) aiPicks.sort((a, b) => (rankIndex.get(a.id) ?? 1e9) - (rankIndex.get(b.id) ?? 1e9));
-  const badFloor = (item: ScoredCandidate) => floorKind(item.listing.floor) !== "normal";
+  const weak = (item: ScoredCandidate) =>
+    (dupes.avoidBadFloors && floorKind(item.listing.floor) !== "normal") || Boolean(dupes.weakIds?.has(item.listing.id));
   const deferred: Array<{ item: ScoredCandidate; reason?: string }> = [];
   for (const pick of aiPicks) {
     const found = byId.get(pick.id);
     if (!found || used.has(pick.id) || !roomFor(found)) continue;
-    const reason = groundedReason(pick.reason, found.listing);
-    if (dupes.avoidBadFloors && badFloor(found)) {
+    const reason = groundedReason(pick.reason, found.listing, { medianDeposit: dupes.medianDeposit });
+    if (weak(found)) {
       deferred.push({ item: found, reason });
       continue;
     }
@@ -917,6 +951,77 @@ export function assemblePicks(
     if (extra > 0) pick.similar = extra;
   }
   return out.slice(0, target).map((pick, index) => ({ ...pick, rank: index + 1 }));
+}
+
+export function basicSummary(picks: MapListing[], candidates: number, c: AskConstraints, lang: Lang): string {
+  const placeName = c.place?.kind === "place" ? displayPlace(c.place.name, lang) : undefined;
+  const typeWord =
+    c.propertyTypes?.length === 1
+      ? propertyTypeText(lang, c.propertyTypes[0]!).toLowerCase()
+      : t(lang, "ask.sum.home");
+  return buildAskSummary({
+    lang,
+    count: picks.length,
+    candidates,
+    placeName,
+    typeWord,
+    deals: salesOf(c),
+    rooms: c.rooms,
+    picks,
+    cheap: (c.preferences ?? []).some((p) => preferenceKey(p) === "cheap"),
+  });
+}
+
+/**
+ * Deterministic language switch of a stored result: same constraints, picks,
+ * order and counts; summary, notes and "basic" reasons are rewritten from the
+ * structured data. Instant and offline, so the UI never shows the old language.
+ */
+export function localizeBasic(
+  result: Extract<AskPicksResult, { status: "ok" | "empty" }>,
+  from: Lang,
+  lang: Lang,
+): Extract<AskPicksResult, { status: "ok" | "empty" }> {
+  if (from === lang) return result;
+  const c = sanitizeConstraints(result.constraints);
+  const notes = result.assumptions
+    .map((a) => relocalizeAssumption(a, from, lang))
+    .filter((a): a is string => Boolean(a));
+  if (result.status === "empty") {
+    return {
+      ...result,
+      constraints: c,
+      summary: result.sourceErrors.length ? t(lang, "ask.emptyNoSource") : t(lang, "ask.emptyNone"),
+      assumptions: notes,
+      suggestions: emptySuggestions(c, lang),
+    };
+  }
+  const listings = result.picks.map((p) => restoreRich(p.listing, p.facts));
+  const center = searchCircle(c, result.radiusM);
+  const reasons = new Map(
+    fallbackRank(listings, c, center, result.radiusM, "", new Date(), lang).map((s) => [s.listing.id, s.reason]),
+  );
+  return {
+    ...result,
+    constraints: c,
+    picks: result.picks.map((p) => ({ ...p, reason: reasons.get(p.listing.id) ?? p.reason, reasonSource: "basic" as const })),
+    summary: basicSummary(result.picks.map((p) => p.listing), result.candidateCount, c, lang),
+    assumptions: notes,
+  };
+}
+
+/** Re-create the detail fields that tags/subway checks read, from the stored facts of a slimmed pick. */
+export function restoreRich(listing: MapListing, facts?: AskPick["facts"]): MapListing {
+  if (!facts) return listing;
+  const rich: Rich = { ...listing };
+  const tags = new Set(facts.tags);
+  if (tags.has("elevator")) rich.elevator = true;
+  if (tags.has("parking")) rich.parking = "possible";
+  if (tags.has("furnished")) rich.options = Array.from({ length: 6 }, (_v, i) => `option${i}`);
+  const words = [tags.has("quiet") ? "조용" : "", tags.has("pet") ? "반려동물" : "", tags.has("sunny") ? "남향" : ""].filter(Boolean);
+  if (words.length) rich.description = `${rich.description ?? ""} ${words.join(" ")}`.trim();
+  if (facts.subwayWalkMin != null) rich.nearby = [{ type: "subway", name: "", walkMinutes: facts.subwayWalkMin, meters: 0 } as NonNullable<Rich["nearby"]>[number]];
+  return rich;
 }
 
 /** Drop the heavy detail fields before sending a listing to the browser. */
