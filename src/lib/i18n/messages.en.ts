@@ -535,7 +535,7 @@ export const en = {
   "ask.applied.map": "the current map",
   "ask.applied.homes": "homes",
   "ask.chip.commute": "Commute ≤{min} min to {dest} (approx.)",
-  "ask.chip.similar": "Similar to {label}",
+  "ask.chip.similar": "Similar to the {label} listing",
   "ask.commute.card": "~{min} min to {dest} (approx.)",
   "ask.assume.anchor": "Using pick #{n} as the reference.",
   "ask.assume.commuteNoDest": "Couldn’t locate “{text}” for the commute, so it was ignored.",

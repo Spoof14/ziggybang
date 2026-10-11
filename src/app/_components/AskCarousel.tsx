@@ -112,7 +112,7 @@ export function AskPickCard({
         </p>
         {commute && pick.commuteMin != null ? (
           <p className="text-[11px] leading-snug text-emerald-300">
-            {t("ask.commute.card", { min: pick.commuteMin, dest: displayPlace(commute.name) })}
+            {t("ask.commute.card", { min: pick.commuteMin, dest: displayPlace(commute.name, lang) })}
           </p>
         ) : null}
         <p

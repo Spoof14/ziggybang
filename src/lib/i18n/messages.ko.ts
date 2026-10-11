@@ -533,7 +533,7 @@ export const ko: Record<MessageKey, string> = {
   "ask.applied.map": "현재 지도",
   "ask.applied.homes": "매물",
   "ask.chip.commute": "{dest}까지 통근 {min}분 이내 (약)",
-  "ask.chip.similar": "{label}와(과) 비슷한 매물",
+  "ask.chip.similar": "{label} 매물과 비슷한 매물",
   "ask.commute.card": "{dest}까지 약 {min}분 (추정)",
   "ask.assume.anchor": "{n}번 추천 매물을 기준으로 찾았어요.",
   "ask.assume.commuteNoDest": "통근 목적지 “{text}”의 위치를 찾지 못해 조건에서 뺐어요.",

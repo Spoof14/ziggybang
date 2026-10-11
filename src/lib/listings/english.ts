@@ -6,6 +6,7 @@ import {
   propertyTypeText,
   salesTypeFilterText,
 } from "./copy";
+import { placeEn, placeKo, type Place } from "~/lib/geo/places";
 import { hasHangul } from "./foreigner";
 import { matchPlaceInAddress } from "./search";
 import { type MapListing } from "./types";
@@ -60,11 +61,33 @@ function titleCase(value: string): string {
     .join(" ");
 }
 
-export function englishNeighborhood(address?: string): string | null {
+/** The Korean 구 named in an address ("마포구", or Latin "Mapo-gu" mapped back), if any. */
+export function addressGu(address?: string): string | null {
   if (!address) return null;
+  const korean = /[가-힣]+구/.exec(address)?.[0];
+  if (korean) return korean;
+  const latin = /([A-Za-z]+)-gu/i.exec(address)?.[0]?.toLowerCase();
+  if (!latin) return null;
+  for (const [ko, en] of Object.entries(DISTRICT_LABEL)) if (en.toLowerCase() === latin) return ko;
+  return null;
+}
+
+/**
+ * Neighbourhood from the place table, but never one that contradicts the
+ * address's own district (a "Seongsu" hit inside a 강남구 address is dropped).
+ */
+function consistentPlace(address?: string): Place | undefined {
+  if (!address) return undefined;
   const place = matchPlaceInAddress(address);
-  if (!place) return null;
-  return titleCase(place.names[0] ?? place.id);
+  if (!place) return undefined;
+  const gu = addressGu(address);
+  if (place.gu && gu && place.gu !== gu) return undefined;
+  return place;
+}
+
+export function englishNeighborhood(address?: string): string | null {
+  const place = consistentPlace(address);
+  return place ? placeEn(place) : null;
 }
 
 export function englishDistrict(address?: string): string | null {
@@ -86,10 +109,8 @@ export function englishDistrict(address?: string): string | null {
 
 /** Korean neighborhood name for a listing ("홍대"), when the place table knows it. */
 export function koreanNeighborhood(address?: string): string | null {
-  if (!address) return null;
-  const place = matchPlaceInAddress(address);
-  if (!place) return null;
-  return place.names.find((name) => hasHangul(name)) ?? null;
+  const place = consistentPlace(address);
+  return place ? placeKo(place) : null;
 }
 
 function localNeighborhood(address: string | undefined, lang: Lang): string | null {

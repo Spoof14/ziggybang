@@ -248,7 +248,7 @@ export function AskSearch({
   );
   const where =
     constraints?.place?.kind === "place"
-      ? displayPlace(constraints.place.name)
+      ? displayPlace(constraints.place.name, lang)
       : undefined;
 
   /**
@@ -342,14 +342,22 @@ export function AskSearch({
 
   // Switching language re-ranks the same constraints so the summary and
   // reasons are rewritten in the new UI language.
+  // Runs when the panel is open (also right after opening with a stale stored result).
+  const regenFor = useRef<Lang | null>(null);
   useEffect(() => {
-    if (!result || !constraints || resultLang === lang || inFlight.current) return;
+    if (resultLang === lang) {
+      regenFor.current = null;
+      return;
+    }
+    if (!open || !result || !constraints || inFlight.current || regenFor.current === lang) return;
+    regenFor.current = lang;
     rerun(constraints);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang]);
+  }, [lang, open, result, resultLang, constraints]);
 
   function runSimilar(listing: MapListing, rank?: number) {
-    const label = rank ? t("ask.similar.label", { rank }) : similarLabel(listing, lang);
+    void rank;
+    const label = similarLabel(listing, lang);
     const next = similarConstraints(priorPickFromListing(rank ?? 0, listing, similarLabel(listing, lang)));
     next.similarTo = { id: listing.id, label };
     setMessages([]);
