@@ -482,6 +482,7 @@ export const ko: Record<MessageKey, string> = {
   "pref.newer": "신축",
   "pref.spacious": "넓은 집",
   "pref.cheap": "저렴한 비용",
+  "ask.searchingFor": "검색 중:",
   "ask.price.wolse": "월세 보증금 {deposit} / 월 {rent}",
   "ask.price.jeonse": "전세 {deposit}",
   "ask.price.sale": "매매 {price}",

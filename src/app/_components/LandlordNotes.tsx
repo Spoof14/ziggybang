@@ -18,10 +18,13 @@ export function LandlordNotes({
   text,
   source,
   showTitle = true,
+  title,
 }: {
   text: string;
   source: Source;
   showTitle?: boolean;
+  /** The agent's headline: translated together with the description and shown with it. */
+  title?: string;
 }) {
   const { lang, t } = useI18n();
   const trimmed = text.trim();
@@ -32,14 +35,23 @@ export function LandlordNotes({
     enabled: english && korean,
     staleTime: 10 * 60 * 1000,
   });
-  const query = api.listings.translateNotes.useQuery(
-    { text: trimmed },
+  const headline = title?.trim() ?? "";
+  const utils = api.useUtils();
+  const query = api.listings.translateBundle.useQuery(
+    { title: headline, text: trimmed },
     {
-      enabled: Boolean(trimmed) && korean && english && requested,
+      enabled: Boolean(trimmed) && (korean || hasHangul(headline)) && english && requested,
       retry: false,
       staleTime: 24 * 60 * 60 * 1000,
     },
   );
+  // The headline in the page header picks up the same translation without another request.
+  const bundledTitle = query.data?.source === "openai" ? query.data.englishTitle?.trim() : undefined;
+  useEffect(() => {
+    if (bundledTitle && headline) {
+      utils.listings.translateTitle.setData({ text: headline }, { english: bundledTitle, source: "openai" });
+    }
+  }, [bundledTitle, headline, utils]);
 
   const busy = requested && (query.isLoading || query.isFetching);
   const [secs, setSecs] = useState(0);
@@ -66,13 +78,15 @@ export function LandlordNotes({
       {showTitle ? <h3 className="text-sm font-semibold text-white">{t("notes.title")}</h3> : null}
       {translation ? (
         <>
-          <p className={body}>{translation}</p>
+          {bundledTitle ? <p className="mt-2 text-sm font-medium text-slate-200">{bundledTitle}</p> : null}
+          <p className={bundledTitle ? body.replace("mt-2", "mt-1") : body}>{translation}</p>
           <p className="mt-1 text-[11px] text-slate-500">{t("notes.machine")}</p>
           <details className="mt-2">
             <summary className="cursor-pointer text-[11px] text-slate-500 hover:text-slate-300">
               {t("notes.korean")}
             </summary>
             <p lang="ko" className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-400">
+              {headline ? `${headline}\n\n` : ""}
               {trimmed}
             </p>
           </details>

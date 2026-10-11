@@ -14,7 +14,6 @@ import {
   salesTypeText,
   sourceText,
 } from "~/lib/listings/copy";
-import { glossText } from "~/lib/listings/glossary";
 import {
   englishAddressLine,
   englishCardTitle,
@@ -29,6 +28,7 @@ import { type MapListing } from "~/lib/listings/types";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { ListingAgeLine } from "./ListingAgeLine";
 import { LandlordNotes } from "./LandlordNotes";
+import { ListingSubtitle } from "./ListingSubtitle";
 import { ListingGallery } from "./ListingGallery";
 import { ListingLocationCard } from "./ListingLocationCard";
 import { ListingPageLink } from "./ListingPageLink";
@@ -129,9 +129,7 @@ export function ListingPanel({
               : (detail.title ?? `${propertyTypeText(lang, listing.propertyType)} ${listing.sourceId}`)}
           </h2>
           {detail.title && detail.title !== englishTitle ? (
-            <p lang="ko" className="mt-1 text-xs text-slate-400">
-              {lang === "en" ? glossText(detail.title, lang) : detail.title}
-            </p>
+            <ListingSubtitle title={detail.title} className="mt-1 text-xs text-slate-400" />
           ) : null}
           {detail.salesType ? (
             <p className="mt-1 text-xs text-slate-400">
@@ -252,7 +250,7 @@ export function ListingPanel({
 
       {description ? (
         <div className="px-4 pb-2">
-          <LandlordNotes text={description} source={listing.source} showTitle={false} />
+          <LandlordNotes text={description} source={listing.source} showTitle={false} title={detail.title} />
         </div>
       ) : null}
 

@@ -21,6 +21,7 @@ import {
   describeAppliedFilters,
   constraintsToSnapshot,
   displayPlace,
+  localizeBasic,
   removeConstraint,
   type AskConstraints,
   type AskPick,
@@ -106,7 +107,14 @@ export function AskSearch({
   /** Language the current result text was produced in. */
   const [resultLang, setResultLang] = useState<Lang>(lang);
   const [constraints, setConstraints] = useState<AskConstraints | null>(null);
-  const [result, setResult] = useState<AskStoredResult | null>(null);
+  const [stored, setResult] = useState<AskStoredResult | null>(null);
+  /** What was submitted, shown while the answer is loading. */
+  const [searchingFor, setSearchingFor] = useState<string | null>(null);
+  /** Never shows text in another language: a stale-language result is translated from structured data on the spot. */
+  const result = useMemo(
+    () => (stored && resultLang !== lang ? localizeBasic(stored, resultLang, lang) : stored),
+    [stored, resultLang, lang],
+  );
   const [draft, setDraft] = useState("");
   const [runKey, setRunKey] = useState(0);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -204,8 +212,8 @@ export function AskSearch({
 
   useEffect(() => {
     if (!restored.current) return;
-    saveAskSession({ messages, constraints, result, lang: resultLang });
-  }, [messages, constraints, result, resultLang]);
+    saveAskSession({ messages, constraints, result: stored, lang: resultLang });
+  }, [messages, constraints, stored, resultLang]);
 
   useEffect(() => {
     if (!pending) {
@@ -268,9 +276,11 @@ export function AskSearch({
     const myRun = (runId.current += 1);
     const timer = setTimeout(() => controller.abort("timeout"), ASK_TIMEOUT_MS);
     const live = () => runId.current === myRun && !controller.signal.aborted;
+    localizeToken.current += 1;
     setError(null);
     setNotice(null);
     setApplied(false);
+    setSearchingFor(text ?? options.label ?? null);
 
     // ~5 turns of memory (user + assistant), kept in sessionStorage with the result.
     const history = text
@@ -326,7 +336,10 @@ export function AskSearch({
       clearTimeout(timer);
       if (inFlight.current === controller) {
         inFlight.current = null;
-        if (runId.current === myRun) setPhase(null);
+        if (runId.current === myRun) {
+          setPhase(null);
+          setSearchingFor(null);
+        }
       }
     }
   }
@@ -342,20 +355,32 @@ export function AskSearch({
     void run({ edited: next });
   }
 
-  // Switching language re-ranks the same constraints so the summary and
-  // reasons are rewritten in the new UI language.
-  // Runs when the panel is open (also right after opening with a stale stored result).
-  const regenFor = useRef<Lang | null>(null);
+  // Switching language keeps the stored constraints and picks exactly. The text
+  // is translated from structured data at once (see `result`), then the server
+  // may upgrade the reasons to model-written ones; nothing is re-interpreted,
+  // re-fetched or re-ranked.
+  const localizeToken = useRef(0);
   useEffect(() => {
-    if (resultLang === lang) {
-      regenFor.current = null;
-      return;
-    }
-    if (!open || !result || !constraints || inFlight.current || regenFor.current === lang) return;
-    regenFor.current = lang;
-    rerun(constraints);
+    if (!stored || resultLang === lang) return;
+    const from = resultLang;
+    const source = stored;
+    const token = (localizeToken.current += 1);
+    setResult(localizeBasic(source, from, lang));
+    setResultLang(lang);
+    if (source.status !== "ok" || source.provider !== "openai") return;
+    void utils.client.listings.askLocalize
+      .mutate({ result: source, fromLang: from, lang })
+      .then((upgraded) => {
+        if (localizeToken.current !== token || upgraded.status !== "ok") return;
+        setResult((prev) =>
+          prev?.status === "ok" && prev.picks.map((p) => p.listing.id).join() === upgraded.picks.map((p) => p.listing.id).join()
+            ? { ...prev, picks: prev.picks.map((p, i) => ({ ...p, reason: upgraded.picks[i]!.reason, reasonSource: upgraded.picks[i]!.reasonSource })) }
+            : prev,
+        );
+      })
+      .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, open, result, resultLang, constraints]);
+  }, [lang, resultLang, stored]);
 
   function runSimilar(listing: MapListing, rank?: number) {
     void rank;
@@ -379,6 +404,7 @@ export function AskSearch({
 
   function newSearch() {
     cancel();
+    localizeToken.current += 1;
     setMessages([]);
     setConstraints(null);
     setResult(null);
@@ -600,6 +626,11 @@ export function AskSearch({
 
           {pending ? (
             <div role="status" aria-live="polite" className="space-y-2">
+              {searchingFor ? (
+                <p className="break-words text-xs text-slate-100">
+                  <span className="text-slate-400">{t("ask.searchingFor")}</span> “{searchingFor}”
+                </p>
+              ) : null}
               <div className="flex items-center justify-between gap-2 text-xs text-slate-300">
                 <span className="flex items-center gap-2">
                   <span className="flex shrink-0 gap-1" aria-hidden="true">

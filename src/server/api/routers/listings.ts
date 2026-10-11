@@ -6,7 +6,7 @@ import { localizeAskResult, runAskPicks } from "~/server/listings/ask-picks";
 import { SEOUL_CENTER, type AskConstraints, type AskPicksResult } from "~/lib/listings/ask-picks";
 import { geocodeKorea } from "~/server/listings/geocode";
 import { inspectListingPhotos } from "~/server/listings/vision";
-import { translateListingNotes } from "~/server/listings/translate";
+import { translateListingBundle, translateListingNotes, translateListingTitle } from "~/server/listings/translate";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { ageFilters } from "~/lib/listings/age";
 import { floorFilters } from "~/lib/listings/floor";
@@ -301,4 +301,14 @@ export const listingsRouter = createTRPCRouter({
   translateNotes: publicProcedure
     .input(z.object({ text: z.string().min(1).max(4000) }))
     .query(({ input }) => translateListingNotes(input.text)),
+
+  /** Short Korean headline → English (automatic, cheap, cached). */
+  translateTitle: publicProcedure
+    .input(z.object({ text: z.string().min(1).max(200) }))
+    .query(({ input }) => translateListingTitle(input.text)),
+
+  /** Headline + description together ("Translate description"). */
+  translateBundle: publicProcedure
+    .input(z.object({ title: z.string().max(200), text: z.string().min(1).max(4000) }))
+    .query(({ input }) => translateListingBundle(input.title, input.text)),
 });

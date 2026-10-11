@@ -484,6 +484,7 @@ export const en = {
   "pref.newer": "newer building",
   "pref.spacious": "spacious",
   "pref.cheap": "low cost",
+  "ask.searchingFor": "Searching:",
   "ask.price.wolse": "Monthly rent: {deposit} deposit / {rent} per month",
   "ask.price.jeonse": "Jeonse {deposit}",
   "ask.price.sale": "For sale {price}",
