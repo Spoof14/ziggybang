@@ -84,17 +84,19 @@ export function englishNeighborhood(address?: string): string | null {
 
 export function englishDistrict(address?: string): string | null {
   if (!address) return null;
-  let best: { label: string; length: number } | undefined;
+  let best: { label: string; length: number; gu: boolean } | undefined;
   for (const [korean, label] of Object.entries(DISTRICT_LABEL)) {
     if (!address.includes(korean)) continue;
-    if (!best || korean.length > best.length) {
-      best = { label, length: korean.length };
+    // A 구 beats a city ("서울특별시 성동구" is Seongdong-gu, not "Seoul").
+    const gu = korean.endsWith("구");
+    if (!best || (gu && !best.gu) || (gu === best.gu && korean.length > best.length)) {
+      best = { label, length: korean.length, gu };
     }
   }
   const latin = (/[A-Za-z-]+-gu/i.exec(address))?.[0];
   if (latin) {
     const label = `${latin.charAt(0).toUpperCase()}${latin.slice(1).toLowerCase()}`;
-    if (!best || latin.length > best.length) return label;
+    if (!best?.gu || latin.length > best.length) return label;
   }
   return best?.label ?? null;
 }

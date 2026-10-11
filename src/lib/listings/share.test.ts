@@ -56,3 +56,13 @@ describe("shareListing", () => {
     vi.unstubAllGlobals();
   });
 });
+
+import { listingPageUrl, listingMapHref } from "./path";
+describe("language in shared links", () => {
+  const l = { source: "zigbang", propertyType: "oneroom", sourceId: "1" } as const;
+  it("carries ?lang=ko, omits it for English", () => {
+    expect(listingPageUrl(l, "https://x.test", "ko")).toBe("https://x.test/listing/zigbang/oneroom/1?lang=ko");
+    expect(listingPageUrl(l, "https://x.test")).toBe("https://x.test/listing/zigbang/oneroom/1");
+    expect(listingMapHref({ lat: 37.5, lng: 127 }, "ko")).toContain("lang=ko");
+  });
+});

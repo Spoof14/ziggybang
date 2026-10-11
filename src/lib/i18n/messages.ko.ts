@@ -489,7 +489,7 @@ export const ko: Record<MessageKey, string> = {
   "ask.r.rentLow2": "월세 {money}으로 대부분보다 저렴",
   "ask.r.rentLow3": "월 {money}으로 비용 절감",
   "ask.r.near1": "{where}에서 {m}m",
-  "ask.r.near2": "{where}와 가까움 ({m}m)",
+  "ask.r.near2": "{where}에서 가까움 ({m}m)",
   "ask.r.near3": "{where}까지 약 {m}m",
   "ask.r.center": "중심지",
   "ask.r.built1": "{year}년 준공",
