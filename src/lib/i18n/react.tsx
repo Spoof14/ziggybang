@@ -47,6 +47,15 @@ function writeLangToUrl(lang: Lang) {
   );
 }
 
+function readCookie(): string | null {
+  try {
+    const match = new RegExp(`(?:^|;\\s*)${LANG_COOKIE}=([^;]*)`).exec(document.cookie);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function readStored(): string | null {
   try {
     return window.localStorage.getItem(LANG_STORAGE_KEY);
@@ -66,7 +75,9 @@ export function LangProvider({
 
   // Resolve ?lang= / localStorage after hydration so server and client markup agree.
   useEffect(() => {
-    const next = resolveLang({ search: window.location.search, stored: readStored() ?? initialLang });
+    // ?lang= beats the cookie (what the server rendered with), which beats localStorage;
+    // all three are then written back so they never disagree.
+    const next = resolveLang({ search: window.location.search, stored: readCookie() ?? readStored() ?? initialLang });
     setLangState(next);
     persistLang(next);
     // A stored Korean choice on a bare link still produces a shareable ?lang=ko URL.

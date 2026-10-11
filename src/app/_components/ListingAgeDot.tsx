@@ -6,6 +6,7 @@ import {
   listingAgeTone,
 } from "~/lib/listings/age";
 import { useI18n } from "~/lib/i18n/react";
+import { useNowAfterMount } from "~/lib/use-now";
 
 export function ListingAgeDot({
   updatedAt,
@@ -15,9 +16,11 @@ export function ListingAgeDot({
   className?: string;
 }) {
   const { lang, t } = useI18n();
-  const tone = listingAgeTone(updatedAt);
+  const now = useNowAfterMount();
+  const tone = now == null ? undefined : listingAgeTone(updatedAt, now);
   if (!tone) return null;
-  const label = formatRelativeListed(updatedAt, Date.now(), lang) ?? t("ago.listingAge");
+  // Relative text depends on the clock: only after mount, so server and client markup agree.
+  const label = formatRelativeListed(updatedAt, now!, lang) ?? t("ago.listingAge");
   return (
     <span
       className={`inline-block h-2 w-2 shrink-0 rounded-full ${ageToneClass[tone]} ${className}`}

@@ -2,11 +2,11 @@ import { z } from "zod";
 import { getListingDetail, getMapData } from "~/server/listings/aggregate";
 import { interpretAsk } from "~/server/listings/ask";
 import { isOpenAiConfigured } from "~/server/listings/openai";
-import { runAskPicks } from "~/server/listings/ask-picks";
+import { localizeAskResult, runAskPicks } from "~/server/listings/ask-picks";
 import { SEOUL_CENTER, type AskConstraints, type AskPicksResult } from "~/lib/listings/ask-picks";
 import { geocodeKorea } from "~/server/listings/geocode";
 import { inspectListingPhotos } from "~/server/listings/vision";
-import { translateListingNotes } from "~/server/listings/translate";
+import { translateListingBundle, translateListingNotes, translateListingTitle } from "~/server/listings/translate";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { ageFilters } from "~/lib/listings/age";
 import { floorFilters } from "~/lib/listings/floor";
@@ -90,6 +90,40 @@ const priorPicksSchema = z
   )
   .max(10);
 const langSchema = z.enum(["en", "ko"]);
+const storedPickSchema = z
+  .object({
+    rank: z.number().int().min(1).max(50),
+    listing: z
+      .object({
+        id: z.string().min(1).max(120),
+        source: sourceSchema,
+        sourceId: z.string().max(120),
+        lat: z.number(),
+        lng: z.number(),
+        propertyType: propertyTypeSchema,
+        url: z.string().max(500),
+      })
+      .passthrough(),
+    reason: z.string().max(400),
+    reasonSource: z.enum(["ai", "basic"]),
+    facts: z.object({ tags: z.array(z.string().max(20)).max(12), subwayWalkMin: z.number().optional() }).optional(),
+  })
+  .passthrough();
+/** A result the browser already holds (language switch): the stored picks and counts are reused as they are. */
+const storedResultSchema = z
+  .object({
+    status: z.enum(["ok", "empty"]),
+    constraints: constraintsSchema,
+    picks: z.array(storedPickSchema).max(12).default([]),
+    summary: z.string().max(600),
+    assumptions: z.array(z.string().max(400)).max(10),
+    provider: z.enum(["openai", "local"]),
+    candidateCount: z.number(),
+    radiusM: z.number(),
+    widened: z.boolean(),
+    sourceErrors: z.array(z.string().max(200)).max(10),
+  })
+  .passthrough();
 const viewportSchema = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) });
 const fallbackReasonSchema = z.enum(["rate_limited", "quota", "auth", "timeout", "error", "unconfigured"]);
 
@@ -232,6 +266,22 @@ export const listingsRouter = createTRPCRouter({
       };
     }),
 
+  /**
+   * Language switch: rewrite summary, reasons and notes of a result the browser
+   * already has. The structured constraints and the picks are reused exactly;
+   * nothing is re-interpreted, re-fetched or re-ranked.
+   */
+  askLocalize: publicProcedure
+    .input(z.object({ result: storedResultSchema, fromLang: langSchema, lang: langSchema }))
+    .mutation(({ input, signal }) =>
+      localizeAskResult({
+        result: input.result as unknown as Parameters<typeof localizeAskResult>[0]["result"],
+        fromLang: input.fromLang,
+        lang: input.lang,
+        signal,
+      }),
+    ),
+
   inspectPhotos: publicProcedure
     .input(
       z.object({
@@ -251,4 +301,14 @@ export const listingsRouter = createTRPCRouter({
   translateNotes: publicProcedure
     .input(z.object({ text: z.string().min(1).max(4000) }))
     .query(({ input }) => translateListingNotes(input.text)),
+
+  /** Short Korean headline → English (automatic, cheap, cached). */
+  translateTitle: publicProcedure
+    .input(z.object({ text: z.string().min(1).max(200) }))
+    .query(({ input }) => translateListingTitle(input.text)),
+
+  /** Headline + description together ("Translate description"). */
+  translateBundle: publicProcedure
+    .input(z.object({ title: z.string().max(200), text: z.string().min(1).max(4000) }))
+    .query(({ input }) => translateListingBundle(input.title, input.text)),
 });

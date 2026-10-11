@@ -14,7 +14,6 @@ import {
   salesTypeText,
   sourceText,
 } from "~/lib/listings/copy";
-import { glossText } from "~/lib/listings/glossary";
 import {
   formatApproveYear,
   formatKoreanPhone,
@@ -54,6 +53,7 @@ import { type ListingDetail, type MapListing } from "~/lib/listings/types";
 import { BackToMap } from "./BackToMap";
 import { ForeignerBadge } from "./ForeignerBadge";
 import { LandlordNotes } from "./LandlordNotes";
+import { ListingSubtitle } from "./ListingSubtitle";
 import { ListingAgeLine } from "./ListingAgeLine";
 import { ListingGallery } from "./ListingGallery";
 import { ListingLocationCard } from "./ListingLocationCard";
@@ -213,9 +213,7 @@ export function ListingDetailView({
             </h2>
             <ForeignerBadge ok={foreignerOk} className="mt-2 inline-flex" />
             {listing.title && listing.title !== englishTitle ? (
-              <p lang="ko" className="mt-1 text-sm text-slate-400">
-                {lang === "en" ? glossText(listing.title, lang) : listing.title}
-              </p>
+              <ListingSubtitle title={listing.title} className="mt-1 text-sm text-slate-400" />
             ) : null}
             {listing.salesType ? (
               <p className="mt-1 text-sm text-slate-400">
@@ -229,7 +227,7 @@ export function ListingDetailView({
           </div>
 
           {listing.description ? (
-            <LandlordNotes text={listing.description} source={listing.source} />
+            <LandlordNotes text={listing.description} source={listing.source} title={listing.title} />
           ) : null}
 
           {listing.options?.length ? (
