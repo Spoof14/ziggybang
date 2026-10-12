@@ -31,6 +31,7 @@ export const ko: Record<MessageKey, string> = {
 
   // --------------------------------------------------------------- status
   "status.loading": "매물을 불러오는 중… 처음에는 몇 초 걸릴 수 있어요",
+  "map.clusterUnfiltered": "필터 밖의 매물이 포함되어 있을 수 있어요",
   "status.source": "{source} {n}",
   "status.sourceOf": "{source} {n} / {total}",
 

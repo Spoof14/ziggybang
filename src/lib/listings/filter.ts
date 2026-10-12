@@ -171,3 +171,24 @@ export function needsListingDetails(
     !isEmptyPriceFilter(input)
   );
 }
+
+/**
+ * Filters Naver's grouped (count-only) clusters cannot honour: the cluster API
+ * takes trade/property type, price, size and building age, but nothing about
+ * text, floor, listing date, foreigner-friendly or photos.
+ */
+export function hasFiltersGroupedCountsIgnore(input: {
+  query?: string;
+  foreignerOk?: boolean;
+  hasPhotos?: boolean;
+  floorFilter?: FloorFilter;
+  ageFilter?: AgeFilter;
+}): boolean {
+  return (
+    Boolean(input.query?.trim()) ||
+    Boolean(input.foreignerOk) ||
+    Boolean(input.hasPhotos) ||
+    Boolean(input.floorFilter) ||
+    Boolean(input.ageFilter)
+  );
+}
