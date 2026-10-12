@@ -12,7 +12,7 @@ import { fetchJson } from "./http";
 
 const PETERPAN_API = "https://api.peterpanz.com";
 const TILE_TTL_MS = 5 * 60 * 1000;
-const LIST_PAGE_SIZE = 100;
+const LIST_PAGE_SIZE = 300;
 
 const PETERPAN_HEADERS = {
   accept: "application/json, text/plain, */*",
@@ -206,7 +206,7 @@ function flattenHouses(payload: PeterpanAreaResponse): PeterpanHouse[] {
 
 export type PeterpanPage = { houses: MapListing[]; total: number };
 
-const SPLIT_DEPTH = 2;
+const SPLIT_DEPTH = 1;
 
 function splitBounds(bounds: Bounds): Bounds[] {
   const midLat = (bounds.south + bounds.north) / 2;
@@ -220,10 +220,10 @@ function splitBounds(bounds: Bounds): Bounds[] {
 }
 
 /**
- * The house list is capped per request and its order is not spatial: a single
+ * The house list is capped per request, and with `order_by=price` (no longer sent) its order was not spatial: a single
  * page of a dense viewport (e.g. Magok, 684 homes) came back as only the
  * southern part. When a box holds more than one page, split it into quadrants
- * (up to SPLIT_DEPTH levels) so every part of the viewport is represented.
+ * (SPLIT_DEPTH levels) so every part of the viewport is represented.
  */
 export async function collectHouses(
   bounds: Bounds,
@@ -263,7 +263,6 @@ async function fetchHouseList(input: {
       const qs = queryString(box, input.zoom, input.propertyTypes, input.salesTypes, {
         pageSize: String(LIST_PAGE_SIZE),
         pageIndex: "1",
-        order_by: "price",
       });
       const payload = await fetchJson<PeterpanAreaResponse>(
         `${PETERPAN_API}/houses/area/pc?${qs}`,

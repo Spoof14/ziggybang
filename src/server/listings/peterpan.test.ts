@@ -77,14 +77,14 @@ describe("collectHouses", () => {
     const inside = all
       .filter((h) => h.lat >= box.south && h.lat <= box.north && h.lng >= box.west && h.lng <= box.east)
       .sort((a, b) => a.lat - b.lat);
-    return { houses: inside.slice(0, 100), total: inside.length };
+    return { houses: inside.slice(0, 300), total: inside.length };
   };
 
   it("single page only reaches the south; collectHouses covers the viewport", async () => {
     const first = await fetchPage(VIEW);
-    expect(Math.max(...first.houses.map((h) => h.lat))).toBeLessThan(37.55);
+    expect(Math.max(...first.houses.map((h) => h.lat))).toBeLessThan(37.57);
     const got = await collectHouses(VIEW, fetchPage);
-    expect(got.length).toBeGreaterThan(400);
+    expect(got.length).toBeGreaterThan(300);
     expect(Math.max(...got.map((h) => h.lat))).toBeGreaterThan(37.59);
     expect(Math.min(...got.map((h) => h.lat))).toBeLessThan(37.535);
     expect(new Set(got.map((h) => h.id)).size).toBe(got.length);

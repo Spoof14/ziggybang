@@ -37,6 +37,8 @@ const MAX_MARKERS = 400;
 const MIN_LIST_ITEMS = 60;
 const MAX_LIST_ITEMS = 300;
 const PETERPAN_BUDGET_MS = 4000;
+// The home list may need a root page plus quadrant pages.
+const PETERPAN_DETAIL_BUDGET_MS = 9000;
 const ZIGBANG_DETAIL_BUDGET_MS = 3500;
 
 export type ListingAdapters = {
@@ -166,7 +168,7 @@ export async function getMapData(
           salesTypes: selectedSalesTypes,
           needsDetails: requireDetails,
         }),
-        PETERPAN_BUDGET_MS,
+        requireDetails ? PETERPAN_DETAIL_BUDGET_MS : PETERPAN_BUDGET_MS,
         "Peterpan",
       ),
     );
