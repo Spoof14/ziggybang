@@ -17,6 +17,7 @@ import {
 } from "~/lib/listings/types";
 import {
   filterListings,
+  hasFiltersGroupedCountsIgnore,
   isNaverClusterListing,
   needsHydratedFilters,
   needsListingDetails,
@@ -196,6 +197,17 @@ export async function getMapData(
   } else if (polygon && polygon.length >= 3) {
     unique = unique.filter((item) => pointInPolygon(item, polygon));
   }
+  // Naver's grouped rows only carry counts. The cluster API took type, price,
+  // size and building age, but not text/floor/date/foreigner/photos, so when
+  // those are active the grouped counts are marked instead of passed off as
+  // filtered.
+  const groupedIgnoresFilters = hasFiltersGroupedCountsIgnore(detailFilters);
+  if (groupedIgnoresFilters) {
+    unique = unique.map((item) =>
+      isNaverClusterListing(item) ? { ...item, unfiltered: true } : item,
+    );
+  }
+  const grouped = unique.filter(isNaverClusterListing);
   const zigbang = unique.filter((item) => item.source === "zigbang").length;
   const naverHomes = unique.filter((item) => item.source === "naver");
   const naver = listingInventoryCount(naverHomes);
@@ -246,11 +258,13 @@ export async function getMapData(
       mode: "clusters",
       clusters,
       listings: [],
+      grouped,
       stats: {
         zigbang,
         naver,
         peterpan,
         naverAvailable: naverTotal,
+        naverUnfiltered: grouped.length > 0 && groupedIgnoresFilters ? true : undefined,
         returned: clusters.length,
         truncated: false,
       },
@@ -263,11 +277,13 @@ export async function getMapData(
     mode: clustered ? "clusters" : "markers",
     clusters,
     listings,
+    grouped: clustered ? grouped : [],
     stats: {
       zigbang,
       naver,
       peterpan,
       naverAvailable: naverTotal,
+      naverUnfiltered: grouped.length > 0 && groupedIgnoresFilters ? true : undefined,
       returned: listings.length || clusters.length,
       truncated,
     },

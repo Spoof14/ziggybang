@@ -34,6 +34,7 @@ export const en = {
   // --------------------------------------------------------------- status
   "status.loading": "Loading homes… first load can take a few seconds",
   "status.source": "{source} {n}",
+  "map.clusterUnfiltered": "Count may include homes outside your filters",
   "status.sourceOf": "{source} {n} of {total}",
 
   // -------------------------------------------------------------- sources

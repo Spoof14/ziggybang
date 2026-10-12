@@ -14,13 +14,17 @@ export function shouldCluster(zoom: number, _pointCount?: number, _maxMarkers = 
   return zoom < 15;
 }
 
+function isGrouped(listing: MapListing): boolean {
+  return listing.source === "naver" && listing.id.startsWith("naver:cluster:");
+}
+
 export function clusterListings(
   listings: MapListing[],
   cellSize: number,
 ): MapCluster[] {
   const buckets = new Map<
     string,
-    { lat: number; lng: number; count: number; sources: Partial<Record<Source, number>> }
+    { lat: number; lng: number; count: number; sources: Partial<Record<Source, number>>; unfiltered: number; grouped: number }
   >();
 
   for (const listing of listings) {
@@ -35,12 +39,16 @@ export function clusterListings(
       existing.count += weight;
       existing.sources[listing.source] =
         (existing.sources[listing.source] ?? 0) + weight;
+      if (listing.unfiltered) existing.unfiltered += weight;
+      if (isGrouped(listing)) existing.grouped += weight;
     } else {
       buckets.set(key, {
         lat: listing.lat * weight,
         lng: listing.lng * weight,
         count: weight,
         sources: { [listing.source]: weight },
+        unfiltered: listing.unfiltered ? weight : 0,
+        grouped: isGrouped(listing) ? weight : 0,
       });
     }
   }
@@ -51,5 +59,7 @@ export function clusterListings(
     lng: bucket.lng / bucket.count,
     count: bucket.count,
     sources: bucket.sources,
+    ...(bucket.unfiltered > 0 ? { unfilteredCount: bucket.unfiltered } : {}),
+    ...(bucket.grouped > 0 ? { groupedCount: bucket.grouped } : {}),
   }));
 }

@@ -4,6 +4,7 @@ export function mergeMapData(parts: Array<MapData | undefined>): MapData {
   const present = parts.filter((part): part is MapData => part !== undefined);
   const listings = present.flatMap((part) => part.listings);
   const clusters = present.flatMap((part) => part.clusters);
+  const grouped = present.flatMap((part) => part.grouped ?? []);
   const errors = present.flatMap((part) => part.errors);
   const zigbang = present.reduce((sum, part) => sum + part.stats.zigbang, 0);
   const naver = present.reduce((sum, part) => sum + part.stats.naver, 0);
@@ -19,11 +20,13 @@ export function mergeMapData(parts: Array<MapData | undefined>): MapData {
     mode: hasListings && clusters.length === 0 ? "markers" : clusters.length ? "clusters" : "markers",
     clusters,
     listings,
+    grouped,
     stats: {
       zigbang,
       naver,
       peterpan,
       naverAvailable: naverAvailable > naver ? naverAvailable : undefined,
+      naverUnfiltered: present.some((part) => part.stats.naverUnfiltered) || undefined,
       returned: hasListings ? listings.length : clusters.length,
       truncated,
     },

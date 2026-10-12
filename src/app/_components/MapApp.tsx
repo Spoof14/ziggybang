@@ -24,7 +24,7 @@ import {
   needsHydratedFilters,
 } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
-import { describeActiveFilters, filterKeyOf, mapLayersForFilters } from "~/lib/listings/visible";
+import { describeActiveFilters, filterKeyOf, layerSourceCounts, mapLayersForFilters } from "~/lib/listings/visible";
 import { loadPrefs, savePrefs, type SavedPrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
 import { type PriceFilter } from "~/lib/listings/price";
 import {
@@ -622,7 +622,7 @@ export default function MapApp() {
       floorFilter,
       ageFilter,
       maxBuildingAge,
-    });
+    }, { grouped: data.grouped, truncated: data.stats.truncated });
     return {
       clusters: layers.clusters,
       listings: layers.listings,
@@ -655,11 +655,25 @@ export default function MapApp() {
         ? {
             clusters: [],
             listings: askPins,
-            stats: { ...liveVisible.stats, returned: askPins.length, truncated: false },
+            // Ask mode draws only its picks: counts follow the picks, not the
+            // live search behind them.
+            stats: {
+              zigbang: askPins.filter((item) => item.source === "zigbang").length,
+              naver: askPins.filter((item) => item.source === "naver").length,
+              peterpan: askPins.filter((item) => item.source === "peterpan").length,
+              naverAvailable: undefined,
+              naverUnfiltered: undefined,
+              returned: askPins.length,
+              truncated: false,
+            },
             errors: liveVisible.errors,
           }
         : liveVisible,
     [askPins, liveVisible],
+  );
+  const layerCounts = useMemo(
+    () => layerSourceCounts(visible, askPins ? undefined : liveVisible.stats),
+    [askPins, liveVisible.stats, visible],
   );
 
   const waitingForFirst =
@@ -1067,7 +1081,7 @@ export default function MapApp() {
   const naverListed = visible.listings.filter(
     (item) => item.source === "naver" && !isNaverClusterListing(item),
   ).length;
-  const naverInventory = visible.stats.naverAvailable ?? visible.stats.naver;
+  const naverInventory = layerCounts.totals.naver ?? layerCounts.naver;
   const listNote =
     sources.includes("naver") && naverInventory > naverListed
       ? t("list.naverNote", {
@@ -1145,21 +1159,21 @@ export default function MapApp() {
     ? undefined
     : visible.errors.find((error) => error.source === "naver");
 
+  const sourceStatus = (source: "zigbang" | "naver" | "peterpan") => {
+    const n = layerCounts[source];
+    const total = layerCounts.totals[source];
+    const approx = source === "naver" && layerCounts.naverApprox;
+    const shown = `${approx ? "≈" : ""}${formatCount(n, lang)}`;
+    return total && total > n
+      ? t("status.sourceOf", { source: sourceText(lang, source), n: shown, total: formatCount(total, lang) })
+      : t("status.source", { source: sourceText(lang, source), n: shown });
+  };
   const statusLabel = waitingForFirst
     ? t("status.loading")
     : [
-        sources.includes("zigbang")
-          ? t("status.source", { source: sourceText(lang, "zigbang"), n: formatCount(visible.stats.zigbang, lang) })
-          : null,
-        sources.includes("naver")
-          ? visible.stats.naverAvailable &&
-            visible.stats.naverAvailable > visible.stats.naver
-            ? t("status.sourceOf", { source: sourceText(lang, "naver"), n: formatCount(visible.stats.naver, lang), total: formatCount(visible.stats.naverAvailable, lang) })
-            : t("status.source", { source: sourceText(lang, "naver"), n: formatCount(visible.stats.naver, lang) })
-          : null,
-        sources.includes("peterpan")
-          ? t("status.source", { source: sourceText(lang, "peterpan"), n: formatCount(visible.stats.peterpan, lang) })
-          : null,
+        sources.includes("zigbang") ? sourceStatus("zigbang") : null,
+        sources.includes("naver") ? sourceStatus("naver") : null,
+        sources.includes("peterpan") ? sourceStatus("peterpan") : null,
       ]
         .filter(Boolean)
         .join(" · ");
@@ -1657,9 +1671,9 @@ export default function MapApp() {
               totalCount={
                 viewMode === "saved"
                   ? savedHomes.length
-                  : visible.stats.zigbang +
-                    (visible.stats.naverAvailable ?? visible.stats.naver) +
-                    visible.stats.peterpan
+                  : (layerCounts.totals.zigbang ?? layerCounts.zigbang) +
+                    (layerCounts.totals.naver ?? layerCounts.naver) +
+                    (layerCounts.totals.peterpan ?? layerCounts.peterpan)
               }
               sort={listSort}
               center={listCenter}

@@ -420,10 +420,10 @@ function LocateMeControl() {
   );
 }
 
-function clusterIcon(count: number, color: string) {
+function clusterIcon(count: number, color: string, unfiltered = false) {
   const size = Math.min(44, 26 + Math.log2(count + 1) * 5);
   return new DivIcon({
-    className: "listing-cluster",
+    className: unfiltered ? "listing-cluster listing-cluster-unfiltered" : "listing-cluster",
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     html: `<span class="listing-cluster-inner" style="--cluster-size:${size}px;--cluster-color:${color}">${count.toLocaleString("en-US")}</span>`,
@@ -439,13 +439,23 @@ function ClusterLayer({
   tool: "pan" | "radius" | "draw";
   onSelect: (cluster: MapCluster) => void;
 }) {
+  const { t } = useI18n();
   return (
     <>
       {clusters.map((cluster) => (
         <Marker
           key={cluster.id}
           position={[cluster.lat, cluster.lng]}
-          icon={clusterIcon(cluster.count, sourceColor(cluster.sources))}
+          icon={clusterIcon(
+            cluster.count,
+            sourceColor(cluster.sources),
+            (cluster.unfilteredCount ?? 0) > 0,
+          )}
+          title={
+            (cluster.unfilteredCount ?? 0) > 0
+              ? t("map.clusterUnfiltered")
+              : undefined
+          }
           eventHandlers={{
             click: (event) => {
               if (tool !== "pan") return;

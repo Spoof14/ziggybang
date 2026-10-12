@@ -74,6 +74,8 @@ export type MapListing = {
   approveDate?: string;
   photos?: string[];
   foreignerOk?: boolean;
+  /** Count-only source row whose count ignores some active filters. */
+  unfiltered?: boolean;
 };
 
 export type MapCluster = {
@@ -82,6 +84,10 @@ export type MapCluster = {
   lng: number;
   count: number;
   sources: Partial<Record<Source, number>>;
+  /** Homes in this bubble from a source that could not apply every active filter. */
+  unfilteredCount?: number;
+  /** Homes in this bubble that are count-only (no individual listings behind them). */
+  groupedCount?: number;
 };
 
 export type SourceError = {
@@ -93,11 +99,15 @@ export type MapData = {
   mode: "clusters" | "markers";
   clusters: MapCluster[];
   listings: MapListing[];
+  /** Count-only source rows (Naver grouped inventory) behind `clusters`, so the client can re-cluster. */
+  grouped?: MapListing[];
   stats: {
     zigbang: number;
     naver: number;
     peterpan: number;
     naverAvailable?: number;
+    /** Naver grouped counts could not apply every active filter. */
+    naverUnfiltered?: boolean;
     returned: number;
     truncated: boolean;
   };

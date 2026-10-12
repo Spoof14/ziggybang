@@ -76,39 +76,94 @@ export function listingsMatchingFilters(
   });
 }
 
+export type MapLayerContext = {
+  /** Count-only source rows (Naver grouped inventory) behind the server clusters. */
+  grouped?: MapListing[];
+  /** True when the server capped the individual homes it sent. */
+  truncated?: boolean;
+};
+
+/**
+ * What the map draws. Every bubble is derived from filtered data:
+ * - individual homes are filtered here with the same predicate the server uses;
+ * - when all homes were loaded, bubbles are rebuilt from those filtered homes
+ *   plus the (area-clipped) count-only source rows, so nothing outside the
+ *   filters is counted and an empty area draws nothing;
+ * - when the server capped the home list (or sent none), its clusters are used
+ *   as-is, they were built from the filtered set server-side.
+ * Count-only rows that could not take every filter keep `unfiltered` so the
+ * bubble can be marked.
+ */
 export function mapLayersForFilters(
   listings: MapListing[],
   serverClusters: MapCluster[],
   input: VisibleFilterInput,
+  context: MapLayerContext = {},
 ): { clusters: MapCluster[]; listings: MapListing[] } {
   const matched = listingsMatchingFilters(listings, input);
-  const hasArea = Boolean(input.circle ?? (input.polygon && input.polygon.length >= 3));
-  const typeFilter = !isAllPropertyTypes(input.propertyTypes);
-  const detailFilter = needsHydratedFilters(detailInputOf(input));
-  const useFilteredPoints = typeFilter || detailFilter || hasArea;
+  if (!shouldCluster(input.zoom)) {
+    return { clusters: [], listings: matched };
+  }
 
-  if (!useFilteredPoints) {
+  const grouped = (context.grouped ?? []).filter((row) =>
+    listingInArea(row, input.circle, input.polygon ?? undefined),
+  );
+  const complete = listings.length > 0 && !context.truncated;
+  if (!complete) {
+    return { clusters: serverClusters, listings: matched };
+  }
+
+  if (matched.length > 60 || grouped.length > 0) {
     return {
-      clusters: hasArea ? [] : serverClusters,
+      clusters: clusterListings([...matched, ...grouped], cellSizeForZoom(input.zoom)),
       listings: matched,
     };
   }
-
-  if (shouldCluster(input.zoom) && matched.length > 60) {
-    return {
-      clusters: clusterListings(matched, cellSizeForZoom(input.zoom)),
-      listings: matched,
-    };
-  }
-
-  // City/gu zoom: the server sends clustered counts and an empty home list.
-  // Those clusters already match the current query — dropping them is what
-  // produced a blank map next to "Naver 0 of 6,000".
-  if (shouldCluster(input.zoom) && matched.length === 0 && serverClusters.length) {
-    return { clusters: serverClusters, listings: [] };
-  }
-
   return { clusters: [], listings: matched };
+}
+
+export type LayerSourceCounts = {
+  zigbang: number;
+  naver: number;
+  peterpan: number;
+  /** Server total per source when more exist than are drawn. */
+  totals: { zigbang?: number; naver?: number; peterpan?: number };
+  /** Some Naver count includes homes the active filters would exclude. */
+  naverApprox: boolean;
+};
+
+/**
+ * Header counts from what is actually drawn, so per-source numbers, the
+ * "on map" total and the list agree with the bubbles/markers.
+ */
+export function layerSourceCounts(
+  layers: { clusters: MapCluster[]; listings: MapListing[] },
+  stats?: { zigbang: number; naver: number; peterpan: number; naverAvailable?: number },
+): LayerSourceCounts {
+  const drawn = { zigbang: 0, naver: 0, peterpan: 0 };
+  let naverApprox = false;
+  if (layers.clusters.length) {
+    for (const cluster of layers.clusters) {
+      drawn.zigbang += cluster.sources.zigbang ?? 0;
+      drawn.naver += cluster.sources.naver ?? 0;
+      drawn.peterpan += cluster.sources.peterpan ?? 0;
+      if ((cluster.unfilteredCount ?? 0) > 0 && (cluster.sources.naver ?? 0) > 0) {
+        naverApprox = true;
+      }
+    }
+    return { ...drawn, totals: {}, naverApprox };
+  }
+  for (const listing of layers.listings) {
+    drawn[listing.source] += listing.count ?? 1;
+  }
+  const totals: LayerSourceCounts["totals"] = {};
+  if (stats) {
+    if (stats.zigbang > drawn.zigbang) totals.zigbang = stats.zigbang;
+    const naverTotal = stats.naverAvailable ?? stats.naver;
+    if (naverTotal > drawn.naver) totals.naver = naverTotal;
+    if (stats.peterpan > drawn.peterpan) totals.peterpan = stats.peterpan;
+  }
+  return { ...drawn, totals, naverApprox };
 }
 
 export function describeActiveFilters(
