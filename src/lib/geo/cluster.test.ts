@@ -65,4 +65,25 @@ describe("cluster", () => {
   it("uses a finer grid at higher zoom", () => {
     expect(cellSizeForZoom(16)).toBeLessThan(cellSizeForZoom(12));
   });
+
+  it("tracks grouped and unfiltered weight per bubble", () => {
+    const grouped = {
+      ...listing("naver:cluster:a", 37.5, 127.0, "naver", 50),
+      unfiltered: true,
+    };
+    const [cluster] = clusterListings([grouped, listing("z", 37.5001, 127.0001)], 0.01);
+    expect(cluster).toMatchObject({
+      count: 51,
+      unfilteredCount: 50,
+      groupedCount: 50,
+      sources: { naver: 50, zigbang: 1 },
+    });
+    const [plain] = clusterListings([listing("z", 37.5, 127.0)], 0.01);
+    expect(plain?.unfilteredCount).toBeUndefined();
+    expect(plain?.groupedCount).toBeUndefined();
+  });
+
+  it("returns no bubbles for no listings", () => {
+    expect(clusterListings([], 0.01)).toEqual([]);
+  });
 });

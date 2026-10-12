@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterBySalesTypes, filterListings, isAllSalesTypes, isDefaultRentSales, needsHydratedFilters } from "./filter";
+import { filterBySalesTypes, filterListings, hasFiltersGroupedCountsIgnore, isAllSalesTypes, isDefaultRentSales, needsHydratedFilters } from "./filter";
 import { type MapListing } from "./types";
 
 function listing(id: string, salesType?: MapListing["salesType"]): MapListing {
@@ -290,5 +290,18 @@ describe("hydrated vs default rent filters", () => {
         maxBuildingAge: 10,
       }),
     ).toBe(true);
+  });
+});
+
+describe("hasFiltersGroupedCountsIgnore", () => {
+  it("is false for filters Naver cluster queries accept", () => {
+    expect(hasFiltersGroupedCountsIgnore({})).toBe(false);
+  });
+  it("is true for text, floor, date, foreigner and photo filters", () => {
+    expect(hasFiltersGroupedCountsIgnore({ query: "hongdae" })).toBe(true);
+    expect(hasFiltersGroupedCountsIgnore({ floorFilter: "min-2" })).toBe(true);
+    expect(hasFiltersGroupedCountsIgnore({ ageFilter: "week" })).toBe(true);
+    expect(hasFiltersGroupedCountsIgnore({ foreignerOk: true })).toBe(true);
+    expect(hasFiltersGroupedCountsIgnore({ hasPhotos: true })).toBe(true);
   });
 });

@@ -356,4 +356,39 @@ describe("getMapData", () => {
       }),
     ).rejects.toThrow("Invalid map bounds");
   });
+
+  describe("Naver grouped counts under filters", () => {
+    const groupedRow = (): MapListing => ({
+      ...listing("naver:cluster:g1", "naver"),
+      propertyType: "apartment",
+      count: 120,
+    });
+    const run = (extra: Record<string, unknown>) =>
+      getMapData(
+        {
+          bounds: seoulBounds,
+          zoom: 13,
+          sources: ["naver"],
+          propertyTypes: ["oneroom"],
+          includeListings: true,
+          ...extra,
+        },
+        { zigbang: async () => [], naver: async () => [groupedRow()] },
+      );
+
+    it("does not flag grouped counts when only API-supported filters are active", async () => {
+      const data = await run({ maxRent: 30 });
+      expect(data.grouped).toHaveLength(1);
+      expect(data.grouped?.[0]?.unfiltered).toBeUndefined();
+      expect(data.clusters[0]?.unfilteredCount).toBeUndefined();
+      expect(data.stats.naverUnfiltered).toBeUndefined();
+    });
+
+    it("marks grouped counts when a filter Naver clusters cannot take is active", async () => {
+      const data = await run({ maxRent: 30, floorFilter: "min-5" });
+      expect(data.grouped?.[0]?.unfiltered).toBe(true);
+      expect(data.clusters[0]).toMatchObject({ count: 120, unfilteredCount: 120, groupedCount: 120 });
+      expect(data.stats.naverUnfiltered).toBe(true);
+    });
+  });
 });
