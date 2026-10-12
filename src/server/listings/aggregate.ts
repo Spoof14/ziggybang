@@ -25,6 +25,7 @@ import {
 import { parseSearchQuery } from "~/lib/listings/search";
 import { settledError, withTimeout } from "./http";
 import { fetchNaverDetail, fetchNaverListings, listingInventoryCount, naverBudgetMs, type NaverMapFetch, type NaverListingQuery } from "./naver";
+import { sampleAcrossBounds } from "~/lib/geo/sample";
 import { fetchPeterpanDetail, fetchPeterpanListings } from "./peterpan";
 import {
   fetchZigbangDetail,
@@ -36,6 +37,8 @@ const MAX_MARKERS = 400;
 const MIN_LIST_ITEMS = 60;
 const MAX_LIST_ITEMS = 300;
 const PETERPAN_BUDGET_MS = 4000;
+// The home list may need a root page plus quadrant pages.
+const PETERPAN_DETAIL_BUDGET_MS = 9000;
 const ZIGBANG_DETAIL_BUDGET_MS = 3500;
 
 export type ListingAdapters = {
@@ -165,7 +168,7 @@ export async function getMapData(
           salesTypes: selectedSalesTypes,
           needsDetails: requireDetails,
         }),
-        PETERPAN_BUDGET_MS,
+        requireDetails ? PETERPAN_DETAIL_BUDGET_MS : PETERPAN_BUDGET_MS,
         "Peterpan",
       ),
     );
@@ -228,7 +231,7 @@ export async function getMapData(
   const homes = unique.filter((item) => !isNaverClusterListing(item));
   let listings: MapListing[] =
     query.includeListings === true || !clustered
-      ? homes.slice(0, listingCap)
+      ? sampleAcrossBounds(homes, listingCap, fetchBounds)
       : [];
 
   if (
