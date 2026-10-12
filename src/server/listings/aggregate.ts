@@ -25,6 +25,7 @@ import {
 import { parseSearchQuery } from "~/lib/listings/search";
 import { settledError, withTimeout } from "./http";
 import { fetchNaverDetail, fetchNaverListings, listingInventoryCount, naverBudgetMs, type NaverMapFetch, type NaverListingQuery } from "./naver";
+import { sampleAcrossBounds } from "~/lib/geo/sample";
 import { fetchPeterpanDetail, fetchPeterpanListings } from "./peterpan";
 import {
   fetchZigbangDetail,
@@ -228,7 +229,7 @@ export async function getMapData(
   const homes = unique.filter((item) => !isNaverClusterListing(item));
   let listings: MapListing[] =
     query.includeListings === true || !clustered
-      ? homes.slice(0, listingCap)
+      ? sampleAcrossBounds(homes, listingCap, fetchBounds)
       : [];
 
   if (

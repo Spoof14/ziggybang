@@ -1,3 +1,4 @@
+import { sampleAcrossBounds } from "~/lib/geo/sample";
 import { containsPoint } from "~/lib/geo/bounds";
 import {
   geohashesInBounds,
@@ -320,18 +321,37 @@ export async function fetchZigbangListings(input: {
 
 const HYDRATE_LIMIT = 120;
 
+function extentOf(items: Array<{ lat: number; lng: number }>): Bounds {
+  const lats = items.map((item) => item.lat);
+  const lngs = items.map((item) => item.lng);
+  return {
+    south: Math.min(...lats),
+    north: Math.max(...lats),
+    west: Math.min(...lngs),
+    east: Math.max(...lngs),
+  };
+}
+
 export async function hydrateZigbangListings(
   listings: MapListing[],
 ): Promise<MapListing[]> {
-  const targets = listings
+  const candidates = listings
     .map((listing, index) => ({ listing, index }))
     .filter(
       ({ listing }) =>
         listing.source === "zigbang" &&
         listing.propertyType !== "apartment" &&
         !listing.salesType,
-    )
-    .slice(0, HYDRATE_LIMIT);
+    );
+  // Spread the hydration budget over the whole extent, not the first N in tile order.
+  const targets =
+    candidates.length > HYDRATE_LIMIT
+      ? sampleAcrossBounds(
+          candidates.map((entry) => ({ ...entry, lat: entry.listing.lat, lng: entry.listing.lng })),
+          HYDRATE_LIMIT,
+          extentOf(candidates.map((entry) => entry.listing)),
+        )
+      : candidates;
 
   const next = listings.slice();
   await runPool(

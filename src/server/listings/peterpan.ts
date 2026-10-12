@@ -12,8 +12,7 @@ import { fetchJson } from "./http";
 
 const PETERPAN_API = "https://api.peterpanz.com";
 const TILE_TTL_MS = 5 * 60 * 1000;
-const LIST_PAGES = 2;
-const LIST_PAGE_SIZE = 80;
+const LIST_PAGE_SIZE = 100;
 
 const PETERPAN_HEADERS = {
   accept: "application/json, text/plain, */*",
@@ -205,42 +204,77 @@ function flattenHouses(payload: PeterpanAreaResponse): PeterpanHouse[] {
   return out;
 }
 
+export type PeterpanPage = { houses: MapListing[]; total: number };
+
+const SPLIT_DEPTH = 2;
+
+function splitBounds(bounds: Bounds): Bounds[] {
+  const midLat = (bounds.south + bounds.north) / 2;
+  const midLng = (bounds.west + bounds.east) / 2;
+  return [
+    { south: bounds.south, north: midLat, west: bounds.west, east: midLng },
+    { south: bounds.south, north: midLat, west: midLng, east: bounds.east },
+    { south: midLat, north: bounds.north, west: bounds.west, east: midLng },
+    { south: midLat, north: bounds.north, west: midLng, east: bounds.east },
+  ];
+}
+
+/**
+ * The house list is capped per request and its order is not spatial: a single
+ * page of a dense viewport (e.g. Magok, 684 homes) came back as only the
+ * southern part. When a box holds more than one page, split it into quadrants
+ * (up to SPLIT_DEPTH levels) so every part of the viewport is represented.
+ */
+export async function collectHouses(
+  bounds: Bounds,
+  fetchPage: (bounds: Bounds) => Promise<PeterpanPage>,
+  depth = 0,
+  pageSize = LIST_PAGE_SIZE,
+): Promise<MapListing[]> {
+  const page = await fetchPage(bounds);
+  if (page.total <= page.houses.length || page.houses.length < pageSize || depth >= SPLIT_DEPTH) {
+    return page.houses;
+  }
+  const parts = await Promise.all(
+    splitBounds(bounds).map((part) => collectHouses(part, fetchPage, depth + 1, pageSize)),
+  );
+  const seen = new Map<string, MapListing>();
+  for (const item of parts.flat()) seen.set(item.id, item);
+  return [...seen.values()];
+}
+
 async function fetchHouseList(input: {
   bounds: Bounds;
   zoom: number;
   propertyTypes: PropertyType[];
   salesTypes?: SalesType[];
 }): Promise<MapListing[]> {
-  const listings: MapListing[] = [];
-  for (let page = 1; page <= LIST_PAGES; page += 1) {
+  return collectHouses(input.bounds, (box) => {
     const key = [
       "pp:list",
-      page,
-      input.bounds.south.toFixed(3),
-      input.bounds.west.toFixed(3),
-      input.bounds.north.toFixed(3),
-      input.bounds.east.toFixed(3),
+      box.south.toFixed(4),
+      box.west.toFixed(4),
+      box.north.toFixed(4),
+      box.east.toFixed(4),
       input.propertyTypes.join(","),
       (input.salesTypes ?? []).join(","),
     ].join(":");
-    const pageItems = await cached(key, TILE_TTL_MS, async () => {
-      const qs = queryString(input.bounds, input.zoom, input.propertyTypes, input.salesTypes, {
+    return cached(key, TILE_TTL_MS, async () => {
+      const qs = queryString(box, input.zoom, input.propertyTypes, input.salesTypes, {
         pageSize: String(LIST_PAGE_SIZE),
-        pageIndex: String(page),
+        pageIndex: "1",
         order_by: "price",
       });
       const payload = await fetchJson<PeterpanAreaResponse>(
         `${PETERPAN_API}/houses/area/pc?${qs}`,
         { headers: PETERPAN_HEADERS, timeoutMs: 8000 },
       );
-      return flattenHouses(payload)
+      const houses = flattenHouses(payload)
         .map(houseToListing)
         .filter((item): item is MapListing => item !== null);
+      return { houses, total: payload.totalCount ?? houses.length };
     });
-    listings.push(...pageItems);
-    if (pageItems.length < LIST_PAGE_SIZE) break;
-  }
-  return listings;
+  });
 }
 
 async function fetchMarkers(input: {
