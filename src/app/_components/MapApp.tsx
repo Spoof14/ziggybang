@@ -831,6 +831,7 @@ export default function MapApp() {
               setListScrollId(first.id);
               setListScrollAt(Date.now());
             }
+            if (result.listings.length > 1) setViewMode("list");
           })
           .catch(() => {
             setFocus({ lat: cluster.lat, lng: cluster.lng, token: Date.now() });
