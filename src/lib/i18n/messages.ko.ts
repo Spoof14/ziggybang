@@ -38,6 +38,8 @@ export const ko: Record<MessageKey, string> = {
   // --------------------------------------------------------------- status
   "status.loading": "매물을 불러오는 중… 처음에는 몇 초 걸릴 수 있어요",
   "map.clusterApproximate": "탭하면 필터가 적용된 매물을 불러옵니다",
+  "map.clusterLoading": "매물 불러오는 중…",
+  "map.clusterNoMatches": "현재 필터에 맞는 매물이 없습니다",
   "map.clusterVerifiedPartial": "필터에 맞는 매물 {n}개 (탭하면 더 보기)",
   "map.legendApprox": "점선 숫자는 상한이에요 — 탭해서 확인하세요",
   "map.clusterUnfiltered": "필터 밖의 매물이 포함되어 있을 수 있어요",
