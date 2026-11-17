@@ -5,13 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { api } from "~/trpc/react";
 import { isValidBounds } from "~/lib/geo/bounds";
 import { type CircleFilter, type LatLng, formatRadius } from "~/lib/geo/shape";
-import {
-  areaBuckets,
-  areaBucketHint,
-  areaBucketLabel,
-  isAllAreaBuckets,
-  type AreaBucketId,
-} from "~/lib/listings/area";
+import { isAllAreaBuckets, type AreaBucketId } from "~/lib/listings/area";
 import {
   friendlySourceError,
   propertyTypeText,
@@ -24,7 +18,7 @@ import {
   needsHydratedFilters,
 } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
-import { describeActiveFilters, filterKeyOf, layerSourceCounts, mapLayersForFilters } from "~/lib/listings/visible";
+import { countActiveFilters, describeActiveFilters, filterKeyOf, layerSourceCounts, mapLayersForFilters } from "~/lib/listings/visible";
 import { isNaverGroupClusterId } from "~/lib/geo/cluster";
 import { loadPrefs, savePrefs, type SavedPrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
 import { type PriceFilter } from "~/lib/listings/price";
@@ -40,8 +34,8 @@ import {
 import { listingCardMeta } from "~/lib/listings/english";
 import { formatCount, keepLangParam, syncLangParam } from "~/lib/i18n";
 import { useI18n } from "~/lib/i18n/react";
-import { ageFilterText, ageFilterTitle, ageFilters, type AgeFilter } from "~/lib/listings/age";
-import { floorFilterText, floorFilters, type FloorFilter } from "~/lib/listings/floor";
+import { type AgeFilter } from "~/lib/listings/age";
+import { type FloorFilter } from "~/lib/listings/floor";
 import { LanguageSwitch } from "./LanguageSwitch";
 import { type SearchSnapshot } from "~/lib/listings/ai-search";
 import { rankListings, type PhotoScoreInput } from "~/lib/listings/recommend";
@@ -77,26 +71,21 @@ import { type AskPick } from "~/lib/listings/ask-picks";
 import { canExpandNaverGroups, groupedHomesHint, naverInventoryNote } from "~/lib/listings/order";
 import { ListingAgeDot } from "./ListingAgeDot";
 import { ListingPrice } from "./ListingPrice";
-import { BuildingAgeSlider } from "./BuildingAgeSlider";
-import { PriceFilters } from "./PriceFilters";
 import { isDeskViewport } from "~/lib/geo/layout";
 import { listingSheetInHistory } from "~/lib/listings/overlay-history";
 import { useHistoryOverlay } from "./useHistoryOverlay";
 import { usePhotoQuality } from "./usePhotoQuality";
+import { useDeskLayout } from "./useDeskLayout";
+import { MapMobileChrome } from "./MapMobileChrome";
+import { MapFilterSheet } from "./MapFilterSheet";
+import { MapFiltersBody } from "./MapFiltersBody";
 
-const ALL_SOURCES: Source[] = ["zigbang", "naver", "peterpan"];
 const ALL_TYPES: PropertyType[] = ["oneroom", "villa", "officetel", "apartment"];
 const ALL_SALES: SalesType[] = ["jeonse", "wolse", "sale"];
 const DEFAULT_SOURCES: Source[] = ["zigbang", "naver", "peterpan"];
 const DEFAULT_SALES: SalesType[] = ["jeonse", "wolse"];
 const DEFAULT_RADIUS_M = 1200;
 const NAVER_HIDE_KEY = "ziggybang:hide-naver-error";
-const TYPE_CHIP_ON: Record<PropertyType, string> = {
-  oneroom: "bg-orange-500 text-slate-950",
-  villa: "bg-amber-300 text-slate-950",
-  officetel: "bg-violet-300 text-slate-950",
-  apartment: "bg-sky-400 text-slate-950",
-};
 
 function roundCoord(value: number) {
   return Math.round(value * 10_000) / 10_000;
@@ -110,19 +99,6 @@ function viewportKey(next: Bounds & { zoom: number }) {
     roundCoord(next.north),
     roundCoord(next.east),
   ].join(":");
-}
-
-function toggleValue<T>(values: T[], value: T) {
-  return values.includes(value)
-    ? values.filter((item) => item !== value)
-    : [...values, value];
-}
-
-function boundsCenter(bounds: Bounds): LatLng {
-  return {
-    lat: (bounds.south + bounds.north) / 2,
-    lng: (bounds.west + bounds.east) / 2,
-  };
 }
 
 export default function MapApp() {
@@ -176,6 +152,9 @@ export default function MapApp() {
   const [askHighlight, setAskHighlight] = useState<string | null>(null);
   const [dismissedNaver, setDismissedNaver] = useState(false);
   const [uiCompact, setUiCompact] = useState(false);
+  const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
+  const [mobileSearchExpanded, setMobileSearchExpanded] = useState(false);
+  const isDesk = useDeskLayout();
   const [shareHint, setShareHint] = useState<string | null>(null);
   const [urlView, setUrlView] = useState({
     lat: 37.565,
@@ -191,7 +170,8 @@ export default function MapApp() {
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [visionById, setVisionById] = useState<Record<string, PhotoScoreInput>>({});
   const headerRef = useRef<HTMLElement>(null);
-  const [headerHeight, setHeaderHeight] = useState(0);
+  const mobileChromeRef = useRef<HTMLDivElement>(null);
+  const [chromeHeight, setChromeHeight] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
 
   const parsedSearch = useMemo(
@@ -1100,6 +1080,22 @@ export default function MapApp() {
     ageFilter,
     maxBuildingAge,
   }, lang);
+  const activeFilterCount = countActiveFilters({
+    sources,
+    propertyTypes,
+    salesTypes,
+    areaBucketIds,
+    query: debouncedQuery,
+    minDeposit,
+    maxDeposit,
+    minRent,
+    maxRent,
+    foreignerOk,
+    hasPhotos,
+    floorFilter,
+    ageFilter,
+    maxBuildingAge,
+  });
   const visibleHomeCount =
     layerCounts.zigbang + layerCounts.naver + layerCounts.peterpan;
 
@@ -1113,15 +1109,26 @@ export default function MapApp() {
     if (!selected || items.some((item) => item.id === selected.id)) return items;
     return [selected, ...items.slice(0, 23)];
   }, [selected, visible.listings]);
+  useEffect(() => {
+    if (!isDesk) setFiltersSheetOpen(false);
+  }, [isDesk]);
+
+  useEffect(() => {
+    if (!isDesk) setUiCompact(true);
+  }, [isDesk]);
+
   useLayoutEffect(() => {
-    const node = headerRef.current;
-    if (!node) return;
-    const update = () => setHeaderHeight(Math.round(node.getBoundingClientRect().height));
+    const node = isDesk ? headerRef.current : mobileChromeRef.current;
+    if (!node) {
+      setChromeHeight(0);
+      return;
+    }
+    const update = () => setChromeHeight(Math.round(node.getBoundingClientRect().height));
     update();
     const observer = new ResizeObserver(update);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [showList, uiCompact, filterSummary]);
+  }, [isDesk, showList, uiCompact, filterSummary, mobileSearchExpanded, filtersSheetOpen]);
   // The map attribution/controls sit above the carousel, whatever its real height is
   // (cards grow with text size and zoom), so measure it instead of guessing a margin.
   const mapChromeRef = useRef<HTMLDivElement>(null);
@@ -1281,14 +1288,61 @@ export default function MapApp() {
             ? t("hint.none", { query: debouncedQuery })
             : null;
 
+  const filtersBody = {
+    sources,
+    setSources,
+    propertyTypes,
+    setPropertyTypes,
+    salesTypes,
+    setSalesTypes,
+    foreignerOk,
+    setForeignerOk,
+    hasPhotos,
+    setHasPhotos,
+    floorFilter,
+    setFloorFilter,
+    ageFilter,
+    setAgeFilter,
+    areaBucketIds,
+    setAreaBucketIds,
+    priceFilter,
+    onPriceChange: (next: PriceFilter) => {
+      setMinDeposit(next.minDeposit);
+      setMaxDeposit(next.maxDeposit);
+      setMinRent(next.minRent);
+      setMaxRent(next.maxRent);
+    },
+    maxBuildingAge,
+    setMaxBuildingAge,
+    filterSummary,
+    visibleHomeCount,
+    clearChipFilters,
+    tool,
+    setTool,
+    circle,
+    polygon,
+    draftPoints,
+    setDraftPoints,
+    setPolygon,
+    setManualCircle,
+    bounds,
+    radiusM,
+    setRadiusM,
+    finishDraw,
+    clearArea,
+  };
+
   return (
     <div
       className="relative h-[100dvh] w-screen overflow-hidden bg-slate-950 text-slate-100"
-      style={{ ["--desktop-panel" as string]: "min(40vw, 40%)" }}
+      style={{
+        ["--desktop-panel" as string]: "min(40vw, 40%)",
+        ["--chrome-h" as string]: `${chromeHeight}px`,
+      }}
     >
       <header
         ref={headerRef}
-        className="pointer-events-none absolute inset-x-0 top-0 z-[1300] p-3 pt-[max(0.75rem,env(safe-area-inset-top))] desk:right-auto desk:w-[var(--desktop-panel)] desk:max-h-[calc(100dvh-0.5rem)]"
+        className="pointer-events-none absolute inset-x-0 top-0 z-[1300] hidden p-3 pt-[max(0.75rem,env(safe-area-inset-top))] desk:block desk:right-auto desk:w-[var(--desktop-panel)] desk:max-h-[calc(100dvh-0.5rem)]"
       >
         <div
           data-header-panel=""
@@ -1415,281 +1469,7 @@ export default function MapApp() {
           </div>
           </div>
 
-          {!uiCompact ? (
-          <>
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {ALL_SOURCES.map((source) => (
-              <button
-                key={source}
-                type="button"
-                aria-pressed={sources.includes(source)}
-                onClick={() =>
-                  setSources((current) => {
-                    const next = toggleValue(current, source);
-                    return next.length ? next : current;
-                  })
-                }
-                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs font-medium sm:text-sm ${
-                  sources.includes(source)
-                    ? source === "naver"
-                      ? "bg-emerald-500 text-slate-950"
-                      : source === "peterpan"
-                        ? "bg-amber-400 text-slate-950"
-                        : "bg-orange-500 text-slate-950"
-                    : "bg-white/10 text-slate-300"
-                }`}
-              >
-                {sourceText(lang, source)}
-              </button>
-            ))}
-            {ALL_TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                aria-pressed={propertyTypes.includes(type)}
-                onClick={() =>
-                  setPropertyTypes((current) => {
-                    const next = toggleValue(current, type);
-                    return next.length ? next : current;
-                  })
-                }
-                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
-                  propertyTypes.includes(type)
-                    ? TYPE_CHIP_ON[type]
-                    : "bg-white/10 text-slate-300"
-                }`}
-              >
-                {propertyTypeText(lang, type)}
-              </button>
-            ))}
-          </div>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {ALL_SALES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                aria-pressed={salesTypes.includes(type)}
-                onClick={() =>
-                  setSalesTypes((current) => {
-                    const next = toggleValue(current, type);
-                    return next.length ? next : current;
-                  })
-                }
-                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
-                  salesTypes.includes(type)
-                    ? "bg-sky-400 text-slate-950"
-                    : "bg-white/10 text-slate-300"
-                }`}
-              >
-                {salesTypeFilterText(lang, type)}
-              </button>
-            ))}
-            <button
-              type="button"
-              aria-pressed={foreignerOk}
-              onClick={() => setForeignerOk((current) => !current)}
-              title={t("chip.foreigner.title")}
-              className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
-                foreignerOk
-                  ? "bg-emerald-400 text-slate-950"
-                  : "bg-white/10 text-slate-300"
-              }`}
-            >
-              {t("chip.foreigner")}
-            </button>
-            <button
-              type="button"
-              aria-pressed={hasPhotos}
-              onClick={() => setHasPhotos((current) => !current)}
-              title={t("chip.photos.title")}
-              className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
-                hasPhotos
-                  ? "bg-sky-400 text-slate-950"
-                  : "bg-white/10 text-slate-300"
-              }`}
-            >
-              {t("chip.photos")}
-            </button>
-            {floorFilters.map((filter) => (
-              <button
-                key={filter}
-                type="button"
-                aria-pressed={floorFilter === filter}
-                onClick={() =>
-                  setFloorFilter((current) => (current === filter ? undefined : filter))
-                }
-                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
-                  floorFilter === filter
-                    ? "bg-amber-300 text-slate-950"
-                    : "bg-white/10 text-slate-300"
-                }`}
-              >
-                {floorFilterText(lang, filter)}
-              </button>
-            ))}
-            {ageFilters.map((filter) => (
-              <button
-                key={filter}
-                type="button"
-                aria-pressed={ageFilter === filter}
-                title={ageFilterTitle(lang, filter)}
-                onClick={() =>
-                  setAgeFilter((current) => (current === filter ? undefined : filter))
-                }
-                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
-                  ageFilter === filter
-                    ? filter === "week"
-                      ? "bg-emerald-400 text-slate-950"
-                      : "bg-amber-300 text-slate-950"
-                    : "bg-white/10 text-slate-300"
-                }`}
-              >
-                {ageFilterText(lang, filter)}
-              </button>
-            ))}
-          </div>
-          </>
-          ) : null}
-
-          {!uiCompact ? (
-          <>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {areaBuckets.map((bucket) => {
-              const active = areaBucketIds.includes(bucket.id);
-              return (
-                <button
-                  key={bucket.id}
-                  type="button"
-                aria-pressed={active}
-                  title={areaBucketHint(lang, bucket.id)}
-                  onClick={() =>
-                    setAreaBucketIds((current) => toggleValue(current, bucket.id))
-                  }
-                  className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
-                    active ? "bg-violet-400 text-slate-950" : "bg-white/10 text-slate-300"
-                  }`}
-                >
-                  {areaBucketLabel(lang, bucket.id)}
-                </button>
-              );
-            })}
-          </div>
-
-          <PriceFilters
-            value={priceFilter}
-            onChange={(next) => {
-              setMinDeposit(next.minDeposit);
-              setMaxDeposit(next.maxDeposit);
-              setMinRent(next.minRent);
-              setMaxRent(next.maxRent);
-            }}
-          />
-          <BuildingAgeSlider
-            maxBuildingAge={maxBuildingAge}
-            onChange={setMaxBuildingAge}
-          />
-          {!uiCompact ? (
-            <div className="mt-1.5 flex items-center justify-between gap-2">
-              <p className="min-w-0 truncate text-[11px] text-violet-200">
-                {filterSummary ?? t("summary.none")}
-                {visibleHomeCount
-                  ? t("summary.onMap", { n: formatCount(visibleHomeCount, lang) })
-                  : ""}
-              </p>
-              <button
-                type="button"
-                onClick={clearChipFilters}
-                className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-white/20"
-              >
-                {t("summary.clear")}
-              </button>
-            </div>
-          ) : null}
-
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {(["pan", "radius", "draw"] as const).map((nextTool) => (
-              <button
-                key={nextTool}
-                type="button"
-                aria-pressed={tool === nextTool}
-                onClick={() => setTool(nextTool)}
-                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs capitalize sm:text-sm ${
-                  tool === nextTool ? "bg-sky-400 text-slate-950" : "bg-white/10 text-slate-300"
-                }`}
-              >
-                {t(`tool.${nextTool}`)}
-              </button>
-            ))}
-            {tool === "radius" ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setPolygon(null);
-                  setDraftPoints([]);
-                  setManualCircle({ ...boundsCenter(bounds), radiusM });
-                }}
-                className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-xs text-slate-300 sm:text-sm"
-              >
-                {t("tool.useCenter")}
-              </button>
-            ) : null}
-            {draftPoints.length ? (
-              <button
-                type="button"
-                onClick={() => setDraftPoints((current) => current.slice(0, -1))}
-                className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-xs text-slate-300 sm:text-sm"
-              >
-                {t("tool.undo")}
-              </button>
-            ) : null}
-            {draftPoints.length >= 3 ? (
-              <button
-                type="button"
-                onClick={finishDraw}
-                className="inline-flex min-h-10 items-center rounded-full bg-emerald-400 px-3 py-1.5 text-xs text-slate-950 sm:text-sm"
-              >
-                {t("tool.finish")}
-              </button>
-            ) : null}
-            {Boolean(circle ?? polygon) || draftPoints.length > 0 ? (
-              <button
-                type="button"
-                onClick={clearArea}
-                className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-xs text-slate-300 sm:text-sm"
-              >
-                {t("tool.clear")}
-              </button>
-            ) : null}
-          </div>
-
-          {tool === "radius" || circle ? (
-            <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-300">
-              {t("tool.radius")}
-              <input
-                type="range"
-                min={250}
-                max={3000}
-                step={50}
-                value={radiusM}
-                onChange={(event) => setRadiusM(Number(event.target.value))}
-                className="flex-1"
-              />
-              <span className="w-14 text-right text-white">{formatRadius(radiusM)}</span>
-            </label>
-          ) : null}
-
-          {tool === "draw" ? (
-            <p className="mt-1.5 text-[11px] text-slate-400">
-              {t("tool.drawHelp")}
-            </p>
-          ) : null}
-          {tool === "radius" && !circle ? (
-            <p className="mt-1.5 text-[11px] text-slate-400">
-              {t("tool.radiusHelp")}
-            </p>
-          ) : null}
-          </>
-          ) : null}
+          {!uiCompact ? <MapFiltersBody {...filtersBody} /> : null}
 
           {naverError ? (
             <p className="mt-1.5 flex items-start justify-between gap-2 text-[11px] text-amber-300">
@@ -1715,13 +1495,47 @@ export default function MapApp() {
         </div>
       </header>
 
-      <div className="absolute inset-0 flex">
+      <MapMobileChrome
+        chromeRef={mobileChromeRef}
+        viewMode={viewMode}
+        onViewMode={setViewMode}
+        savedCount={savedHomes.length}
+        filterCount={activeFilterCount}
+        onOpenFilters={() => setFiltersSheetOpen(true)}
+        onOpenAsk={() => setAskOpen(true)}
+        searchInput={searchInput}
+        onSearchInput={setSearchInput}
+        onSearchSubmit={() => setDebouncedQuery(searchInput)}
+        onClearSearch={() => {
+          setSearchInput("");
+          setDebouncedQuery("");
+        }}
+        searchExpanded={mobileSearchExpanded}
+        onToggleSearch={() => setMobileSearchExpanded((open) => !open)}
+      />
+
+      <MapFilterSheet
+        open={filtersSheetOpen}
+        onClose={() => setFiltersSheetOpen(false)}
+        naverError={
+          naverError
+            ? {
+                source: naverError.source,
+                message: friendlySourceError(naverError.source, naverError.message, lang),
+              }
+            : undefined
+        }
+        onHideNaver={hideNaverError}
+        body={filtersBody}
+      />
+
+      <div className="absolute inset-0 flex mobile:pt-[var(--chrome-h)] desk:pt-0">
         <div
           ref={mapChromeRef}
           data-map-chrome={
             viewMode === "map" && visible.listings.length ? "carousel" : undefined
           }
-          data-filters={uiCompact ? "compact" : "open"}
+          data-filters={isDesk && !uiCompact ? "open" : "compact"}
           className={
             showList
               ? "pointer-events-none invisible absolute inset-0 z-0 h-full desk:visible desk:pointer-events-auto desk:static desk:z-auto desk:w-[46%]"
@@ -1751,8 +1565,7 @@ export default function MapApp() {
         {showList ? (
           <div
             data-list-panel="portrait"
-            className="relative z-[1200] h-full min-h-0 w-full min-w-0 flex-1 bg-slate-950 mobile:pt-[var(--header-h)] desk:pt-0"
-            style={{ ["--header-h" as string]: `${headerHeight}px` }}
+            className="relative z-[1200] h-full min-h-0 w-full min-w-0 flex-1 bg-slate-950 desk:pt-0"
           >
             <ListingList
               listings={listListings}
@@ -1860,7 +1673,7 @@ export default function MapApp() {
             ref={carouselRef}
             className={`pointer-events-auto absolute bottom-4 left-4 right-4 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar desk:left-[calc(var(--desktop-panel)+1.25rem)] ${
               selected ? "desk:right-[calc(var(--desktop-panel)+1rem)]" : ""
-            } ${uiCompact ? "" : "mobile:hidden"} tiny:hidden ${
+            } ${isDesk && !uiCompact ? "mobile:hidden" : ""} tiny:hidden ${
               selected ? "mobile:invisible mobile:pointer-events-none" : ""
             }`}
           >
@@ -1912,7 +1725,7 @@ export default function MapApp() {
         <div
           role="status"
           className="pointer-events-auto absolute right-3 z-[1150] flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 rounded-2xl border border-sky-400/40 bg-slate-950/95 px-3 py-2 text-xs text-slate-100 shadow-xl top-[var(--ask-top)] mobile:left-3 desk:left-[calc(var(--desktop-panel)+1.25rem)] desk:right-auto desk:top-3"
-          style={{ ["--ask-top" as string]: `${headerHeight + 8}px` }}
+          style={{ ["--ask-top" as string]: `${chromeHeight + 8}px` }}
         >
           <span>
             Showing your {askPins.length} Ask pick{askPins.length === 1 ? "" : "s"} on the map

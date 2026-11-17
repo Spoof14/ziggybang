@@ -26,6 +26,7 @@ export const en = {
   "header.copySearchPrompt": "Copy this search link",
   "header.showFilters": "Show filters",
   "header.hideFilters": "Hide filters",
+  "header.filtersShort": "Filters",
   "lang.group": "Language",
   "lang.switch": "Korean (한국어)",
   "lang.en": "EN",
