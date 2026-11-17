@@ -52,6 +52,15 @@ body {
   width: 30px;
 }
 
+@media (max-width: 639px) {
+  .leaflet-control-locate a,
+  .leaflet-control-metro a,
+  .leaflet-bar a {
+    height: 40px;
+    width: 40px;
+  }
+}
+
 .leaflet-control-locate a svg {
   height: 16px;
   width: 16px;

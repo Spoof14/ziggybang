@@ -1213,7 +1213,14 @@ export default function MapApp() {
         ref={headerRef}
         className="pointer-events-none absolute inset-x-0 top-0 z-[1300] p-3 pt-[max(0.75rem,env(safe-area-inset-top))] desk:right-auto desk:w-[var(--desktop-panel)] desk:max-h-[calc(100dvh-0.5rem)]"
       >
-        <div className="pointer-events-auto mx-auto max-h-[min(62dvh,calc(100dvh-1.5rem))] short:max-h-[50dvh] tiny:max-h-[calc(100dvh-1.5rem)] w-full desk:max-h-[calc(100dvh-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-slate-950/75 p-2.5 shadow-xl backdrop-blur-md desk:mx-0 desk:max-w-none">
+        <div
+          data-header-panel=""
+          className="pointer-events-auto mx-auto max-h-[min(62dvh,calc(100dvh-1.5rem))] short:max-h-[50dvh] tiny:max-h-[calc(100dvh-1.5rem)] w-full desk:max-h-[calc(100dvh-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-slate-950/75 p-2.5 shadow-xl backdrop-blur-md desk:mx-0 desk:max-w-none"
+        >
+          <div
+            data-header-sticky=""
+            className="sticky top-0 z-20 -mx-2.5 space-y-2 border-b border-white/10 bg-slate-950/95 px-2.5 pb-2.5 backdrop-blur-md"
+          >
           <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
             <div className="min-w-[11rem] flex-1">
               <p className="flex flex-wrap items-baseline gap-x-2 text-[10px] uppercase tracking-[0.18em] text-sky-300">
@@ -1237,14 +1244,16 @@ export default function MapApp() {
               <button
                 type="button"
                 onClick={() => void copySearchLink()}
-                className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
+                className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-white/20"
               >
                 {shareHint ?? t("header.copyLink")}
               </button>
               <button
                 type="button"
+                data-filter-toggle=""
+                aria-label={uiCompact ? t("header.showFilters") : t("header.hideFilters")}
                 onClick={() => setUiCompact((current) => !current)}
-                className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
+                className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-white/20"
               >
                 {uiCompact ? t("header.showFilters") : t("header.hideFilters")}
               </button>
@@ -1252,9 +1261,86 @@ export default function MapApp() {
             </div>
           </div>
 
+          <label className="relative block">
+            <span className="sr-only">{t("search.label")}</span>
+            <input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") setDebouncedQuery(searchInput);
+              }}
+              placeholder={t("search.placeholder")}
+              autoComplete="off"
+              spellCheck={false}
+              className="search-input min-h-10 w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-2 pr-16 text-sm text-slate-100 caret-white outline-none focus:border-sky-400"
+            />
+            {searchInput ? (
+              <button
+                type="button"
+                aria-label={t("search.clear.aria")}
+                onClick={() => {
+                  setSearchInput("");
+                  setDebouncedQuery("");
+                }}
+                className="absolute right-1 top-1/2 flex min-h-10 min-w-10 -translate-y-1/2 items-center justify-center rounded-lg text-xs text-slate-400 hover:bg-white/10 hover:text-white"
+              >
+                {t("search.clear")}
+              </button>
+            ) : null}
+          </label>
+          {areaHint ? (
+            <p className="text-[11px] text-sky-300">{areaHint}</p>
+          ) : null}
+          {uiCompact ? (
+            <p className="flex items-center justify-between gap-2 text-[11px] text-violet-200">
+              <span className="min-w-0 truncate">
+                {filterSummary ?? t("summary.none")}
+                {visibleHomeCount
+                  ? t("summary.onMap", { n: formatCount(visibleHomeCount, lang) })
+                  : ""}
+              </span>
+              <button
+                type="button"
+                onClick={clearChipFilters}
+                className="inline-flex min-h-10 shrink-0 items-center px-2 text-slate-400 hover:text-white"
+              >
+                {t("summary.clear")}
+              </button>
+            </p>
+          ) : null}
+
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap gap-1.5">
+              {(["map", "list", "best", "saved"] as ViewMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={viewMode === mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs capitalize sm:text-sm ${
+                    viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
+                  }`}
+                >
+                  {mode === "saved" && savedHomes.length
+                    ? t("view.savedN", { n: savedHomes.length })
+                    : t(`view.${mode}`)}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              aria-label={t("ask.open.aria")}
+              onClick={() => setAskOpen(true)}
+              className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-sky-400 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-300 sm:text-sm"
+            >
+              {t("ask.open")}
+            </button>
+          </div>
+          </div>
+
           {!uiCompact ? (
           <>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
             {ALL_SOURCES.map((source) => (
               <button
                 key={source}
@@ -1266,7 +1352,7 @@ export default function MapApp() {
                     return next.length ? next : current;
                   })
                 }
-                className={`rounded-full px-2.5 py-1 text-xs font-medium sm:text-sm ${
+                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs font-medium sm:text-sm ${
                   sources.includes(source)
                     ? source === "naver"
                       ? "bg-emerald-500 text-slate-950"
@@ -1290,7 +1376,7 @@ export default function MapApp() {
                     return next.length ? next : current;
                   })
                 }
-                className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
                   propertyTypes.includes(type)
                     ? TYPE_CHIP_ON[type]
                     : "bg-white/10 text-slate-300"
@@ -1312,7 +1398,7 @@ export default function MapApp() {
                     return next.length ? next : current;
                   })
                 }
-                className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
                   salesTypes.includes(type)
                     ? "bg-sky-400 text-slate-950"
                     : "bg-white/10 text-slate-300"
@@ -1326,7 +1412,7 @@ export default function MapApp() {
               aria-pressed={foreignerOk}
               onClick={() => setForeignerOk((current) => !current)}
               title={t("chip.foreigner.title")}
-              className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+              className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
                 foreignerOk
                   ? "bg-emerald-400 text-slate-950"
                   : "bg-white/10 text-slate-300"
@@ -1339,7 +1425,7 @@ export default function MapApp() {
               aria-pressed={hasPhotos}
               onClick={() => setHasPhotos((current) => !current)}
               title={t("chip.photos.title")}
-              className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+              className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
                 hasPhotos
                   ? "bg-sky-400 text-slate-950"
                   : "bg-white/10 text-slate-300"
@@ -1355,7 +1441,7 @@ export default function MapApp() {
                 onClick={() =>
                   setFloorFilter((current) => (current === filter ? undefined : filter))
                 }
-                className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
                   floorFilter === filter
                     ? "bg-amber-300 text-slate-950"
                     : "bg-white/10 text-slate-300"
@@ -1373,7 +1459,7 @@ export default function MapApp() {
                 onClick={() =>
                   setAgeFilter((current) => (current === filter ? undefined : filter))
                 }
-                className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
                   ageFilter === filter
                     ? filter === "week"
                       ? "bg-emerald-400 text-slate-950"
@@ -1387,82 +1473,6 @@ export default function MapApp() {
           </div>
           </>
           ) : null}
-
-          <label className="relative mt-2 block">
-            <span className="sr-only">{t("search.label")}</span>
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") setDebouncedQuery(searchInput);
-              }}
-              placeholder={t("search.placeholder")}
-              autoComplete="off"
-              spellCheck={false}
-              className="search-input w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-1.5 pr-16 text-sm text-slate-100 caret-white outline-none focus:border-sky-400"
-            />
-            {searchInput ? (
-              <button
-                type="button"
-                aria-label={t("search.clear.aria")}
-                onClick={() => {
-                  setSearchInput("");
-                  setDebouncedQuery("");
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-0.5 text-xs text-slate-400 hover:bg-white/10 hover:text-white"
-              >
-                {t("search.clear")}
-              </button>
-            ) : null}
-          </label>
-          {areaHint ? (
-            <p className="mt-1 text-[11px] text-sky-300">{areaHint}</p>
-          ) : null}
-          {uiCompact ? (
-            <p className="mt-1 flex items-center justify-between gap-2 text-[11px] text-violet-200">
-              <span className="min-w-0 truncate">
-                {filterSummary ?? t("summary.none")}
-                {visibleHomeCount
-                  ? t("summary.onMap", { n: formatCount(visibleHomeCount, lang) })
-                  : ""}
-              </span>
-              <button
-                type="button"
-                onClick={clearChipFilters}
-                className="shrink-0 text-slate-400 hover:text-white"
-              >
-                {t("summary.clear")}
-              </button>
-            </p>
-          ) : null}
-
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <div className="flex min-w-0 flex-wrap gap-1.5">
-              {(["map", "list", "best", "saved"] as ViewMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                aria-pressed={viewMode === mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
-                    viewMode === mode ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
-                  }`}
-                >
-                  {mode === "saved" && savedHomes.length
-                    ? t("view.savedN", { n: savedHomes.length })
-                    : t(`view.${mode}`)}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              aria-label={t("ask.open.aria")}
-              onClick={() => setAskOpen(true)}
-              className="shrink-0 rounded-full bg-sky-400 px-2.5 py-1 text-xs font-medium text-slate-950 hover:bg-sky-300 sm:text-sm"
-            >
-              {t("ask.open")}
-            </button>
-          </div>
 
           {!uiCompact ? (
           <>
@@ -1478,7 +1488,7 @@ export default function MapApp() {
                   onClick={() =>
                     setAreaBucketIds((current) => toggleValue(current, bucket.id))
                   }
-                  className={`rounded-full px-2.5 py-1 text-xs sm:text-sm ${
+                  className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs sm:text-sm ${
                     active ? "bg-violet-400 text-slate-950" : "bg-white/10 text-slate-300"
                   }`}
                 >
@@ -1512,7 +1522,7 @@ export default function MapApp() {
               <button
                 type="button"
                 onClick={clearChipFilters}
-                className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
+                className="inline-flex min-h-10 shrink-0 items-center rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-white/20"
               >
                 {t("summary.clear")}
               </button>
@@ -1526,7 +1536,7 @@ export default function MapApp() {
                 type="button"
                 aria-pressed={tool === nextTool}
                 onClick={() => setTool(nextTool)}
-                className={`rounded-full px-2.5 py-1 text-xs capitalize sm:text-sm ${
+                className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-xs capitalize sm:text-sm ${
                   tool === nextTool ? "bg-sky-400 text-slate-950" : "bg-white/10 text-slate-300"
                 }`}
               >
@@ -1541,7 +1551,7 @@ export default function MapApp() {
                   setDraftPoints([]);
                   setManualCircle({ ...boundsCenter(bounds), radiusM });
                 }}
-                className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
+                className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-xs text-slate-300 sm:text-sm"
               >
                 {t("tool.useCenter")}
               </button>
@@ -1550,7 +1560,7 @@ export default function MapApp() {
               <button
                 type="button"
                 onClick={() => setDraftPoints((current) => current.slice(0, -1))}
-                className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
+                className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-xs text-slate-300 sm:text-sm"
               >
                 {t("tool.undo")}
               </button>
@@ -1559,7 +1569,7 @@ export default function MapApp() {
               <button
                 type="button"
                 onClick={finishDraw}
-                className="rounded-full bg-emerald-400 px-2.5 py-1 text-xs text-slate-950 sm:text-sm"
+                className="inline-flex min-h-10 items-center rounded-full bg-emerald-400 px-3 py-1.5 text-xs text-slate-950 sm:text-sm"
               >
                 {t("tool.finish")}
               </button>
@@ -1568,7 +1578,7 @@ export default function MapApp() {
               <button
                 type="button"
                 onClick={clearArea}
-                className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-slate-300 sm:text-sm"
+                className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-xs text-slate-300 sm:text-sm"
               >
                 {t("tool.clear")}
               </button>
