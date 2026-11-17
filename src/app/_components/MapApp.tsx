@@ -588,9 +588,11 @@ export default function MapApp() {
   );
 
   const [extraNaver, setExtraNaver] = useState<MapListing[]>([]);
+  const [dismissedNaverGroups, setDismissedNaverGroups] = useState<string[]>([]);
   const extraKey = `${currentFilterKey}|${bounds.south}|${bounds.west}|${bounds.north}|${bounds.east}|${zoom}`;
   useEffect(() => {
     setExtraNaver([]);
+    setDismissedNaverGroups([]);
   }, [extraKey]);
   const mergedListings = useMemo(() => {
     if (!extraNaver.length) return data.listings;
@@ -617,7 +619,7 @@ export default function MapApp() {
       floorFilter,
       ageFilter,
       maxBuildingAge,
-    }, { grouped: data.grouped, truncated: data.stats.truncated });
+    }, { grouped: data.grouped, truncated: data.stats.truncated, dismissedGroupIds: dismissedNaverGroups });
     return {
       clusters: layers.clusters,
       listings: layers.listings,
@@ -643,6 +645,7 @@ export default function MapApp() {
     zoom,
     foreignerOk,
     hasPhotos,
+    dismissedNaverGroups,
   ]);
 
   const visible = useMemo(
@@ -813,9 +816,25 @@ export default function MapApp() {
       if (isNaverGroupClusterId(cluster.id)) {
         const sourceId = cluster.id.slice("naver:cluster:".length);
         void expandNaverGroups
-          .mutateAsync(naverGroupInput([{ sourceId, lat: cluster.lat, lng: cluster.lng, count: cluster.count }]))
+          .mutateAsync(
+            naverGroupInput([
+              {
+                sourceId,
+                lat: cluster.lat,
+                lng: cluster.lng,
+                count: cluster.countMax ?? cluster.count,
+              },
+            ]),
+          )
           .then((result) => {
+            if (result.emptySourceIds?.includes(sourceId)) {
+              setDismissedNaverGroups((current) =>
+                current.includes(sourceId) ? current : [...current, sourceId],
+              );
+              return;
+            }
             applyExpandedNaver(result.listings);
+            setDismissedNaverGroups((current) => current.filter((id) => id !== sourceId));
             const first = result.listings[0];
             if (first) {
               setSelected(first);
@@ -1695,11 +1714,18 @@ export default function MapApp() {
                               sourceId: cluster.id.slice("naver:cluster:".length),
                               lat: cluster.lat,
                               lng: cluster.lng,
-                              count: cluster.count,
+                              count: cluster.countMax ?? cluster.count,
                             })),
                           ),
                         )
-                        .then((result) => applyExpandedNaver(result.listings))
+                        .then((result) => {
+                          if (result.emptySourceIds?.length) {
+                            setDismissedNaverGroups((current) => [
+                              ...new Set([...current, ...result.emptySourceIds]),
+                            ]);
+                          }
+                          applyExpandedNaver(result.listings);
+                        })
                         .catch(() => undefined);
                     }
                   : undefined

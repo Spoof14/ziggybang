@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { getListingDetail, getMapData } from "~/server/listings/aggregate";
-import { fetchNaverGroupArticles } from "~/server/listings/naver";
 import { interpretAsk } from "~/server/listings/ask";
 import { isOpenAiConfigured } from "~/server/listings/openai";
 import { localizeAskResult, runAskPicks } from "~/server/listings/ask-picks";
@@ -11,9 +10,7 @@ import { translateListingBundle, translateListingNotes, translateListingTitle } 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { ageFilters } from "~/lib/listings/age";
 import { floorFilters } from "~/lib/listings/floor";
-import { filterListings } from "~/lib/listings/filter";
-import { parseSearchQuery } from "~/lib/listings/search";
-import { salesTypes as allSalesTypes } from "~/lib/listings/types";
+import { expandNaverGroupsFiltered } from "~/server/listings/naver-group-expand";
 
 const boundsSchema = z.object({
   south: z.number(),
@@ -213,46 +210,24 @@ export const listingsRouter = createTRPCRouter({
             lng: (input.bounds.west + input.bounds.east) / 2,
             count: undefined as number | undefined,
           }));
-      const pages = groups.map((group) =>
-        fetchNaverGroupArticles({
-          bounds: input.bounds,
-          zoom: input.zoom,
-          propertyTypes: input.propertyTypes,
-          salesTypes: input.salesTypes,
-          areaBucketIds: input.areaBucketIds,
-          minDeposit: input.minDeposit,
-          maxDeposit: input.maxDeposit,
-          minRent: input.minRent,
-          maxRent: input.maxRent,
-          maxBuildingAge: input.maxBuildingAge,
-          sourceId: group.sourceId,
-          lat: group.lat,
-          lng: group.lng,
-          count: group.count,
-        }),
-      );
-      const listings = (await Promise.allSettled(pages)).flatMap((result) =>
-        result.status === "fulfilled" ? result.value : [],
-      );
-      const { listingQuery } = parseSearchQuery(input.query ?? "");
-      const filtered = filterListings(listings, {
+      return expandNaverGroupsFiltered({
+        groups,
+        bounds: input.bounds,
+        zoom: input.zoom,
         propertyTypes: input.propertyTypes,
-        salesTypes: input.salesTypes?.length ? input.salesTypes : [...allSalesTypes],
-        areaBucketIds: input.areaBucketIds ?? [],
-        query: listingQuery,
+        salesTypes: input.salesTypes,
+        areaBucketIds: input.areaBucketIds,
         minDeposit: input.minDeposit,
         maxDeposit: input.maxDeposit,
         minRent: input.minRent,
         maxRent: input.maxRent,
         maxBuildingAge: input.maxBuildingAge,
+        query: input.query,
         foreignerOk: input.foreignerOk,
         hasPhotos: input.hasPhotos,
         floorFilter: input.floorFilter,
         ageFilter: input.ageFilter,
-        requireDetails: true,
       });
-      const seen = new Map(filtered.map((listing) => [listing.id, listing]));
-      return { listings: [...seen.values()] };
     }),
 
   getDetail: publicProcedure
