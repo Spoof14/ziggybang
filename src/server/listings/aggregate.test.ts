@@ -88,6 +88,45 @@ describe("getMapData", () => {
     expect(data.stats.truncated).toBe(true);
   });
 
+  it("keeps leftover Naver building groups at street zoom so the map can list them", async () => {
+    const data = await getMapData(
+      {
+        bounds: seoulBounds,
+        zoom: 17,
+        sources: ["naver"],
+        propertyTypes: ["oneroom"],
+        includeListings: true,
+      },
+      {
+        zigbang: async () => [],
+        naver: async () => ({
+          listings: [
+            listing("n1", "naver"),
+            listing("n2", "naver"),
+            listing("n3", "naver"),
+            {
+              id: "naver:cluster:bldg",
+              source: "naver",
+              sourceId: "bldg",
+              lat: 37.566,
+              lng: 126.978,
+              propertyType: "apartment",
+              count: 7,
+              url: "https://m.land.naver.com/",
+            },
+          ],
+          available: 10,
+        }),
+      },
+    );
+    expect(data.listings.map((item) => item.id)).toEqual(["n1", "n2", "n3"]);
+    expect(data.grouped).toHaveLength(1);
+    expect(data.grouped?.[0]?.count).toBe(7);
+    expect(data.stats.naver).toBe(10);
+    expect(data.stats.truncated).toBe(true);
+    expect(data.clusters).toEqual([]);
+  });
+
   it("keeps Naver area clusters on the map at city zoom", async () => {
     const data = await getMapData(
       {

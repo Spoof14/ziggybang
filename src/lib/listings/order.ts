@@ -27,7 +27,31 @@ export function sortByDistanceTo<T extends LatLngLike>(
 }
 
 /** Message for a list that is empty while the map still shows grouped homes. */
-export function groupedHomesHint(groupedCount: number, lang: Lang = DEFAULT_LANG): string | undefined {
+export function groupedHomesHint(
+  groupedCount: number,
+  lang: Lang = DEFAULT_LANG,
+  zoom?: number,
+): string | undefined {
   if (groupedCount <= 0) return undefined;
-  return t(lang, "list.groupedHint", { n: formatCount(groupedCount, lang) });
+  const key = zoom != null && zoom >= 15 ? "list.groupedHintStreet" : "list.groupedHint";
+  return t(lang, key, { n: formatCount(groupedCount, lang) });
+}
+
+const STREET_ZOOM = 15;
+
+/** Explain a short individual list when Naver still has grouped inventory. */
+export function naverInventoryNote(
+  input: { inventory: number; listed: number; zoom: number },
+  lang: Lang = DEFAULT_LANG,
+): string | undefined {
+  if (input.inventory <= input.listed) return undefined;
+  const key = input.zoom >= STREET_ZOOM ? "list.naverNoteStreet" : "list.naverNote";
+  return t(lang, key, {
+    inventory: formatCount(input.inventory, lang),
+    listed: formatCount(input.listed, lang),
+  });
+}
+
+export function canExpandNaverGroups(input: { inventory: number; listed: number; zoom: number }): boolean {
+  return input.zoom >= STREET_ZOOM && input.inventory > input.listed;
 }

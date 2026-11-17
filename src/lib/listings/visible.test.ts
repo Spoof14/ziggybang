@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeActiveFilters, layerSourceCounts, mapLayersForFilters } from "./visible";
+import { describeActiveFilters, layerSourceCounts, leftoverGroupedListings, mapLayersForFilters } from "./visible";
 import { type MapListing } from "./types";
 
 function home(
@@ -226,10 +226,25 @@ describe("bubbles follow filters", () => {
     expect(layers.listings.map((l) => l.id)).toEqual(["small"]);
   });
 
-  it("never draws bubbles at street zoom", () => {
-    const layers = mapLayersForFilters([at("a", 37.556, 126.923)], [{ id: "s", lat: 1, lng: 1, count: 9, sources: {} }], { ...base, zoom: 16 });
+  it("drops area-server clusters at street zoom but keeps leftover Naver building bubbles", () => {
+    const layers = mapLayersForFilters(
+      [at("a", 37.556, 126.923)],
+      [{ id: "s", lat: 1, lng: 1, count: 9, sources: {} }],
+      { ...base, zoom: 16 },
+    );
     expect(layers.clusters).toEqual([]);
     expect(layers.listings).toHaveLength(1);
+
+    const grouped = at("naver:cluster:bldg", 37.556, 126.923, { source: "naver", count: 10 });
+    const street = mapLayersForFilters(
+      [at("a", 37.556, 126.923, { source: "naver" }), at("b", 37.5561, 126.9231, { source: "naver" })],
+      [],
+      { ...base, zoom: 17 },
+      { grouped: [grouped] },
+    );
+    expect(street.listings).toHaveLength(2);
+    expect(street.clusters).toHaveLength(1);
+    expect(street.clusters[0]).toMatchObject({ id: "naver:cluster:bldg", count: 8, sources: { naver: 8 } });
   });
 });
 
@@ -255,5 +270,25 @@ describe("layerSourceCounts", () => {
 
   it("is all zeros when nothing is drawn", () => {
     expect(layerSourceCounts({ clusters: [], listings: [] })).toMatchObject({ zigbang: 0, naver: 0, peterpan: 0 });
+  });
+
+  it("adds leftover Naver building bubbles to listed homes at street zoom", () => {
+    const counts = layerSourceCounts({
+      clusters: [
+        { id: "naver:cluster:bldg", lat: 37.55, lng: 126.92, count: 170, sources: { naver: 170 }, groupedCount: 170 },
+      ],
+      listings: [at("a", 37.55, 126.92, { source: "naver" }), at("b", 37.55, 126.92, { source: "naver" }), at("c", 37.55, 126.92, { source: "naver" })],
+    });
+    expect(counts).toMatchObject({ naver: 173, zigbang: 0, peterpan: 0, totals: {}, naverApprox: false });
+  });
+});
+
+describe("leftoverGroupedListings", () => {
+  it("shrinks a building group by nearby listed homes and drops it when all are listed", () => {
+    const group = at("naver:cluster:bldg", 37.55, 126.92, { source: "naver", count: 10 });
+    const shrunk = leftoverGroupedListings([group], [at("a", 37.55, 126.92, { source: "naver" }), at("b", 37.5501, 126.9201, { source: "naver" })]);
+    expect(shrunk).toEqual([expect.objectContaining({ id: "naver:cluster:bldg", count: 8 })]);
+    const listed = Array.from({ length: 10 }, (_, i) => at(`n${i}`, 37.55, 126.92, { source: "naver" }));
+    expect(leftoverGroupedListings([group], listed)).toEqual([]);
   });
 });

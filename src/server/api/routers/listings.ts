@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getListingDetail, getMapData } from "~/server/listings/aggregate";
+import { fetchNaverGroupArticles } from "~/server/listings/naver";
 import { interpretAsk } from "~/server/listings/ask";
 import { isOpenAiConfigured } from "~/server/listings/openai";
 import { localizeAskResult, runAskPicks } from "~/server/listings/ask-picks";
@@ -167,6 +168,67 @@ export const listingsRouter = createTRPCRouter({
       }),
     )
     .query(({ input }) => getMapData(input)),
+
+  expandNaverGroups: publicProcedure
+    .input(
+      z.object({
+        sourceIds: z.array(z.string().min(1).max(40)).min(1).max(12),
+        bounds: boundsSchema,
+        zoom: z.number().min(1).max(20),
+        propertyTypes: z.array(propertyTypeSchema).min(1),
+        salesTypes: z.array(salesTypeSchema).min(1).optional(),
+        areaBucketIds: z.array(areaBucketSchema).optional(),
+        minDeposit: z.number().min(0).max(1_000_000).optional(),
+        maxDeposit: z.number().min(0).max(1_000_000).optional(),
+        minRent: z.number().min(0).max(50_000).optional(),
+        maxRent: z.number().min(0).max(50_000).optional(),
+        maxBuildingAge: z.number().int().min(5).max(39).optional(),
+        groups: z
+          .array(
+            z.object({
+              sourceId: z.string().min(1).max(40),
+              lat: z.number(),
+              lng: z.number(),
+              count: z.number().int().min(1).optional(),
+            }),
+          )
+          .max(12)
+          .optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const groups = input.groups?.length
+        ? input.groups
+        : input.sourceIds.map((sourceId) => ({
+            sourceId,
+            lat: (input.bounds.south + input.bounds.north) / 2,
+            lng: (input.bounds.west + input.bounds.east) / 2,
+            count: undefined as number | undefined,
+          }));
+      const pages = groups.map((group) =>
+        fetchNaverGroupArticles({
+          bounds: input.bounds,
+          zoom: input.zoom,
+          propertyTypes: input.propertyTypes,
+          salesTypes: input.salesTypes,
+          areaBucketIds: input.areaBucketIds,
+          minDeposit: input.minDeposit,
+          maxDeposit: input.maxDeposit,
+          minRent: input.minRent,
+          maxRent: input.maxRent,
+          maxBuildingAge: input.maxBuildingAge,
+          sourceId: group.sourceId,
+          lat: group.lat,
+          lng: group.lng,
+          count: group.count,
+        }),
+      );
+      const listings = (await Promise.allSettled(pages)).flatMap((result) =>
+        result.status === "fulfilled" ? result.value : [],
+      );
+      const seen = new Map(listings.map((listing) => [listing.id, listing]));
+      return { listings: [...seen.values()] };
+    }),
 
   getDetail: publicProcedure
     .input(
