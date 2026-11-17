@@ -9,6 +9,7 @@ import { LANG_HEADER, parseLang, DEFAULT_LANG } from "~/lib/i18n/lang";
 import { LangProvider } from "~/lib/i18n/react";
 import { TRPCReactProvider } from "~/trpc/react";
 import { canonicalSiteUrl } from "~/lib/site-url";
+import { PwaRegister } from "./_components/PwaRegister";
 
 const SITE_URL = canonicalSiteUrl();
 const SITE_TITLE = "Ziggybang";
@@ -37,9 +38,21 @@ export const metadata: Metadata = {
     title: "Ziggybang — Korea rentals, in English",
     description: SITE_DESCRIPTION,
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: SITE_TITLE,
+  },
   icons: [
     { rel: "icon", url: "/favicon.svg", type: "image/svg+xml" },
     { rel: "icon", url: "/favicon.ico" },
+    { rel: "icon", url: "/favicon.png", sizes: "32x32", type: "image/png" },
+    {
+      rel: "apple-touch-icon",
+      url: "/icons/apple-touch-icon.png",
+      sizes: "180x180",
+      type: "image/png",
+    },
   ],
 };
 
@@ -47,6 +60,7 @@ export const viewport: Viewport = {
   themeColor: "#020617",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({
@@ -59,6 +73,7 @@ export default async function RootLayout({
       <body className="bg-slate-950">
         <LangProvider initialLang={lang}>
           <TRPCReactProvider>{children}</TRPCReactProvider>
+          <PwaRegister />
         </LangProvider>
         {process.env.VERCEL ? <Analytics /> : null}
       </body>
