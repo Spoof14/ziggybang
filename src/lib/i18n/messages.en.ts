@@ -42,6 +42,8 @@ export const en = {
   "status.source": "{source} {n}",
   "map.clusterUnfiltered": "Count may include homes outside your filters",
   "map.clusterApproximate": "Tap to load homes with your filters applied",
+  "map.clusterLoading": "Loading homes…",
+  "map.clusterNoMatches": "No homes here match your current filters",
   "map.clusterVerifiedPartial": "{n} homes match your filters (tap for more)",
   "map.legendApprox": "Dashed counts are upper bounds — tap to verify",
   "status.sourceOf": "{source} {n} of {total}",

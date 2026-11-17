@@ -589,6 +589,8 @@ export default function MapApp() {
 
   const [extraNaver, setExtraNaver] = useState<MapListing[]>([]);
   const [dismissedNaverGroups, setDismissedNaverGroups] = useState<string[]>([]);
+  const [expandingClusterId, setExpandingClusterId] = useState<string | null>(null);
+  const [clusterExpandNotice, setClusterExpandNotice] = useState<string | null>(null);
   const extraKey = `${currentFilterKey}|${bounds.south}|${bounds.west}|${bounds.north}|${bounds.east}|${zoom}`;
   useEffect(() => {
     setExtraNaver([]);
@@ -815,6 +817,8 @@ export default function MapApp() {
     (cluster: MapCluster) => {
       if (isNaverGroupClusterId(cluster.id)) {
         const sourceId = cluster.id.slice("naver:cluster:".length);
+        setClusterExpandNotice(null);
+        setExpandingClusterId(cluster.id);
         void expandNaverGroups
           .mutateAsync(
             naverGroupInput([
@@ -831,6 +835,7 @@ export default function MapApp() {
               setDismissedNaverGroups((current) =>
                 current.includes(sourceId) ? current : [...current, sourceId],
               );
+              setClusterExpandNotice(t("map.clusterNoMatches"));
               return;
             }
             applyExpandedNaver(result.listings);
@@ -844,14 +849,18 @@ export default function MapApp() {
             if (result.listings.length > 1) setViewMode("list");
           })
           .catch(() => {
+            setClusterExpandNotice(t("map.clusterNoMatches"));
             setFocus({ lat: cluster.lat, lng: cluster.lng, token: Date.now() });
+          })
+          .finally(() => {
+            setExpandingClusterId((current) => (current === cluster.id ? null : current));
           });
         return;
       }
       setSelected(null);
       setFocus({ lat: cluster.lat, lng: cluster.lng, token: Date.now() });
     },
-    [applyExpandedNaver, expandNaverGroups, naverGroupInput],
+    [applyExpandedNaver, expandNaverGroups, naverGroupInput, t],
   );
 
   const onMapClick = useCallback(
@@ -1659,12 +1668,21 @@ export default function MapApp() {
             polygon={polygon}
             draftPoints={draftPoints}
             tool={tool}
+            expandingClusterId={expandingClusterId}
             onViewport={onViewport}
             onSelectListing={onSelectFromMap}
             onSelectCluster={onSelectCluster}
             onMapClick={onMapClick}
             onFinishDraw={finishDraw}
           />
+          {clusterExpandNotice || expandingClusterId ? (
+            <p
+              role="status"
+              className="pointer-events-none absolute inset-x-3 bottom-20 z-[1250] mx-auto max-w-md rounded-xl border border-white/15 bg-slate-950/90 px-3 py-2 text-center text-xs text-slate-100 shadow-lg mobile:bottom-24"
+            >
+              {expandingClusterId ? t("map.clusterLoading") : clusterExpandNotice}
+            </p>
+          ) : null}
         </div>
         {showList ? (
           <div

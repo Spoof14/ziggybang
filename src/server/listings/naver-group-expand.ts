@@ -195,3 +195,25 @@ export async function expandNaverGroupsFiltered(
   const seen = new Map(listings.map((listing) => [listing.id, listing]));
   return { listings: [...seen.values()], emptySourceIds };
 }
+
+const PRIME_MAX_GROUPS = 10;
+
+/** Street zoom: hydrate at least one listable home per leftover Naver building bubble. */
+export async function primeNaverGroupedBuildings(
+  grouped: MapListing[],
+  input: Omit<ExpandNaverGroupsInput, "groups">,
+): Promise<MapListing[]> {
+  if (!grouped.length) return [];
+  const groups = grouped.slice(0, PRIME_MAX_GROUPS).map((row) => ({
+    sourceId: row.sourceId,
+    lat: row.lat,
+    lng: row.lng,
+    count: Math.min(Math.max(row.countMax ?? row.count ?? 1, 1), 30),
+  }));
+  const { listings } = await expandNaverGroupsFiltered({
+    ...input,
+    groups,
+    deadlineMs: input.deadlineMs ?? Date.now() + 2800,
+  });
+  return listings;
+}

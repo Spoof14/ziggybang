@@ -426,25 +426,35 @@ function LocateMeControl() {
   );
 }
 
-function clusterIcon(count: number, color: string, uncertain: boolean, label: string) {
+function clusterIcon(
+  count: number,
+  color: string,
+  uncertain: boolean,
+  label: string,
+  loading: boolean,
+) {
   const basis = uncertain ? Math.max(count, 8) : count;
   const size = Math.min(44, 26 + Math.log2(basis + 1) * 5);
   const modifier = uncertain ? " listing-cluster-approx" : "";
+  const busy = loading ? " listing-cluster-loading" : "";
+  const inner = loading
+    ? `<span class="listing-cluster-spinner" aria-hidden="true"></span>`
+    : label;
   return new DivIcon({
-    className: `listing-cluster${modifier}`,
+    className: `listing-cluster${modifier}${busy}`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
-    html: `<span class="listing-cluster-inner" style="--cluster-size:${size}px;--cluster-color:${color}">${label}</span>`,
+    html: `<span class="listing-cluster-inner" style="--cluster-size:${size}px;--cluster-color:${color}">${inner}</span>`,
   });
 }
 
 function ClusterLayer({
   clusters,
-  tool,
+  expandingId,
   onSelect,
 }: {
   clusters: MapCluster[];
-  tool: "pan" | "radius" | "draw";
+  expandingId?: string | null;
   onSelect: (cluster: MapCluster) => void;
 }) {
   const { lang, t } = useI18n();
@@ -453,20 +463,23 @@ function ClusterLayer({
       {clusters.map((cluster) => {
         const uncertain = clusterShowsUncertainty(cluster);
         const label = clusterBubbleLabel(cluster, lang);
+        const loading = expandingId === cluster.id;
         return (
         <Marker
           key={cluster.id}
           position={[cluster.lat, cluster.lng]}
+          zIndexOffset={loading ? 2000 : 1200}
+          riseOnHover
           icon={clusterIcon(
             cluster.count,
             sourceColor(cluster.sources),
             uncertain,
             label,
+            loading,
           )}
           title={clusterBubbleHint(cluster, lang)}
           eventHandlers={{
             click: (event) => {
-              if (tool !== "pan") return;
               DomEvent.stopPropagation(event);
               onSelect(cluster);
             },
@@ -512,7 +525,6 @@ function MarkerLayer({
           eventHandlers={{
             click: (event) => {
               DomEvent.stopPropagation(event);
-              if (tool !== "pan") return;
               onSelect(listing);
             },
           }}
@@ -535,6 +547,7 @@ export function ListingMap({
   polygon,
   draftPoints,
   tool,
+  expandingClusterId,
   onViewport,
   onSelectListing,
   onSelectCluster,
@@ -549,6 +562,7 @@ export function ListingMap({
   polygon: LatLng[] | null;
   draftPoints: LatLng[];
   tool: "pan" | "radius" | "draw";
+  expandingClusterId?: string | null;
   onViewport: (next: {
     south: number;
     west: number;
@@ -568,11 +582,11 @@ export function ListingMap({
     () => (
       <ClusterLayer
         clusters={clusters}
-        tool={tool}
+        expandingId={expandingClusterId}
         onSelect={onSelectCluster}
       />
     ),
-    [clusters, onSelectCluster, tool],
+    [clusters, expandingClusterId, onSelectCluster],
   );
   const markerLayer = useMemo(
     () => (
@@ -621,6 +635,7 @@ export function ListingMap({
         <Circle
           center={[circle.lat, circle.lng]}
           radius={circle.radiusM}
+          interactive={false}
           pathOptions={{ color: "#38bdf8", weight: 2, fillOpacity: 0.12 }}
         />
       ) : null}
@@ -629,6 +644,7 @@ export function ListingMap({
           positions={polygon.map(
             (point) => [point.lat, point.lng] as [number, number],
           )}
+          interactive={false}
           pathOptions={{ color: "#a78bfa", weight: 2, fillOpacity: 0.12 }}
         />
       ) : null}

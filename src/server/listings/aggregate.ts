@@ -26,6 +26,8 @@ import { parseSearchQuery } from "~/lib/listings/search";
 import { settledError, withTimeout } from "./http";
 import { fetchNaverDetail, fetchNaverListings, listingInventoryCount, naverBudgetMs, type NaverMapFetch, type NaverListingQuery } from "./naver";
 import { refineNaverGroupedForDetailFilters, uncertainNaverGroup } from "./naver-group-refine";
+import { primeNaverGroupedBuildings } from "./naver-group-expand";
+import { leftoverGroupedListings } from "~/lib/listings/visible";
 import { sampleAcrossBounds } from "~/lib/geo/sample";
 import { fetchPeterpanDetail, fetchPeterpanListings } from "./peterpan";
 import {
@@ -224,6 +226,37 @@ export async function getMapData(
   } else if (groupedIgnoresFilters) {
     grouped = grouped.map((item) => uncertainNaverGroup(item));
     unique = [...homes, ...grouped];
+  }
+  if (query.zoom >= 15 && grouped.length > 0) {
+    const leftover = leftoverGroupedListings(grouped, homes);
+    if (leftover.length > 0) {
+      try {
+        const primed = await primeNaverGroupedBuildings(leftover, {
+          bounds: fetchBounds,
+          zoom: query.zoom,
+          propertyTypes,
+          salesTypes: detailFilters.salesTypes,
+          areaBucketIds: detailFilters.areaBucketIds,
+          minDeposit: detailFilters.minDeposit,
+          maxDeposit: detailFilters.maxDeposit,
+          minRent: detailFilters.minRent,
+          maxRent: detailFilters.maxRent,
+          maxBuildingAge: detailFilters.maxBuildingAge,
+          query: query.query,
+          foreignerOk: detailFilters.foreignerOk,
+          hasPhotos: detailFilters.hasPhotos,
+          floorFilter: detailFilters.floorFilter,
+          ageFilter: detailFilters.ageFilter,
+          deadlineMs: Date.now() + Math.max(1000, Math.floor(naverBudgetMs() * 0.22)),
+        });
+        if (primed.length) {
+          homes = dedupeListings([...homes, ...primed]);
+          unique = [...homes, ...grouped];
+        }
+      } catch {
+        /* map still shows tappable bubbles */
+      }
+    }
   }
   const zigbang = unique.filter((item) => item.source === "zigbang").length;
   const naverHomes = unique.filter((item) => item.source === "naver");

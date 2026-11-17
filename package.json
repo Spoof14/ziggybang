@@ -10,7 +10,8 @@
     "start": "next start",
     "test": "vitest run",
     "test:live": "RUN_LIVE_TESTS=1 vitest run src/server/listings/live.test.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@t3-oss/env-nextjs": "^0.10.1",
@@ -41,6 +42,7 @@
     "eslint-config-next": "^15.5.25",
     "postcss": "^8.4.39",
     "prettier": "^3.3.2",
+    "@playwright/test": "^1.49.0",
     "prettier-plugin-tailwindcss": "^0.6.5",
     "tailwindcss": "^3.4.3",
     "typescript": "^5.5.3",

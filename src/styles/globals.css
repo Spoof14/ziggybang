@@ -117,9 +117,14 @@ body {
   text-underline-offset: 2px;
 }
 
+.leaflet-tooltip-pane {
+  pointer-events: none;
+}
+
 .listing-cluster {
   background: transparent !important;
   border: 0 !important;
+  pointer-events: auto !important;
 }
 
 .listing-cluster-unfiltered .listing-cluster-inner,
@@ -153,6 +158,28 @@ body {
   height: var(--cluster-size);
   justify-content: center;
   width: var(--cluster-size);
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.listing-cluster-loading .listing-cluster-inner {
+  opacity: 0.75;
+}
+
+.listing-cluster-spinner {
+  animation: cluster-spin 0.8s linear infinite;
+  border: 2px solid #0f172a;
+  border-radius: 999px;
+  border-top-color: transparent;
+  box-sizing: border-box;
+  height: calc(var(--cluster-size) * 0.45);
+  width: calc(var(--cluster-size) * 0.45);
+}
+
+@keyframes cluster-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .no-scrollbar {
