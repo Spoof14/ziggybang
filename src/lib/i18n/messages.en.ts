@@ -27,6 +27,11 @@ export const en = {
   "header.showFilters": "Show filters",
   "header.hideFilters": "Hide filters",
   "header.filtersShort": "Filters",
+  "filters.showHomes": "Show {n} homes",
+  "filters.section.sources": "Sources & types",
+  "filters.section.deal": "Deal & features",
+  "filters.section.area": "Area & price",
+  "filters.section.mapTools": "Map tools",
   "lang.group": "Language",
   "lang.switch": "Korean (한국어)",
   "lang.en": "EN",
@@ -36,6 +41,9 @@ export const en = {
   "status.loading": "Loading homes… first load can take a few seconds",
   "status.source": "{source} {n}",
   "map.clusterUnfiltered": "Count may include homes outside your filters",
+  "map.clusterApproximate": "Tap to load homes with your filters applied",
+  "map.clusterVerifiedPartial": "{n} homes match your filters (tap for more)",
+  "map.legendApprox": "Dashed counts are upper bounds — tap to verify",
   "status.sourceOf": "{source} {n} of {total}",
 
   // -------------------------------------------------------------- sources

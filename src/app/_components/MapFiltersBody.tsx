@@ -136,7 +136,10 @@ export function MapFiltersBody({
   const { lang, t } = useI18n();
   return (
   <>
-          <div className="mt-0 flex flex-wrap gap-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            {t("filters.section.sources")}
+          </p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
             {ALL_SOURCES.map((source) => (
               <button
                 key={source}
@@ -182,7 +185,10 @@ export function MapFiltersBody({
               </button>
             ))}
           </div>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            {t("filters.section.deal")}
+          </p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
             {ALL_SALES.map((type) => (
               <button
                 key={type}
@@ -268,7 +274,10 @@ export function MapFiltersBody({
             ))}
           </div>
 
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            {t("filters.section.area")}
+          </p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
             {areaBuckets.map((bucket) => {
               const active = areaBucketIds.includes(bucket.id);
               return (
@@ -311,7 +320,10 @@ export function MapFiltersBody({
             </button>
           </div>
 
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            {t("filters.section.mapTools")}
+          </p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
             {(["pan", "radius", "draw"] as const).map((nextTool) => (
               <button
                 key={nextTool}

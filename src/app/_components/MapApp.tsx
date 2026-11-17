@@ -18,6 +18,7 @@ import {
   needsHydratedFilters,
 } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
+import { activeFilterChips } from "~/lib/listings/active-filter-chips";
 import { countActiveFilters, describeActiveFilters, filterKeyOf, layerSourceCounts, mapLayersForFilters } from "~/lib/listings/visible";
 import { isNaverGroupClusterId } from "~/lib/geo/cluster";
 import { loadPrefs, savePrefs, type SavedPrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
@@ -773,10 +774,20 @@ export default function MapApp() {
       minRent,
       maxRent,
       maxBuildingAge,
+      query: debouncedQuery,
+      foreignerOk: foreignerOk || undefined,
+      hasPhotos: hasPhotos || undefined,
+      floorFilter,
+      ageFilter,
     }),
     [
+      ageFilter,
       areaBucketIds,
       bounds,
+      debouncedQuery,
+      floorFilter,
+      foreignerOk,
+      hasPhotos,
       maxBuildingAge,
       maxDeposit,
       maxRent,
@@ -1080,6 +1091,75 @@ export default function MapApp() {
     ageFilter,
     maxBuildingAge,
   }, lang);
+  const mobileFilterChips = useMemo(
+    () =>
+      activeFilterChips(
+        {
+          sources,
+          propertyTypes,
+          salesTypes,
+          areaBucketIds,
+          query: debouncedQuery,
+          minDeposit,
+          maxDeposit,
+          minRent,
+          maxRent,
+          foreignerOk,
+          hasPhotos,
+          floorFilter,
+          ageFilter,
+          maxBuildingAge,
+        },
+        lang,
+      ),
+    [
+      ageFilter,
+      areaBucketIds,
+      debouncedQuery,
+      floorFilter,
+      foreignerOk,
+      hasPhotos,
+      lang,
+      maxBuildingAge,
+      maxDeposit,
+      maxRent,
+      minDeposit,
+      minRent,
+      propertyTypes,
+      salesTypes,
+      sources,
+    ],
+  );
+
+  const removeFilterChip = useCallback(
+    (id: string) => {
+      if (id === "sources") setSources(DEFAULT_SOURCES);
+      else if (id === "propertyTypes") setPropertyTypes(ALL_TYPES);
+      else if (id === "salesTypes") setSalesTypes(DEFAULT_SALES);
+      else if (id === "price") {
+        setMinDeposit(undefined);
+        setMaxDeposit(undefined);
+        setMinRent(undefined);
+        setMaxRent(undefined);
+      } else if (id === "buildingAge") setMaxBuildingAge(undefined);
+      else if (id === "foreignerOk") setForeignerOk(false);
+      else if (id === "hasPhotos") setHasPhotos(false);
+      else if (id === "floorFilter") setFloorFilter(undefined);
+      else if (id === "ageFilter") setAgeFilter(undefined);
+      else if (id === "query") {
+        setSearchInput("");
+        setDebouncedQuery("");
+      } else if (id.startsWith("area:")) {
+        const bucket = id.slice("area:".length);
+        setAreaBucketIds((current) => current.filter((item) => item !== bucket));
+      }
+    },
+    [],
+  );
+
+  const drawnHomeCount =
+    layerCounts.zigbang + layerCounts.naver + layerCounts.peterpan;
+
   const activeFilterCount = countActiveFilters({
     sources,
     propertyTypes,
@@ -1163,10 +1243,12 @@ export default function MapApp() {
     (item) => item.source === "naver" && !isNaverClusterListing(item),
   ).length;
   const naverInventory = layerCounts.totals.naver ?? layerCounts.naver;
+  const approxNote = layerCounts.naverApprox ? t("map.legendApprox") : undefined;
   const listNote =
-    sources.includes("naver") && naverInventory > naverListed
+    approxNote ??
+    (sources.includes("naver") && naverInventory > naverListed
       ? naverInventoryNote({ inventory: naverInventory, listed: naverListed, zoom }, lang)
-      : undefined;
+      : undefined);
   const leftoverNaverGroups = visible.clusters.filter((cluster) => isNaverGroupClusterId(cluster.id));
   const naverUnlisted = Math.max(0, naverInventory - naverListed);
   const showLoadAllNaver =
@@ -1527,6 +1609,9 @@ export default function MapApp() {
         }
         onHideNaver={hideNaverError}
         body={filtersBody}
+        chips={mobileFilterChips}
+        onRemoveChip={removeFilterChip}
+        homeCount={drawnHomeCount}
       />
 
       <div className="absolute inset-0 flex mobile:pt-[var(--chrome-h)] desk:pt-0">

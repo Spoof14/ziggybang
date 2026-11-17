@@ -76,6 +76,9 @@ export type MapListing = {
   foreignerOk?: boolean;
   /** Count-only source row whose count ignores some active filters. */
   unfiltered?: boolean;
+  /** Server/client: bubble should show ≤max, not a guaranteed total. */
+  countUncertain?: boolean;
+  countMax?: number;
 };
 
 export type MapCluster = {
@@ -88,6 +91,9 @@ export type MapCluster = {
   unfilteredCount?: number;
   /** Homes in this bubble that are count-only (no individual listings behind them). */
   groupedCount?: number;
+  countUncertain?: boolean;
+  /** Upper bound while filters are still being verified (tap bubble to load). */
+  countMax?: number;
 };
 
 export type SourceError = {
@@ -108,6 +114,8 @@ export type MapData = {
     naverAvailable?: number;
     /** Naver grouped counts could not apply every active filter. */
     naverUnfiltered?: boolean;
+    /** Some Naver building bubbles show ≤N or ? until tapped. */
+    naverGroupApprox?: boolean;
     returned: number;
     truncated: boolean;
   };

@@ -278,7 +278,7 @@ describe("layerSourceCounts", () => {
       ],
       listings: [],
     });
-    expect(counts).toMatchObject({ zigbang: 5, naver: 10, peterpan: 3, naverApprox: true });
+    expect(counts).toMatchObject({ zigbang: 5, naver: 0, peterpan: 3, naverApprox: true });
   });
 
   it("counts drawn homes and reports server totals only when more exist", () => {

@@ -11,6 +11,9 @@ import { translateListingBundle, translateListingNotes, translateListingTitle } 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { ageFilters } from "~/lib/listings/age";
 import { floorFilters } from "~/lib/listings/floor";
+import { filterListings } from "~/lib/listings/filter";
+import { parseSearchQuery } from "~/lib/listings/search";
+import { salesTypes as allSalesTypes } from "~/lib/listings/types";
 
 const boundsSchema = z.object({
   south: z.number(),
@@ -183,6 +186,11 @@ export const listingsRouter = createTRPCRouter({
         minRent: z.number().min(0).max(50_000).optional(),
         maxRent: z.number().min(0).max(50_000).optional(),
         maxBuildingAge: z.number().int().min(5).max(39).optional(),
+        query: z.string().max(120).optional(),
+        foreignerOk: z.boolean().optional(),
+        hasPhotos: z.boolean().optional(),
+        floorFilter: floorFilterSchema.optional(),
+        ageFilter: ageFilterSchema.optional(),
         groups: z
           .array(
             z.object({
@@ -226,7 +234,24 @@ export const listingsRouter = createTRPCRouter({
       const listings = (await Promise.allSettled(pages)).flatMap((result) =>
         result.status === "fulfilled" ? result.value : [],
       );
-      const seen = new Map(listings.map((listing) => [listing.id, listing]));
+      const { listingQuery } = parseSearchQuery(input.query ?? "");
+      const filtered = filterListings(listings, {
+        propertyTypes: input.propertyTypes,
+        salesTypes: input.salesTypes?.length ? input.salesTypes : [...allSalesTypes],
+        areaBucketIds: input.areaBucketIds ?? [],
+        query: listingQuery,
+        minDeposit: input.minDeposit,
+        maxDeposit: input.maxDeposit,
+        minRent: input.minRent,
+        maxRent: input.maxRent,
+        maxBuildingAge: input.maxBuildingAge,
+        foreignerOk: input.foreignerOk,
+        hasPhotos: input.hasPhotos,
+        floorFilter: input.floorFilter,
+        ageFilter: input.ageFilter,
+        requireDetails: true,
+      });
+      const seen = new Map(filtered.map((listing) => [listing.id, listing]));
       return { listings: [...seen.values()] };
     }),
 

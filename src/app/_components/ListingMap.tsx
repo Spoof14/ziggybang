@@ -29,6 +29,11 @@ import { isUsableMapViewport, offsetLngByPx, panelOffsetPx } from "~/lib/geo/bou
 import { type CircleFilter, type LatLng } from "~/lib/geo/shape";
 import { type Lang } from "~/lib/i18n";
 import { useI18n } from "~/lib/i18n/react";
+import {
+  clusterBubbleHint,
+  clusterBubbleLabel,
+  clusterShowsUncertainty,
+} from "~/lib/listings/cluster-label";
 import { formatPrice, propertyTypeText } from "~/lib/listings/copy";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
 import { isNaverGroupClusterId } from "~/lib/geo/cluster";
@@ -421,13 +426,15 @@ function LocateMeControl() {
   );
 }
 
-function clusterIcon(count: number, color: string, unfiltered = false) {
-  const size = Math.min(44, 26 + Math.log2(count + 1) * 5);
+function clusterIcon(count: number, color: string, uncertain: boolean, label: string) {
+  const basis = uncertain ? Math.max(count, 8) : count;
+  const size = Math.min(44, 26 + Math.log2(basis + 1) * 5);
+  const modifier = uncertain ? " listing-cluster-approx" : "";
   return new DivIcon({
-    className: unfiltered ? "listing-cluster listing-cluster-unfiltered" : "listing-cluster",
+    className: `listing-cluster${modifier}`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
-    html: `<span class="listing-cluster-inner" style="--cluster-size:${size}px;--cluster-color:${color}">${count.toLocaleString("en-US")}</span>`,
+    html: `<span class="listing-cluster-inner" style="--cluster-size:${size}px;--cluster-color:${color}">${label}</span>`,
   });
 }
 
@@ -440,25 +447,23 @@ function ClusterLayer({
   tool: "pan" | "radius" | "draw";
   onSelect: (cluster: MapCluster) => void;
 }) {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
   return (
     <>
-      {clusters.map((cluster) => (
+      {clusters.map((cluster) => {
+        const uncertain = clusterShowsUncertainty(cluster);
+        const label = clusterBubbleLabel(cluster, lang);
+        return (
         <Marker
           key={cluster.id}
           position={[cluster.lat, cluster.lng]}
           icon={clusterIcon(
             cluster.count,
             sourceColor(cluster.sources),
-            (cluster.unfilteredCount ?? 0) > 0,
+            uncertain,
+            label,
           )}
-          title={
-            (cluster.unfilteredCount ?? 0) > 0
-              ? t("map.clusterUnfiltered")
-              : isNaverGroupClusterId(cluster.id)
-                ? t("map.clusterHomes", { n: String(cluster.count) })
-                : undefined
-          }
+          title={clusterBubbleHint(cluster, lang)}
           eventHandlers={{
             click: (event) => {
               if (tool !== "pan") return;
@@ -466,8 +471,15 @@ function ClusterLayer({
               onSelect(cluster);
             },
           }}
-        />
-      ))}
+        >
+          {uncertain ? (
+            <Tooltip direction="top" permanent opacity={0.92} className="cluster-hint-tooltip">
+              {t("map.clusterApproximate")}
+            </Tooltip>
+          ) : null}
+        </Marker>
+      );
+      })}
     </>
   );
 }
