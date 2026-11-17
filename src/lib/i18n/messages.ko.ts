@@ -24,6 +24,7 @@ export const ko: Record<MessageKey, string> = {
   "header.copySearchPrompt": "이 검색 링크를 복사하세요",
   "header.showFilters": "필터 보기",
   "header.hideFilters": "필터 숨기기",
+  "header.filtersShort": "필터",
   "lang.group": "언어",
   "lang.switch": "한국어 (Korean)",
   "lang.en": "EN",

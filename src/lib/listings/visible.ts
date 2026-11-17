@@ -19,6 +19,7 @@ import {
   type MapListing,
   type PropertyType,
   type SalesType,
+  type Source,
 } from "./types";
 
 export type VisibleFilterInput = {
@@ -246,6 +247,37 @@ export function describeActiveFilters(
   const built = describeBuildingAgeFilter(input.maxBuildingAge, lang);
   if (built) parts.push(built);
   return parts.length ? parts.join(" · ") : null;
+}
+
+const SOURCE_COUNT = 3;
+
+export function countActiveFilters(
+  input: {
+    sources: Source[];
+    propertyTypes: PropertyType[];
+    salesTypes: SalesType[];
+    areaBucketIds: AreaBucketId[];
+    query?: string;
+    foreignerOk?: boolean;
+    floorFilter?: FloorFilter;
+    ageFilter?: AgeFilter;
+    maxBuildingAge?: number;
+    hasPhotos?: boolean;
+  } & PriceFilter,
+): number {
+  let n = 0;
+  if (input.sources.length > 0 && input.sources.length < SOURCE_COUNT) n++;
+  if (!isAllPropertyTypes(input.propertyTypes)) n++;
+  if (input.salesTypes.length && !isDefaultRentSales(input.salesTypes)) n++;
+  if (input.areaBucketIds.length) n++;
+  if (describePriceFilter(input, DEFAULT_LANG)) n++;
+  if (input.foreignerOk) n++;
+  if (input.hasPhotos) n++;
+  if (input.floorFilter) n++;
+  if (input.ageFilter) n++;
+  if (describeBuildingAgeFilter(input.maxBuildingAge, DEFAULT_LANG)) n++;
+  if (input.query?.trim()) n++;
+  return n;
 }
 
 export function filterKeyOf(input: {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeActiveFilters, layerSourceCounts, leftoverGroupedListings, mapLayersForFilters } from "./visible";
+import { countActiveFilters, describeActiveFilters, layerSourceCounts, leftoverGroupedListings, mapLayersForFilters } from "./visible";
 import { type MapListing } from "./types";
 
 function home(
@@ -103,6 +103,27 @@ describe("map layers follow filters", () => {
         sources: { naver: 6000 },
       },
     ]);
+  });
+
+  it("counts active filters for the mobile badge", () => {
+    expect(
+      countActiveFilters({
+        sources: ["zigbang", "naver", "peterpan"],
+        propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+      }),
+    ).toBe(0);
+    expect(
+      countActiveFilters({
+        sources: ["zigbang", "naver"],
+        propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+        salesTypes: ["jeonse", "wolse"],
+        areaBucketIds: [],
+        foreignerOk: true,
+        query: "gangnam",
+      }),
+    ).toBe(3);
   });
 
   it("omits the default jeonse + monthly mix from the compact summary", () => {
