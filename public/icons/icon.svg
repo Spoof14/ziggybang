@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ziggybang">
+  <defs>
+    <linearGradient id="pin" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="#020617"/>
+  <path fill="url(#pin)" d="M256 96c-74.4 0-136 58.8-136 131.2 0 36.8 18.4 76.8 52.8 119.2 28.8 35.2 64 66.4 83.2 84.8 6.4 6.4 16 6.4 22.4 0 19.2-18.4 54.4-49.6 83.2-84.8 34.4-42.4 52.8-82.4 52.8-119.2C464 154.8 402.4 96 256 96zm0 195.2a64 64 0 1 1 0-128 64 64 0 0 1 0 128z"/>
+  <circle cx="256" cy="227.2" r="28" fill="#f8fafc"/>
+  <path fill="#ff6b2c" d="M372 392H140c-12 0-20-13.2-14.4-23.2l36-62.4c3.2-5.6 10.4-5.6 13.6 0l36 62.4c5.6 10 17.6 10 22.4 0l36-62.4c3.2-5.6 10.4-5.6 13.6 0l36 62.4c5.6 10-2.4 23.2-14.4 23.2z" opacity=".95"/>
+</svg>

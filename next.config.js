@@ -17,11 +17,20 @@ const config = {
   async headers() {
     return [
       {
-        source: "/:path(favicon.svg|favicon.ico)",
+        source: "/:path(favicon.svg|favicon.ico|favicon.png|sw.js|manifest.webmanifest)",
         headers: [
           {
             key: "Cache-Control",
             value: "public, max-age=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
+      {
+        source: "/icons/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=604800, stale-while-revalidate=86400",
           },
         ],
       },

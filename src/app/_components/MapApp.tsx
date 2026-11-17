@@ -47,6 +47,16 @@ import {
   toggleSavedHome,
 } from "~/lib/listings/saved";
 import {
+  addSavedSearch,
+  defaultSavedSearchName,
+  deleteSavedSearch,
+  loadSavedSearches,
+  normalizeSavedSearchQuery,
+  renameSavedSearch,
+  type SavedSearch,
+} from "~/lib/listings/saved-searches";
+import { parseAppUrlPatch } from "~/lib/listings/apply-app-url";
+import {
   buildAppSearch,
   hasAppUrlState,
   prefsForInitialState,
@@ -80,6 +90,7 @@ import { useDeskLayout } from "./useDeskLayout";
 import { MapMobileChrome } from "./MapMobileChrome";
 import { MapFilterSheet } from "./MapFilterSheet";
 import { MapFiltersBody } from "./MapFiltersBody";
+import { SavedSearchesPanel } from "./SavedSearchesPanel";
 
 const ALL_TYPES: PropertyType[] = ["oneroom", "villa", "officetel", "apartment"];
 const ALL_SALES: SalesType[] = ["jeonse", "wolse", "sale"];
@@ -138,6 +149,8 @@ export default function MapApp() {
   }, []);
   const askUiReady = useRef(false);
   const [savedHomes, setSavedHomes] = useState<MapListing[]>([]);
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [savedSearchHint, setSavedSearchHint] = useState<string | null>(null);
   const [tool, setTool] = useState<"pan" | "radius" | "draw">("pan");
   const [radiusM, setRadiusM] = useState(DEFAULT_RADIUS_M);
   const [manualCircle, setManualCircle] = useState<CircleFilter | null>(null);
@@ -276,6 +289,7 @@ export default function MapApp() {
       });
     }
     setSavedHomes(loadSavedHomes());
+    setSavedSearches(loadSavedSearches());
     setPrefsLoaded(true);
   }, []);
 
@@ -932,40 +946,32 @@ export default function MapApp() {
     });
   }, []);
 
-  const copySearchLink = useCallback(async () => {
-    const next = buildAppSearch({
-      searchInput,
-      viewMode,
-      sources,
-      propertyTypes,
-      salesTypes,
-      areaBucketIds,
-      radiusM,
-      radiusActive: Boolean(circle),
-      circleCenter: manualCircle && !polygon ? { lat: manualCircle.lat, lng: manualCircle.lng } : null,
-      view: urlView,
-      listSort,
-      minDeposit,
-      maxDeposit,
-      minRent,
-      maxRent,
-      foreignerOk,
-      hasPhotos,
-      floorFilter,
-      ageFilter,
-      maxBuildingAge,
-    });
-    const href = `${window.location.origin}${window.location.pathname}${syncLangParam(next, lang)}`;
-    try {
-      await navigator.clipboard.writeText(href);
-      setShareHint(t("header.copied"));
-    } catch {
-      window.prompt(t("header.copySearchPrompt"), href);
-    }
-    window.setTimeout(() => setShareHint(null), 1600);
+  const currentAppSearch = useCallback(() => {
+    return normalizeSavedSearchQuery(
+      buildAppSearch({
+        searchInput,
+        viewMode,
+        sources,
+        propertyTypes,
+        salesTypes,
+        areaBucketIds,
+        radiusM,
+        radiusActive: Boolean(circle),
+        circleCenter: manualCircle && !polygon ? { lat: manualCircle.lat, lng: manualCircle.lng } : null,
+        view: urlView,
+        listSort,
+        minDeposit,
+        maxDeposit,
+        minRent,
+        maxRent,
+        foreignerOk,
+        hasPhotos,
+        floorFilter,
+        ageFilter,
+        maxBuildingAge,
+      }),
+    );
   }, [
-    t,
-    lang,
     areaBucketIds,
     circle,
     urlView,
@@ -977,10 +983,10 @@ export default function MapApp() {
     maxRent,
     minDeposit,
     minRent,
-    propertyTypes,
-    radiusM,
     manualCircle,
     polygon,
+    propertyTypes,
+    radiusM,
     salesTypes,
     searchInput,
     sources,
@@ -988,6 +994,113 @@ export default function MapApp() {
     foreignerOk,
     hasPhotos,
   ]);
+
+  const saveCurrentSearch = useCallback(() => {
+    const search = currentAppSearch();
+    const chips = activeFilterChips(
+      {
+        sources,
+        propertyTypes,
+        salesTypes,
+        areaBucketIds,
+        query: searchInput,
+        foreignerOk,
+        hasPhotos,
+        floorFilter,
+        ageFilter,
+        maxBuildingAge,
+        minDeposit,
+        maxDeposit,
+        minRent,
+        maxRent,
+      },
+      lang,
+    ).map((chip) => chip.label);
+    const name = defaultSavedSearchName({ chips, index: savedSearches.length }, lang);
+    const next = addSavedSearch({ name, search });
+    setSavedSearches(next);
+    setSavedSearchHint(t("savedSearch.saved"));
+    window.setTimeout(() => setSavedSearchHint(null), 1600);
+  }, [
+    t,
+    lang,
+    currentAppSearch,
+    savedSearches.length,
+    sources,
+    propertyTypes,
+    salesTypes,
+    areaBucketIds,
+    searchInput,
+    foreignerOk,
+    hasPhotos,
+    floorFilter,
+    ageFilter,
+    maxBuildingAge,
+    minDeposit,
+    maxDeposit,
+    minRent,
+    maxRent,
+  ]);
+
+  const applySavedSearch = useCallback(
+    (item: SavedSearch) => {
+      const patch = parseAppUrlPatch(item.search);
+      setSearchInput(patch.searchInput);
+      setDebouncedQuery(patch.searchInput);
+      setViewMode(patch.viewMode);
+      setSources(patch.sources ?? DEFAULT_SOURCES);
+      setPropertyTypes(patch.propertyTypes ?? ALL_TYPES);
+      setSalesTypes(patch.salesTypes ?? DEFAULT_SALES);
+      setAreaBucketIds(patch.areaBucketIds ?? []);
+      setRadiusM(patch.radiusM ?? DEFAULT_RADIUS_M);
+      keepUrlCircle.current = Boolean(patch.circleCenter);
+      setManualCircle(
+        patch.circleCenter
+          ? { ...patch.circleCenter, radiusM: patch.radiusM ?? DEFAULT_RADIUS_M }
+          : null,
+      );
+      setPolygon(null);
+      setListSort(patch.listSort ?? "featured");
+      setMinDeposit(patch.minDeposit);
+      setMaxDeposit(patch.maxDeposit);
+      setMinRent(patch.minRent);
+      setMaxRent(patch.maxRent);
+      setForeignerOk(patch.foreignerOk ?? false);
+      setHasPhotos(patch.hasPhotos ?? false);
+      setFloorFilter(patch.floorFilter);
+      setAgeFilter(patch.ageFilter);
+      setMaxBuildingAge(patch.maxBuildingAge);
+      if (patch.view) {
+        setUrlView({
+          lat: patch.view.lat,
+          lng: patch.view.lng,
+          zoom: Math.round(patch.view.zoom),
+        });
+        setZoom(Math.round(patch.view.zoom));
+        setFocus({
+          lat: patch.view.lat,
+          lng: patch.view.lng,
+          zoom: patch.view.zoom,
+          token: Date.now(),
+        });
+      }
+      setFiltersSheetOpen(false);
+      setSelected(null);
+    },
+    [],
+  );
+
+  const copySearchLink = useCallback(async () => {
+    const next = currentAppSearch();
+    const href = `${window.location.origin}${window.location.pathname}${syncLangParam(next, lang)}`;
+    try {
+      await navigator.clipboard.writeText(href);
+      setShareHint(t("header.copied"));
+    } catch {
+      window.prompt(t("header.copySearchPrompt"), href);
+    }
+    window.setTimeout(() => setShareHint(null), 1600);
+  }, [t, lang, currentAppSearch]);
 
   const hideNaverError = useCallback((turnOff = false) => {
     setDismissedNaver(true);
@@ -1491,6 +1604,13 @@ export default function MapApp() {
               </button>
               <button
                 type="button"
+                onClick={saveCurrentSearch}
+                className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-white/20"
+              >
+                {savedSearchHint ?? t("savedSearch.save")}
+              </button>
+              <button
+                type="button"
                 data-filter-toggle=""
                 aria-label={uiCompact ? t("header.showFilters") : t("header.hideFilters")}
                 onClick={() => setUiCompact((current) => !current)}
@@ -1640,6 +1760,7 @@ export default function MapApp() {
         chips={mobileFilterChips}
         onRemoveChip={removeFilterChip}
         homeCount={drawnHomeCount}
+        onSaveSearch={saveCurrentSearch}
       />
 
       <div className="absolute inset-0 flex mobile:pt-[var(--chrome-h)] desk:pt-0">
@@ -1687,10 +1808,20 @@ export default function MapApp() {
         {showList ? (
           <div
             data-list-panel="portrait"
-            className="relative z-[1200] h-full min-h-0 w-full min-w-0 flex-1 bg-slate-950 desk:pt-0"
+            className="relative z-[1200] flex h-full min-h-0 w-full min-w-0 flex-1 flex-col bg-slate-950 desk:pt-0"
           >
+            {viewMode === "saved" ? (
+              <SavedSearchesPanel
+                searches={savedSearches}
+                onApply={applySavedSearch}
+                onRename={(id, name) => setSavedSearches(renameSavedSearch(id, name))}
+                onDelete={(id) => setSavedSearches(deleteSavedSearch(id))}
+              />
+            ) : null}
+            <div className="min-h-0 flex-1">
             <ListingList
               listings={listListings}
+              panelTitle={viewMode === "saved" ? t("savedSearch.homesSection") : undefined}
               selectedId={selected?.id}
               loading={viewMode === "saved" ? false : waitingForFirst && listListings.length === 0}
               truncated={viewMode === "saved" ? false : visible.stats.truncated}
@@ -1785,6 +1916,7 @@ export default function MapApp() {
               }
               onLoadMore={() => setListingLimit((current) => Math.min(300, current + 60))}
             />
+            </div>
           </div>
         ) : null}
 
@@ -1800,7 +1932,7 @@ export default function MapApp() {
         {viewMode === "map" && visible.listings.length ? (
           <div
             ref={carouselRef}
-            className={`pointer-events-auto absolute bottom-4 left-4 right-4 z-[1100] flex gap-2 overflow-x-auto pb-1 no-scrollbar desk:left-[calc(var(--desktop-panel)+1.25rem)] ${
+            className={`pointer-events-auto absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-[1100] flex gap-2 overflow-x-auto pb-[max(0.25rem,env(safe-area-inset-bottom))] no-scrollbar desk:left-[calc(var(--desktop-panel)+1.25rem)] ${
               selected ? "desk:right-[calc(var(--desktop-panel)+1rem)]" : ""
             } ${isDesk && !uiCompact ? "mobile:hidden" : ""} tiny:hidden ${
               selected ? "mobile:invisible mobile:pointer-events-none" : ""

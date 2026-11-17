@@ -62,6 +62,7 @@ export function ListingList({
   onLoadMore,
   scrollToId,
   scrollToAt,
+  panelTitle,
 }: {
   listings: MapListing[];
   selectedId?: string;
@@ -91,6 +92,7 @@ export function ListingList({
   onLoadMore?: () => void;
   scrollToId?: string;
   scrollToAt?: number;
+  panelTitle?: string;
 }) {
   const { lang, t } = useI18n();
   const sorted = useMemo(() => {
@@ -153,6 +155,9 @@ export function ListingList({
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-950">
       <div className="sticky top-0 z-10 flex flex-col gap-2 border-b border-white/10 bg-slate-950 px-3 pb-2 pt-2">
+        {panelTitle ? (
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">{panelTitle}</h2>
+        ) : null}
         <p className="text-xs text-slate-400">{countLabel}</p>
         {recommendHint ? (
           <p className="text-[11px] leading-snug text-sky-300">{recommendHint}</p>

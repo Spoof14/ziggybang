@@ -17,6 +17,7 @@ export function MapFilterSheet({
   chips,
   onRemoveChip,
   homeCount,
+  onSaveSearch,
 }: {
   open: boolean;
   onClose: () => void;
@@ -26,6 +27,7 @@ export function MapFilterSheet({
   chips: ActiveFilterChip[];
   onRemoveChip: (id: string) => void;
   homeCount: number;
+  onSaveSearch?: () => void;
 }) {
   const { lang, t } = useI18n();
   if (!open) return null;
@@ -99,6 +101,15 @@ export function MapFilterSheet({
           ) : null}
         </div>
         <div className="sticky bottom-0 border-t border-white/10 bg-slate-950/95 px-3 py-2 backdrop-blur-md">
+          {onSaveSearch ? (
+            <button
+              type="button"
+              onClick={onSaveSearch}
+              className="mb-2 inline-flex min-h-11 w-full items-center justify-center rounded-full border border-white/15 bg-slate-900 text-sm text-slate-100"
+            >
+              {t("savedSearch.save")}
+            </button>
+          ) : null}
           <div className="flex gap-2">
             <button
               type="button"
