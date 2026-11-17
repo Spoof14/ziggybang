@@ -82,6 +82,8 @@ export type MapLayerContext = {
   grouped?: MapListing[];
   /** True when the server capped the individual homes it sent. */
   truncated?: boolean;
+  /** Building group ids (lgeo) with zero homes under the active filters after expand. */
+  dismissedGroupIds?: string[];
 };
 
 /**
@@ -96,6 +98,17 @@ export type MapLayerContext = {
  * bubble can be marked.
  */
 const GROUP_COVER_RADIUS_M = 120;
+
+function groupedRowsForContext(
+  context: MapLayerContext,
+  input: VisibleFilterInput,
+): MapListing[] {
+  const dismissed = new Set((context.dismissedGroupIds ?? []).map((id) => `naver:cluster:${id}`));
+  return (context.grouped ?? []).filter((row) => {
+    if (dismissed.has(row.id)) return false;
+    return listingInArea(row, input.circle, input.polygon ?? undefined);
+  });
+}
 
 /** Drop or shrink leftover Naver group rows once nearby homes are listed. */
 export function leftoverGroupedListings(
@@ -125,17 +138,13 @@ export function mapLayersForFilters(
     // Street zoom: draw individual homes plus leftover Naver building bubbles
     // (those still have no listable article behind them).
     const grouped = leftoverGroupedListings(
-      (context.grouped ?? []).filter((row) =>
-        listingInArea(row, input.circle, input.polygon ?? undefined),
-      ),
+      groupedRowsForContext(context, input),
       matched,
     );
     return { clusters: groupedListingsToClusters(grouped), listings: matched };
   }
 
-  const grouped = (context.grouped ?? []).filter((row) =>
-    listingInArea(row, input.circle, input.polygon ?? undefined),
-  );
+  const grouped = groupedRowsForContext(context, input);
   const complete = listings.length > 0 && !context.truncated;
   if (!complete) {
     return { clusters: serverClusters, listings: matched };

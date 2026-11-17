@@ -304,6 +304,14 @@ describe("layerSourceCounts", () => {
   });
 });
 
+describe("dismissed Naver building groups", () => {
+  it("hides a dismissed group bubble at street zoom", () => {
+    const grouped = at("naver:cluster:bldg", 37.556, 126.923, { source: "naver", count: 4, unfiltered: true });
+    const street = mapLayersForFilters([], [], { ...base, zoom: 17 }, { grouped: [grouped], dismissedGroupIds: ["bldg"] });
+    expect(street.clusters).toEqual([]);
+  });
+});
+
 describe("leftoverGroupedListings", () => {
   it("shrinks a building group by nearby listed homes and drops it when all are listed", () => {
     const group = at("naver:cluster:bldg", 37.55, 126.92, { source: "naver", count: 10 });
