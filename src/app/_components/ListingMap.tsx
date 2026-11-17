@@ -31,6 +31,7 @@ import { type Lang } from "~/lib/i18n";
 import { useI18n } from "~/lib/i18n/react";
 import { formatPrice, propertyTypeText } from "~/lib/listings/copy";
 import { type MapCluster, type MapListing } from "~/lib/listings/types";
+import { isNaverGroupClusterId } from "~/lib/geo/cluster";
 import { MetroLayer } from "./MetroLayer";
 
 export type MapFocus = {
@@ -454,7 +455,9 @@ function ClusterLayer({
           title={
             (cluster.unfilteredCount ?? 0) > 0
               ? t("map.clusterUnfiltered")
-              : undefined
+              : isNaverGroupClusterId(cluster.id)
+                ? t("map.clusterHomes", { n: String(cluster.count) })
+                : undefined
           }
           eventHandlers={{
             click: (event) => {

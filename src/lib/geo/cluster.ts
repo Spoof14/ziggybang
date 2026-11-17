@@ -18,6 +18,29 @@ function isGrouped(listing: MapListing): boolean {
   return listing.source === "naver" && listing.id.startsWith("naver:cluster:");
 }
 
+export function isNaverGroupClusterId(id: string): boolean {
+  return id.startsWith("naver:cluster:");
+}
+
+/** One map bubble per leftover Naver building / cluster pin. */
+export function groupedListingsToClusters(listings: MapListing[]): MapCluster[] {
+  const clusters: MapCluster[] = [];
+  for (const listing of listings) {
+    if (!isGrouped(listing)) continue;
+    const count = listing.count && listing.count > 1 ? listing.count : 1;
+    clusters.push({
+      id: listing.id,
+      lat: listing.lat,
+      lng: listing.lng,
+      count,
+      sources: { naver: count },
+      groupedCount: count,
+      ...(listing.unfiltered ? { unfilteredCount: count } : {}),
+    });
+  }
+  return clusters;
+}
+
 export function clusterListings(
   listings: MapListing[],
   cellSize: number,

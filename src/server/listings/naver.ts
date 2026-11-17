@@ -219,6 +219,82 @@ export function naverArticleListParams(input: {
   };
 }
 
+/** new.land article list scoped to one cluster / building (lgeo). */
+export function naverClusterArticleParams(input: {
+  cortarNo: string;
+  lgeo: string;
+  page: number;
+  bounds: Bounds;
+  zoom: number;
+  propertyTypes: PropertyType[];
+  salesTypes?: SalesType[];
+  minDeposit?: number;
+  maxDeposit?: number;
+  minRent?: number;
+  maxRent?: number;
+  areaBucketIds?: AreaBucketId[];
+  maxBuildingAge?: number;
+}): Record<string, string> {
+  return {
+    ...naverArticleListParams(input),
+    itemId: input.lgeo,
+    lgeo: input.lgeo,
+    ...naverMapParams(input.bounds, input.zoom),
+  };
+}
+
+export function mlandClusterArticleUrl(input: {
+  cortarNo: string;
+  lgeo: string;
+  page: number;
+  lat: number;
+  lng: number;
+  bounds: Bounds;
+  zoom: number;
+  count?: number;
+  propertyTypes: PropertyType[];
+  salesTypes?: SalesType[];
+}): string {
+  const params = new URLSearchParams({
+    itemId: input.lgeo,
+    lgeo: input.lgeo,
+    rletTpCd: propertyQuery(input.propertyTypes),
+    tradTpCd: salesQuery(input.salesTypes),
+    z: String(naverZoom(input.zoom)),
+    lat: String(input.lat),
+    lon: String(input.lng),
+    btm: String(input.bounds.south),
+    lft: String(input.bounds.west),
+    top: String(input.bounds.north),
+    rgt: String(input.bounds.east),
+    cortarNo: input.cortarNo,
+    sort: "rank",
+    page: String(input.page),
+  });
+  if (input.count && input.count > 0) params.set("totCnt", String(input.count));
+  return `https://m.land.naver.com/cluster/ajax/articleList?${params.toString()}`;
+}
+
+/** Pages to fetch for one cluster, capped so a 173-home building cannot blow the budget. */
+export function clusterArticlePagesForCount(count: number, pageSize = 20, maxPages = NAVER_ARTICLE_PAGES): number {
+  if (count <= 0) return 1;
+  return Math.min(maxPages, Math.max(1, Math.ceil(count / pageSize)));
+}
+
+/**
+ * A cluster-article response that looks like the whole-dong rank list
+ * (most pins far from the bubble) should not be treated as a success.
+ */
+export function clusterArticlesAreScoped(
+  articles: MapListing[],
+  cluster: Pick<MapListing, "lat" | "lng">,
+  radiusM = 400,
+): boolean {
+  if (!articles.length) return false;
+  const near = articles.filter((article) => distanceM(article, cluster) <= radiusM).length;
+  return near / articles.length >= 0.3;
+}
+
 export function naverFilterCacheKey(input: {
   minDeposit?: number;
   maxDeposit?: number;
@@ -649,29 +725,83 @@ function dedupeNaverListings(listings: MapListing[]): MapListing[] {
  * the geocoded rows sit in (or just beside) the viewport — that is the
  * "0 of 88" safety net, not the default.
  */
+export type NaverClipFallback = "nearby" | "all" | "none";
+
+/**
+ * Keep pins that sit in the requested map. `fallback` controls what happens
+ * when none do: "nearby" keeps a 15% pad, "all" returns the unclipped list
+ * (the old "0 of 88" safety net, which can inflate street-zoom counts),
+ * "none" returns an empty list.
+ */
 export function clipNaverListingsToViewport(
   listings: MapListing[],
   bounds: Bounds,
+  options?: { fallback?: NaverClipFallback },
 ): MapListing[] {
   const exact = listings.filter((listing) =>
     containsPoint(bounds, listing.lat, listing.lng),
   );
   if (exact.length) return exact;
+  const fallback = options?.fallback ?? "all";
+  if (fallback === "none") return [];
   const nearby = listings.filter((listing) =>
     containsPoint(expandBounds(bounds, 0.15), listing.lat, listing.lng),
   );
   if (nearby.length) return nearby;
+  if (fallback === "nearby") return [];
   return listings;
 }
 
-/** Keep article pins, and add cluster markers that are not the same building. */
-export function mergeNaverPins(articles: MapListing[], clusters: MapListing[]): MapListing[] {
+/** In-view inventory: individual homes plus leftover grouped counts. */
+export function naverViewportInventory(listings: MapListing[]): number {
+  return listingInventoryCount(listings);
+}
+
+const CLUSTER_COVER_RADIUS_M = 120;
+
+export function articlesNearCluster(
+  articles: MapListing[],
+  cluster: MapListing,
+  radiusM = CLUSTER_COVER_RADIUS_M,
+): MapListing[] {
+  return articles.filter((article) => distanceM(article, cluster) <= radiusM);
+}
+
+/**
+ * How many homes in a grouped pin are not already listed as individual
+ * articles nearby. 0 means the bubble can be dropped.
+ */
+export function leftoverClusterCount(
+  cluster: MapListing,
+  articles: MapListing[],
+  radiusM = CLUSTER_COVER_RADIUS_M,
+): number {
+  const total = cluster.count && cluster.count > 1 ? cluster.count : 1;
+  const nearby = articlesNearCluster(articles, cluster, radiusM).length;
+  return Math.max(0, total - nearby);
+}
+
+/**
+ * Keep article pins, and keep cluster markers for inventory that is not
+ * already listed nearby. A building with 173 ads and 3 listed pins stays
+ * on the map as a leftover count of 170, instead of disappearing.
+ */
+export function mergeNaverPins(
+  articles: MapListing[],
+  clusters: MapListing[],
+  radiusM = CLUSTER_COVER_RADIUS_M,
+): MapListing[] {
   if (!clusters.length) return articles;
   if (!articles.length) return clusters;
-  const extra = clusters.filter((cluster) =>
-    articles.every((article) => distanceM(article, cluster) > 120),
-  );
-  return [...articles, ...extra];
+  const leftover: MapListing[] = [];
+  for (const cluster of clusters) {
+    const remaining = leftoverClusterCount(cluster, articles, radiusM);
+    if (remaining <= 0) continue;
+    leftover.push(remaining === (cluster.count && cluster.count > 1 ? cluster.count : 1)
+      ? cluster
+      : { ...cluster, count: remaining });
+  }
+  return [...articles, ...leftover];
 }
 
 async function fulfilledResults<T>(jobs: Array<Promise<T>>): Promise<T[]> {
@@ -816,9 +946,174 @@ async function fetchArticleList(input: {
   return { listings, total };
 }
 
+async function mapArticlePayload(payload: NaverArticleResponse): Promise<{
+  items: MapListing[];
+  isMore: boolean;
+  total?: number;
+}> {
+  const items = (payload.articleList ?? payload.body ?? [])
+    .map(articleToListing)
+    .filter((item): item is MapListing => item !== null);
+  return {
+    items,
+    isMore: payload.isMoreData ?? items.length >= 20,
+    total: articleListTotal(payload, items.length),
+  };
+}
+
+async function fetchClusterArticlePage(input: {
+  bounds: Bounds;
+  zoom: number;
+  cortarNo: string;
+  lgeo: string;
+  page: number;
+  lat: number;
+  lng: number;
+  count?: number;
+  propertyTypes: PropertyType[];
+  salesTypes?: SalesType[];
+  minDeposit?: number;
+  maxDeposit?: number;
+  minRent?: number;
+  maxRent?: number;
+  areaBucketIds?: AreaBucketId[];
+  maxBuildingAge?: number;
+}): Promise<{ items: MapListing[]; isMore: boolean; total?: number }> {
+  const query = naverClusterArticleParams(input);
+  const key = [
+    "nv:cluster-articles",
+    input.lgeo,
+    input.cortarNo,
+    input.page,
+    query.realEstateType,
+    query.tradeType,
+    naverFilterCacheKey(input),
+  ].join(":");
+
+  return cached(key, TILE_TTL_MS, async () => {
+    try {
+      const payload = await naverAuthorizedJson<NaverArticleResponse>(
+        `${NEW_LAND_ORIGIN}/api/articles?${new URLSearchParams(query).toString()}`,
+        naverRequestTimeoutMs(),
+      );
+      const mapped = await mapArticlePayload(payload);
+      if (mapped.items.length) return mapped;
+    } catch {
+      /* fall through to the mobile cluster list */
+    }
+    const payload = await naverAuthorizedJson<NaverArticleResponse>(
+      mlandClusterArticleUrl(input),
+      naverRequestTimeoutMs(),
+    );
+    return mapArticlePayload(payload);
+  });
+}
+
+export type NaverGroupQuery = NaverListingQuery & {
+  sourceId: string;
+  cortarNo?: string;
+  lat?: number;
+  lng?: number;
+  count?: number;
+  pages?: number;
+};
+
+/**
+ * All individually listable homes in one Naver cluster / building, paged
+ * within a time budget.
+ */
+export async function fetchNaverGroupArticles(input: NaverGroupQuery): Promise<MapListing[]> {
+  const cortarNo =
+    input.cortarNo ??
+    (await cortarNoForPoint(input.lat ?? boundsCenter(input.bounds).lat, input.lng ?? boundsCenter(input.bounds).lng, 15)) ??
+    (await cortarNosForViewport(input.bounds, 15))[0];
+  if (!cortarNo) return [];
+  const cluster = {
+    lat: input.lat ?? boundsCenter(input.bounds).lat,
+    lng: input.lng ?? boundsCenter(input.bounds).lng,
+  };
+  const maxPages = input.pages ?? clusterArticlePagesForCount(input.count ?? 40);
+  const first = await fetchClusterArticlePage({
+    ...input,
+    cortarNo,
+    lgeo: input.sourceId,
+    page: 1,
+    lat: cluster.lat,
+    lng: cluster.lng,
+  });
+  const listings = [...first.items];
+  if (!clusterArticlesAreScoped(listings, cluster) && listings.length) {
+    return listings.filter((item) => distanceM(item, cluster) <= 400);
+  }
+  if (!first.isMore || maxPages <= 1) {
+    return dedupeNaverListings(listings);
+  }
+  const neededPages = first.total
+    ? Math.min(maxPages, Math.max(2, Math.ceil(first.total / 20)))
+    : maxPages;
+  const extra = await fulfilledResults(
+    Array.from({ length: neededPages - 1 }, (_, index) =>
+      fetchClusterArticlePage({
+        ...input,
+        cortarNo,
+        lgeo: input.sourceId,
+        page: 2 + index,
+        lat: cluster.lat,
+        lng: cluster.lng,
+      }),
+    ),
+  );
+  for (const page of extra) listings.push(...page.items);
+  const unique = dedupeNaverListings(listings);
+  if (!clusterArticlesAreScoped(unique, cluster)) {
+    return unique.filter((item) => distanceM(item, cluster) <= 400);
+  }
+  return unique;
+}
+
+async function expandClustersInView(input: {
+  clusters: MapListing[];
+  articles: MapListing[];
+  query: NaverListingQuery;
+  cortarNos: string[];
+  deadlineMs: number;
+}): Promise<MapListing[]> {
+  const uncovered = input.clusters
+    .map((cluster) => ({ cluster, remaining: leftoverClusterCount(cluster, input.articles) }))
+    .filter((row) => row.remaining > 0)
+    .sort((a, b) => b.remaining - a.remaining);
+  if (!uncovered.length) return input.articles;
+
+  const articles = [...input.articles];
+  for (const row of uncovered) {
+    if (Date.now() >= input.deadlineMs) break;
+    const cortarNo =
+      (await cortarNoForPoint(row.cluster.lat, row.cluster.lng, 15)) ?? input.cortarNos[0];
+    if (!cortarNo) continue;
+    const pages = clusterArticlePagesForCount(row.remaining);
+    try {
+      const fetched = await fetchNaverGroupArticles({
+        ...input.query,
+        sourceId: row.cluster.sourceId,
+        cortarNo,
+        lat: row.cluster.lat,
+        lng: row.cluster.lng,
+        count: row.remaining,
+        pages,
+      });
+      articles.push(...fetched);
+    } catch {
+      /* keep the leftover bubble; Load all can retry */
+    }
+  }
+  return dedupeNaverListings(articles);
+}
+
 export async function fetchNaverListings(input: NaverListingQuery): Promise<NaverMapFetch> {
   const cortarNos = await cortarNosForViewport(input.bounds, input.zoom);
   if (!cortarNos.length) return { listings: [] };
+  const streetZoom = input.zoom >= 15;
+  const clipFallback: NaverClipFallback = streetZoom ? "nearby" : "all";
 
   const loadClusters = async (nos: string[]) =>
     clipNaverListingsToViewport(
@@ -826,6 +1121,7 @@ export async function fetchNaverListings(input: NaverListingQuery): Promise<Nave
         (await fulfilledResults(nos.map((cortarNo) => fetchClusterList({ ...input, cortarNo })))).flat(),
       ),
       input.bounds,
+      { fallback: clipFallback },
     );
 
   const loadArticles = async (nos: string[]) => {
@@ -839,27 +1135,26 @@ export async function fetchNaverListings(input: NaverListingQuery): Promise<Nave
       ),
     );
     const fetched = dedupeNaverListings(groups.flatMap((group) => group.listings));
-    const reported = groups.reduce((sum, group) => sum + (group.total ?? 0), 0);
-    return {
-      listings: clipNaverListingsToViewport(fetched, input.bounds),
-      reported: reported > 0 ? reported : undefined,
-    };
+    return clipNaverListingsToViewport(fetched, input.bounds, { fallback: clipFallback });
   };
 
-  if (input.zoom >= 15) {
+  if (streetZoom) {
     // Articles miss many apartment rows (no list coords). Clusters still
-    // mark those buildings — merge them in so a 90 m pan cannot blank Magok.
-    const [articles, clusters] = await Promise.all([
+    // mark those buildings — merge them in, then try to list the homes
+    // behind each leftover bubble before the budget runs out.
+    const [articlePins, clusters] = await Promise.all([
       loadArticles(cortarNos),
       loadClusters(cortarNos),
     ]);
-    const listings = mergeNaverPins(articles.listings, clusters);
-    const available = Math.max(
-      listingInventoryCount(listings),
-      articles.reported ?? 0,
-      listingInventoryCount(clusters),
-      listings.length,
-    );
+    const expanded = await expandClustersInView({
+      clusters,
+      articles: articlePins,
+      query: input,
+      cortarNos,
+      deadlineMs: Date.now() + Math.max(800, Math.floor(naverBudgetMs() * 0.45)),
+    });
+    const listings = mergeNaverPins(expanded, clusters);
+    const available = naverViewportInventory(listings);
     return {
       listings,
       available: available > 0 ? available : undefined,
@@ -874,8 +1169,8 @@ export async function fetchNaverListings(input: NaverListingQuery): Promise<Nave
   const dongNos = await cortarNosForViewport(input.bounds, 15);
   const articles = await loadArticles(dongNos);
   return {
-    listings: articles.listings,
-    available: Math.max(articles.reported ?? 0, articles.listings.length) || undefined,
+    listings: articles,
+    available: articles.length || undefined,
   };
 }
 

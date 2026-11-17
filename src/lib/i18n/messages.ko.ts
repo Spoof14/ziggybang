@@ -170,6 +170,11 @@ export const ko: Record<MessageKey, string> = {
   "list.loadingMore": "더 불러오는 중…",
   "list.naverNote":
     "네이버에는 이 지역 매물이 {inventory}개 있지만 개별 목록으로는 {listed}개만 보여드릴 수 있어요. 나머지는 지도에 묶여 있으니 확대하거나 지역을 좁혀 보세요.",
+  "list.naverNoteStreet":
+    "네이버에는 이 지역 매물이 {inventory}개 있고, 그중 {listed}개가 목록에 있어요. 나머지는 지도의 건물 묶음에 있으니 숫자를 눌러 보거나 나머지를 불러오세요.",
+  "list.loadAllNaver": "나머지 {n}개 모두 불러오기",
+  "list.naverLoadingGroup": "이 건물 매물을 불러오는 중…",
+  "map.clusterHomes": "이 위치의 매물 {n}개 보기",
   "list.bestZoom":
     "동네를 검색하거나 지도를 확대해 보세요. ‘추천’은 ㎡당 가격, 인기 지역, 사진 품질로 매물을 순위화합니다.",
   "list.bestAi":
@@ -182,6 +187,8 @@ export const ko: Record<MessageKey, string> = {
   "list.emptyForeigner": "제목에 외국인 환영을 적은 광고가 적어요. 지역을 넓히거나 해당 칩을 꺼 보세요.",
   "list.groupedHint":
     "지도를 확대하면 개별 매물을 불러옵니다. 현재 배율에서는 매물 {n}개가 묶음으로 표시돼요.",
+  "list.groupedHintStreet":
+    "지도의 건물 묶음에 매물 {n}개가 있어요. 숫자를 누르면 목록을 볼 수 있어요.",
   "list.reason.floorplan": "대부분 도면 사진",
   "list.reason.dark": "어두운 사진",
   "list.reason.value": "㎡당 가격 우수",

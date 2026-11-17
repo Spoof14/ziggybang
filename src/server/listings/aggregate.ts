@@ -211,10 +211,13 @@ export async function getMapData(
     );
   }
   const grouped = unique.filter(isNaverClusterListing);
+  const homes = unique.filter((item) => !isNaverClusterListing(item));
   const zigbang = unique.filter((item) => item.source === "zigbang").length;
   const naverHomes = unique.filter((item) => item.source === "naver");
   const naver = listingInventoryCount(naverHomes);
   const peterpan = unique.filter((item) => item.source === "peterpan").length;
+  // Only keep a higher "available" when it is still about this viewport
+  // (leftover grouped homes), never a dong-wide total that dwarfs the map.
   const naverTotal =
     naverAvailable != null && naverAvailable > naver ? naverAvailable : undefined;
   const clustered = shouldCluster(query.zoom, unique.length, MAX_MARKERS);
@@ -228,7 +231,6 @@ export async function getMapData(
           Math.max(MIN_LIST_ITEMS, query.listingLimit ?? MIN_LIST_ITEMS),
         )
       : MAX_MARKERS;
-  const homes = unique.filter((item) => !isNaverClusterListing(item));
   let listings: MapListing[] =
     query.includeListings === true || !clustered
       ? sampleAcrossBounds(homes, listingCap, fetchBounds)
@@ -275,12 +277,15 @@ export async function getMapData(
     };
   }
 
-  const truncated = homes.length > listings.length || Boolean(naverTotal);
+  const leftoverGrouped = listingInventoryCount(grouped);
+  const truncated = homes.length > listings.length || leftoverGrouped > 0 || Boolean(naverTotal);
   return {
-    mode: clustered ? "clusters" : "markers",
+    mode: clustered ? "clusters" : leftoverGrouped > 0 ? "clusters" : "markers",
     clusters,
     listings,
-    grouped: clustered ? grouped : [],
+    // Keep leftover Naver building groups at street zoom so the map can
+    // draw a tappable count instead of dropping them from the response.
+    grouped,
     stats: {
       zigbang,
       naver,

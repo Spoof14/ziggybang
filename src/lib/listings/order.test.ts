@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { distanceM, groupedHomesHint, sortByDistanceTo } from "./order";
+import { canExpandNaverGroups, distanceM, groupedHomesHint, naverInventoryNote, sortByDistanceTo } from "./order";
 
 describe("list ordering", () => {
   const hongdae = { lat: 37.5563, lng: 126.9236 };
@@ -27,5 +27,13 @@ describe("list ordering", () => {
     expect(groupedHomesHint(0)).toBeUndefined();
     expect(groupedHomesHint(48)).toMatch(/Zoom in to load individual homes/);
     expect(groupedHomesHint(48)).toContain("48");
+    expect(groupedHomesHint(48, "en", 17)).toMatch(/Tap a count to list them/);
+    expect(groupedHomesHint(48, "en", 17)).not.toMatch(/Zoom in/);
+    expect(naverInventoryNote({ inventory: 10, listed: 3, zoom: 12 })).toMatch(/zoom in/i);
+    expect(naverInventoryNote({ inventory: 173, listed: 3, zoom: 17 })).toMatch(/tap a count/i);
+    expect(naverInventoryNote({ inventory: 173, listed: 3, zoom: 17 })).not.toMatch(/zoom in/i);
+    expect(canExpandNaverGroups({ inventory: 10, listed: 3, zoom: 17 })).toBe(true);
+    expect(canExpandNaverGroups({ inventory: 10, listed: 10, zoom: 17 })).toBe(false);
+    expect(canExpandNaverGroups({ inventory: 10, listed: 0, zoom: 14 })).toBe(false);
   });
 });

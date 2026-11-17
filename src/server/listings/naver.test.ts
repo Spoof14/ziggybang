@@ -11,10 +11,16 @@ import {
   NAVER_ARTICLE_PAGES,
   articlePagesForCortarCount,
   clipNaverListingsToViewport,
+  clusterArticlePagesForCount,
+  clusterArticlesAreScoped,
+  leftoverClusterCount,
   listingInventoryCount,
   inferNaverSalesType,
   mergeNaverPins,
+  mlandClusterArticleUrl,
   naverArticleListParams,
+  naverClusterArticleParams,
+  naverViewportInventory,
   naverAreaRange,
   naverBudgetMs,
   naverClusterZoom,
@@ -212,7 +218,9 @@ describe("naver mappers", () => {
       1,
     )!;
     const merged = mergeNaverPins([villa], [cluster, nearby]);
-    expect(merged.map((item) => item.sourceId)).toEqual(["villa", "magok"]);
+    expect(merged.map((item) => item.sourceId)).toEqual(["villa", "magok", "same"]);
+    expect(merged.find((item) => item.sourceId === "same")?.count).toBe(2);
+    expect(merged.find((item) => item.sourceId === "magok")?.count).toBe(12);
   });
 
   it("keeps map pins inside the viewport instead of the whole dong", () => {
@@ -396,5 +404,85 @@ describe("naver mappers", () => {
       "1",
     );
     expect(listing).toMatchObject({ lat: 37.56, lng: 126.92 });
+  });
+});
+
+describe("naver street-zoom inventory", () => {
+  const pin = (id: string, lat: number, lng: number) => {
+    const listing = articleToListing({
+      articleNo: id,
+      realEstateTypeCode: "OR",
+      tradeTypeCode: "B2",
+      latitude: lat,
+      longitude: lng,
+    });
+    if (!listing) throw new Error(`expected pin ${id}`);
+    return listing;
+  };
+
+  const group = (id: string, lat: number, lng: number, count: number) => {
+    const listing = clusterToListing({ latitude: lat, longitude: lng, count, markerId: id }, 0);
+    if (!listing) throw new Error(`expected cluster ${id}`);
+    return listing;
+  };
+
+  it("reduces a leftover cluster by nearby listed homes instead of dropping it", () => {
+    const cluster = group("bldg", 37.55, 126.92, 173);
+    const listed = [pin("a", 37.55, 126.92), pin("b", 37.5501, 126.9201), pin("c", 37.5499, 126.9199)];
+    expect(leftoverClusterCount(cluster, listed)).toBe(170);
+    expect(naverViewportInventory(mergeNaverPins(listed, [cluster]))).toBe(173);
+  });
+
+  it("does not keep far-away clusters in a tight street viewport", () => {
+    const tight = { south: 37.549, west: 126.918, north: 37.551, east: 126.922 };
+    const inside = group("in", 37.55, 126.92, 12);
+    const far = group("far", 37.498, 127.028, 173);
+    expect(clipNaverListingsToViewport([inside, far], tight, { fallback: "nearby" }).map((item) => item.sourceId)).toEqual(
+      ["in"],
+    );
+    expect(clipNaverListingsToViewport([far], tight, { fallback: "nearby" })).toEqual([]);
+    expect(clipNaverListingsToViewport([far], tight, { fallback: "none" })).toEqual([]);
+  });
+
+  it("rejects a cluster article page that looks like the whole-dong list", () => {
+    const cluster = { lat: 37.55, lng: 126.92 };
+    const far = [pin("a", 37.48, 127.0), pin("b", 37.49, 127.02), pin("c", 37.47, 126.99)];
+    expect(clusterArticlesAreScoped(far, cluster)).toBe(false);
+    const near = [pin("a", 37.55, 126.92), pin("b", 37.5505, 126.9205)];
+    expect(clusterArticlesAreScoped(near, cluster)).toBe(true);
+    expect(clusterArticlesAreScoped([], cluster)).toBe(false);
+  });
+
+  it("caps cluster article pages and tags the request with the cluster id", () => {
+    expect(clusterArticlePagesForCount(173)).toBe(8);
+    expect(clusterArticlePagesForCount(10)).toBe(1);
+    const params = naverClusterArticleParams({
+      cortarNo: "1144012200",
+      lgeo: "21221002311",
+      page: 1,
+      bounds: { south: 37.549, west: 126.918, north: 37.551, east: 126.922 },
+      zoom: 17,
+      propertyTypes: ["oneroom", "villa", "officetel", "apartment"],
+      salesTypes: ["jeonse", "wolse"],
+    });
+    expect(params.lgeo).toBe("21221002311");
+    expect(params.itemId).toBe("21221002311");
+    expect(params.cortarNo).toBe("1144012200");
+    const mobile = mlandClusterArticleUrl({
+      cortarNo: "1144012200",
+      lgeo: "21221002311",
+      page: 2,
+      lat: 37.55,
+      lng: 126.92,
+      bounds: { south: 37.549, west: 126.918, north: 37.551, east: 126.922 },
+      zoom: 17,
+      count: 173,
+      propertyTypes: ["officetel"],
+      salesTypes: ["wolse"],
+    });
+    expect(mobile).toContain("m.land.naver.com/cluster/ajax/articleList");
+    expect(mobile).toContain("lgeo=21221002311");
+    expect(mobile).toContain("page=2");
+    expect(mobile).toContain("totCnt=173");
   });
 });

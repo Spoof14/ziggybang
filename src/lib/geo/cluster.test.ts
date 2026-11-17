@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type MapListing } from "~/lib/listings/types";
-import { cellSizeForZoom, clusterListings, shouldCluster } from "./cluster";
+import { cellSizeForZoom, clusterListings, groupedListingsToClusters, isNaverGroupClusterId, shouldCluster } from "./cluster";
 
 function listing(
   id: string,
@@ -85,5 +85,17 @@ describe("cluster", () => {
 
   it("returns no bubbles for no listings", () => {
     expect(clusterListings([], 0.01)).toEqual([]);
+  });
+
+  it("turns leftover Naver group rows into one bubble each", () => {
+    expect(isNaverGroupClusterId("naver:cluster:21221002311")).toBe(true);
+    expect(isNaverGroupClusterId("cluster:1:2")).toBe(false);
+    const [bubble] = groupedListingsToClusters([listing("naver:cluster:bldg", 37.55, 126.92, "naver", 170)]);
+    expect(bubble).toMatchObject({
+      id: "naver:cluster:bldg",
+      count: 170,
+      sources: { naver: 170 },
+      groupedCount: 170,
+    });
   });
 });
