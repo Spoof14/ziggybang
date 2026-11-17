@@ -25,6 +25,7 @@ import {
 import { parseSearchQuery } from "~/lib/listings/search";
 import { settledError, withTimeout } from "./http";
 import { fetchNaverDetail, fetchNaverListings, listingInventoryCount, naverBudgetMs, type NaverMapFetch, type NaverListingQuery } from "./naver";
+import { refineNaverGroupedForDetailFilters, uncertainNaverGroup } from "./naver-group-refine";
 import { sampleAcrossBounds } from "~/lib/geo/sample";
 import { fetchPeterpanDetail, fetchPeterpanListings } from "./peterpan";
 import {
@@ -205,13 +206,25 @@ export async function getMapData(
   // those are active the grouped counts are marked instead of passed off as
   // filtered.
   const groupedIgnoresFilters = hasFiltersGroupedCountsIgnore(detailFilters);
-  if (groupedIgnoresFilters) {
-    unique = unique.map((item) =>
-      isNaverClusterListing(item) ? { ...item, unfiltered: true } : item,
-    );
+  let grouped = unique.filter(isNaverClusterListing);
+  let homes = unique.filter((item) => !isNaverClusterListing(item));
+  let naverGroupRefined = false;
+  if (groupedIgnoresFilters && query.zoom >= 15 && grouped.length > 0) {
+    const refined = await refineNaverGroupedForDetailFilters(grouped, {
+      bounds: fetchBounds,
+      zoom: query.zoom,
+      propertyTypes,
+      detailFilters,
+      deadlineMs: Date.now() + Math.max(900, Math.floor(naverBudgetMs() * 0.35)),
+    });
+    naverGroupRefined = true;
+    grouped = refined.filter(isNaverClusterListing);
+    homes = [...homes, ...refined.filter((item) => !isNaverClusterListing(item))];
+    unique = [...homes, ...grouped];
+  } else if (groupedIgnoresFilters) {
+    grouped = grouped.map((item) => uncertainNaverGroup(item));
+    unique = [...homes, ...grouped];
   }
-  const grouped = unique.filter(isNaverClusterListing);
-  const homes = unique.filter((item) => !isNaverClusterListing(item));
   const zigbang = unique.filter((item) => item.source === "zigbang").length;
   const naverHomes = unique.filter((item) => item.source === "naver");
   const naver = listingInventoryCount(naverHomes);
@@ -269,7 +282,9 @@ export async function getMapData(
         naver,
         peterpan,
         naverAvailable: naverTotal,
-        naverUnfiltered: grouped.length > 0 && groupedIgnoresFilters ? true : undefined,
+        naverUnfiltered:
+          grouped.length > 0 && groupedIgnoresFilters && !naverGroupRefined ? true : undefined,
+        naverGroupApprox: grouped.some((item) => item.countUncertain) ? true : undefined,
         returned: clusters.length,
         truncated: false,
       },
@@ -291,7 +306,9 @@ export async function getMapData(
       naver,
       peterpan,
       naverAvailable: naverTotal,
-      naverUnfiltered: grouped.length > 0 && groupedIgnoresFilters ? true : undefined,
+      naverUnfiltered:
+        grouped.length > 0 && groupedIgnoresFilters && !naverGroupRefined ? true : undefined,
+      naverGroupApprox: grouped.some((item) => item.countUncertain) ? true : undefined,
       returned: listings.length || clusters.length,
       truncated,
     },

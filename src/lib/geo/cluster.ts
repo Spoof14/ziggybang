@@ -32,10 +32,14 @@ export function groupedListingsToClusters(listings: MapListing[]): MapCluster[] 
       id: listing.id,
       lat: listing.lat,
       lng: listing.lng,
-      count,
+      count:
+        listing.countUncertain && (listing.count ?? 0) > 0 ? listing.count! : count,
       sources: { naver: count },
       groupedCount: count,
-      ...(listing.unfiltered ? { unfilteredCount: count } : {}),
+      countUncertain: listing.countUncertain,
+      countMax: listing.countMax ?? (listing.countUncertain ? count : undefined),
+      ...(listing.unfiltered && !listing.countUncertain ? { unfilteredCount: count } : {}),
+      ...(listing.unfiltered && listing.countUncertain ? { unfilteredCount: listing.countMax ?? count } : {}),
     });
   }
   return clusters;

@@ -164,32 +164,52 @@ export type LayerSourceCounts = {
  * Header counts from what is actually drawn, so per-source numbers, the
  * "on map" total and the list agree with the bubbles/markers.
  */
+function clusterSourceWeight(
+  cluster: MapCluster,
+  source: "zigbang" | "naver" | "peterpan",
+): number {
+  const raw = cluster.sources[source] ?? 0;
+  if (source === "naver" && cluster.countUncertain) {
+    return cluster.count > 0 ? cluster.count : 0;
+  }
+  if (source === "naver" && (cluster.unfilteredCount ?? 0) > 0 && !cluster.countUncertain) {
+    return 0;
+  }
+  return raw;
+}
+
 export function layerSourceCounts(
   layers: { clusters: MapCluster[]; listings: MapListing[] },
-  stats?: { zigbang: number; naver: number; peterpan: number; naverAvailable?: number },
+  stats?: {
+    zigbang: number;
+    naver: number;
+    peterpan: number;
+    naverAvailable?: number;
+    naverGroupApprox?: boolean;
+  },
 ): LayerSourceCounts {
   const drawn = { zigbang: 0, naver: 0, peterpan: 0 };
-  let naverApprox = false;
+  let naverApprox = Boolean(stats?.naverGroupApprox);
   const streetGroups =
     layers.listings.length > 0 &&
     layers.clusters.length > 0 &&
     layers.clusters.every((cluster) => isNaverGroupClusterId(cluster.id));
   if (layers.clusters.length && !streetGroups) {
     for (const cluster of layers.clusters) {
-      drawn.zigbang += cluster.sources.zigbang ?? 0;
-      drawn.naver += cluster.sources.naver ?? 0;
-      drawn.peterpan += cluster.sources.peterpan ?? 0;
-      if ((cluster.unfilteredCount ?? 0) > 0 && (cluster.sources.naver ?? 0) > 0) {
+      drawn.zigbang += clusterSourceWeight(cluster, "zigbang");
+      drawn.naver += clusterSourceWeight(cluster, "naver");
+      drawn.peterpan += clusterSourceWeight(cluster, "peterpan");
+      if (cluster.countUncertain || ((cluster.unfilteredCount ?? 0) > 0 && (cluster.sources.naver ?? 0) > 0)) {
         naverApprox = true;
       }
     }
     return { ...drawn, totals: {}, naverApprox };
   }
   for (const cluster of layers.clusters) {
-    drawn.zigbang += cluster.sources.zigbang ?? 0;
-    drawn.naver += cluster.sources.naver ?? 0;
-    drawn.peterpan += cluster.sources.peterpan ?? 0;
-    if ((cluster.unfilteredCount ?? 0) > 0 && (cluster.sources.naver ?? 0) > 0) {
+    drawn.zigbang += clusterSourceWeight(cluster, "zigbang");
+    drawn.naver += clusterSourceWeight(cluster, "naver");
+    drawn.peterpan += clusterSourceWeight(cluster, "peterpan");
+    if (cluster.countUncertain || ((cluster.unfilteredCount ?? 0) > 0 && (cluster.sources.naver ?? 0) > 0)) {
       naverApprox = true;
     }
   }

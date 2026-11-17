@@ -25,6 +25,11 @@ export const ko: Record<MessageKey, string> = {
   "header.showFilters": "필터 보기",
   "header.hideFilters": "필터 숨기기",
   "header.filtersShort": "필터",
+  "filters.showHomes": "매물 {n}개 보기",
+  "filters.section.sources": "출처 · 유형",
+  "filters.section.deal": "거래 · 조건",
+  "filters.section.area": "면적 · 가격",
+  "filters.section.mapTools": "지도 도구",
   "lang.group": "언어",
   "lang.switch": "한국어 (Korean)",
   "lang.en": "EN",
@@ -32,6 +37,9 @@ export const ko: Record<MessageKey, string> = {
 
   // --------------------------------------------------------------- status
   "status.loading": "매물을 불러오는 중… 처음에는 몇 초 걸릴 수 있어요",
+  "map.clusterApproximate": "탭하면 필터가 적용된 매물을 불러옵니다",
+  "map.clusterVerifiedPartial": "필터에 맞는 매물 {n}개 (탭하면 더 보기)",
+  "map.legendApprox": "점선 숫자는 상한이에요 — 탭해서 확인하세요",
   "map.clusterUnfiltered": "필터 밖의 매물이 포함되어 있을 수 있어요",
   "status.source": "{source} {n}",
   "status.sourceOf": "{source} {n} / {total}",
