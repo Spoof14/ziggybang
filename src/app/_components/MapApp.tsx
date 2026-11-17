@@ -25,6 +25,7 @@ import {
 } from "~/lib/listings/filter";
 import { mergeMapData } from "~/lib/listings/merge";
 import { describeActiveFilters, filterKeyOf, layerSourceCounts, mapLayersForFilters } from "~/lib/listings/visible";
+import { isNaverGroupClusterId } from "~/lib/geo/cluster";
 import { loadPrefs, savePrefs, type SavedPrefs, type ListSort, type ViewMode } from "~/lib/listings/prefs";
 import { type PriceFilter } from "~/lib/listings/price";
 import {
@@ -73,7 +74,7 @@ import { AskSearch } from "./AskSearch";
 import { loadAskSession } from "~/lib/listings/ask-session";
 import { loadAskUi, patchAskUi, previewFromSearch, withPreviewParam } from "~/lib/listings/ask-ui";
 import { type AskPick } from "~/lib/listings/ask-picks";
-import { groupedHomesHint } from "~/lib/listings/order";
+import { canExpandNaverGroups, groupedHomesHint, naverInventoryNote } from "~/lib/listings/order";
 import { ListingAgeDot } from "./ListingAgeDot";
 import { ListingPrice } from "./ListingPrice";
 import { BuildingAgeSlider } from "./BuildingAgeSlider";
@@ -593,6 +594,7 @@ export default function MapApp() {
     enabled: viewMode === "best",
   });
   const inspectPhotos = api.listings.inspectPhotos.useMutation();
+  const expandNaverGroups = api.listings.expandNaverGroups.useMutation();
 
   const data = useMemo(
     () =>
@@ -604,8 +606,20 @@ export default function MapApp() {
     [naverQuery.data, peterpanQuery.data, sources, zigbangQuery.data],
   );
 
+  const [extraNaver, setExtraNaver] = useState<MapListing[]>([]);
+  const extraKey = `${currentFilterKey}|${bounds.south}|${bounds.west}|${bounds.north}|${bounds.east}|${zoom}`;
+  useEffect(() => {
+    setExtraNaver([]);
+  }, [extraKey]);
+  const mergedListings = useMemo(() => {
+    if (!extraNaver.length) return data.listings;
+    const seen = new Map(data.listings.map((item) => [item.id, item]));
+    for (const item of extraNaver) seen.set(item.id, item);
+    return [...seen.values()];
+  }, [data.listings, extraNaver]);
+
   const liveVisible = useMemo(() => {
-    const layers = mapLayersForFilters(data.listings, data.clusters, {
+    const layers = mapLayersForFilters(mergedListings, data.clusters, {
       propertyTypes: propertyTypes.length ? propertyTypes : ALL_TYPES,
       salesTypes: salesTypes.length ? salesTypes : ALL_SALES,
       areaBucketIds,
@@ -633,6 +647,7 @@ export default function MapApp() {
     areaBucketIds,
     circle,
     data,
+    mergedListings,
     floorFilter,
     ageFilter,
     maxBuildingAge,
@@ -764,10 +779,69 @@ export default function MapApp() {
     }
   }, [listScrollId, listScrollAt, viewMode]);
 
-  const onSelectCluster = useCallback((cluster: MapCluster) => {
-    setSelected(null);
-    setFocus({ lat: cluster.lat, lng: cluster.lng, token: Date.now() });
+  const naverGroupInput = useCallback(
+    (groups: Array<{ sourceId: string; lat: number; lng: number; count?: number }>) => ({
+      sourceIds: groups.map((group) => group.sourceId),
+      groups,
+      bounds,
+      zoom,
+      propertyTypes: propertyTypes.length ? propertyTypes : ALL_TYPES,
+      salesTypes: salesTypes.length ? salesTypes : ALL_SALES,
+      areaBucketIds: isAllAreaBuckets(areaBucketIds) ? undefined : areaBucketIds,
+      minDeposit,
+      maxDeposit,
+      minRent,
+      maxRent,
+      maxBuildingAge,
+    }),
+    [
+      areaBucketIds,
+      bounds,
+      maxBuildingAge,
+      maxDeposit,
+      maxRent,
+      minDeposit,
+      minRent,
+      propertyTypes,
+      salesTypes,
+      zoom,
+    ],
+  );
+
+  const applyExpandedNaver = useCallback((listings: MapListing[]) => {
+    if (!listings.length) return;
+    setExtraNaver((current) => {
+      const seen = new Map(current.map((item) => [item.id, item]));
+      for (const item of listings) seen.set(item.id, item);
+      return [...seen.values()];
+    });
   }, []);
+
+  const onSelectCluster = useCallback(
+    (cluster: MapCluster) => {
+      if (isNaverGroupClusterId(cluster.id)) {
+        const sourceId = cluster.id.slice("naver:cluster:".length);
+        void expandNaverGroups
+          .mutateAsync(naverGroupInput([{ sourceId, lat: cluster.lat, lng: cluster.lng, count: cluster.count }]))
+          .then((result) => {
+            applyExpandedNaver(result.listings);
+            const first = result.listings[0];
+            if (first) {
+              setSelected(first);
+              setListScrollId(first.id);
+              setListScrollAt(Date.now());
+            }
+          })
+          .catch(() => {
+            setFocus({ lat: cluster.lat, lng: cluster.lng, token: Date.now() });
+          });
+        return;
+      }
+      setSelected(null);
+      setFocus({ lat: cluster.lat, lng: cluster.lng, token: Date.now() });
+    },
+    [applyExpandedNaver, expandNaverGroups, naverGroupInput],
+  );
 
   const onMapClick = useCallback(
     (point: LatLng) => {
@@ -1025,9 +1099,8 @@ export default function MapApp() {
     ageFilter,
     maxBuildingAge,
   }, lang);
-  const visibleHomeCount = visible.clusters.length
-    ? visible.clusters.reduce((sum, cluster) => sum + cluster.count, 0)
-    : visible.listings.length;
+  const visibleHomeCount =
+    layerCounts.zigbang + layerCounts.naver + layerCounts.peterpan;
 
   const groupedHomes = visible.clusters.reduce((sum, cluster) => sum + cluster.count, 0);
   // Order the default list around what the user is looking at: the radius
@@ -1084,11 +1157,14 @@ export default function MapApp() {
   const naverInventory = layerCounts.totals.naver ?? layerCounts.naver;
   const listNote =
     sources.includes("naver") && naverInventory > naverListed
-      ? t("list.naverNote", {
-          inventory: formatCount(naverInventory, lang),
-          listed: formatCount(naverListed, lang),
-        })
+      ? naverInventoryNote({ inventory: naverInventory, listed: naverListed, zoom }, lang)
       : undefined;
+  const leftoverNaverGroups = visible.clusters.filter((cluster) => isNaverGroupClusterId(cluster.id));
+  const naverUnlisted = Math.max(0, naverInventory - naverListed);
+  const showLoadAllNaver =
+    sources.includes("naver") &&
+    canExpandNaverGroups({ inventory: naverInventory, listed: naverListed, zoom }) &&
+    leftoverNaverGroups.length > 0;
   const photoScores = usePhotoQuality(
     viewMode === "best" ? listListings.map((item) => item.thumbnail) : [],
     viewMode === "best",
@@ -1643,7 +1719,11 @@ export default function MapApp() {
         >
           <ListingMap
             clusters={visible.clusters}
-            listings={visible.clusters.length ? [] : visible.listings}
+            listings={
+              visible.clusters.length && !visible.clusters.every((cluster) => isNaverGroupClusterId(cluster.id))
+                ? []
+                : visible.listings
+            }
             selectedId={selected?.id ?? askHighlight ?? undefined}
             focus={focus}
             circle={circle}
@@ -1690,6 +1770,31 @@ export default function MapApp() {
                   ? undefined
                   : listNote
               }
+              actionLabel={
+                viewMode === "saved" || !showLoadAllNaver
+                  ? undefined
+                  : t("list.loadAllNaver", { n: formatCount(naverUnlisted, lang) })
+              }
+              actionBusy={expandNaverGroups.isPending}
+              onAction={
+                showLoadAllNaver
+                  ? () => {
+                      void expandNaverGroups
+                        .mutateAsync(
+                          naverGroupInput(
+                            leftoverNaverGroups.map((cluster) => ({
+                              sourceId: cluster.id.slice("naver:cluster:".length),
+                              lat: cluster.lat,
+                              lng: cluster.lng,
+                              count: cluster.count,
+                            })),
+                          ),
+                        )
+                        .then((result) => applyExpandedNaver(result.listings))
+                        .catch(() => undefined);
+                    }
+                  : undefined
+              }
               recommendHint={
                 viewMode !== "best"
                   ? undefined
@@ -1704,8 +1809,8 @@ export default function MapApp() {
                   ? t("list.emptySaved")
                   : viewMode === "best" && zoom < 14 && !circle && !polygon
                     ? t("list.emptyBest")
-                    : listListings.length === 0 && groupedHomesHint(groupedHomes, lang)
-                      ? groupedHomesHint(groupedHomes, lang)
+                    : listListings.length === 0 && groupedHomesHint(groupedHomes, lang, zoom)
+                      ? groupedHomesHint(groupedHomes, lang, zoom)
                     : zoom < 15 && listListings.length === 0
                       ? t("list.emptyZoom")
                     : hasPhotos

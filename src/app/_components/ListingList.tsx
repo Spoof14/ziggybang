@@ -52,6 +52,9 @@ export function ListingList({
   ranked,
   recommendHint,
   note,
+  actionLabel,
+  actionBusy,
+  onAction,
   onSort,
   onSelect,
   onToggleSave,
@@ -77,6 +80,9 @@ export function ListingList({
   ranked?: RankedListing[];
   recommendHint?: string;
   note?: string;
+  actionLabel?: string;
+  actionBusy?: boolean;
+  onAction?: () => void;
   onSort: (sort: ListSort) => void;
   onSelect: (listing: MapListing) => void;
   onToggleSave: (listing: MapListing) => void;
@@ -155,6 +161,16 @@ export function ListingList({
           <p className="text-[11px] leading-snug text-amber-300" role="note">
             {note}
           </p>
+        ) : null}
+        {actionLabel && onAction ? (
+          <button
+            type="button"
+            disabled={actionBusy}
+            onClick={onAction}
+            className="self-start rounded-full bg-white/10 px-3 py-1 text-[11px] text-slate-100 hover:bg-white/20 disabled:opacity-60"
+          >
+            {actionBusy ? t("list.naverLoadingGroup") : actionLabel}
+          </button>
         ) : null}
         {ranked ? null : (
         <div className="flex flex-wrap gap-1">

@@ -172,6 +172,11 @@ export const en = {
   "list.loadingMore": "Loading more…",
   "list.naverNote":
     "Naver reports {inventory} homes here, but only {listed} can be listed individually. The rest are grouped on the map; zoom in or narrow the area to list more.",
+  "list.naverNoteStreet":
+    "Naver has {inventory} homes here; {listed} are listed individually. The rest are grouped into buildings on the map — tap a count to list them, or load the rest.",
+  "list.loadAllNaver": "Load all {n}",
+  "list.naverLoadingGroup": "Loading homes in this building…",
+  "map.clusterHomes": "List {n} homes here",
   "list.bestZoom":
     "Search a neighborhood or zoom in. Best ranks homes by ₩/m², popular areas, and photo quality.",
   "list.bestAi":
@@ -184,6 +189,8 @@ export const en = {
   "list.emptyForeigner": "Few ads say foreigners are welcome in the title. Widen the area, or turn that chip off.",
   "list.groupedHint":
     "Zoom in to load individual homes. {n} homes are grouped into clusters on the map at this zoom.",
+  "list.groupedHintStreet":
+    "{n} homes are grouped into buildings on the map. Tap a count to list them.",
   "list.reason.floorplan": "Mostly a floorplan",
   "list.reason.dark": "Dark photos",
   "list.reason.value": "Strong ₩/m²",

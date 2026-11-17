@@ -1,5 +1,5 @@
-import { clusterListings, cellSizeForZoom, shouldCluster } from "~/lib/geo/cluster";
-import { listingInArea, type CircleFilter, type LatLng } from "~/lib/geo/shape";
+import { clusterListings, cellSizeForZoom, shouldCluster, groupedListingsToClusters, isNaverGroupClusterId } from "~/lib/geo/cluster";
+import { distanceM, listingInArea, type CircleFilter, type LatLng } from "~/lib/geo/shape";
 import { DEFAULT_LANG, t, type Lang } from "~/lib/i18n";
 import { areaBucketLabel, areaBuckets, type AreaBucketId } from "./area";
 import {
@@ -94,6 +94,25 @@ export type MapLayerContext = {
  * Count-only rows that could not take every filter keep `unfiltered` so the
  * bubble can be marked.
  */
+const GROUP_COVER_RADIUS_M = 120;
+
+/** Drop or shrink leftover Naver group rows once nearby homes are listed. */
+export function leftoverGroupedListings(
+  grouped: MapListing[],
+  articles: MapListing[],
+  radiusM = GROUP_COVER_RADIUS_M,
+): MapListing[] {
+  const leftover: MapListing[] = [];
+  for (const row of grouped) {
+    const total = row.count && row.count > 1 ? row.count : 1;
+    const nearby = articles.filter((article) => distanceM(article, row) <= radiusM).length;
+    const remaining = Math.max(0, total - nearby);
+    if (remaining <= 0) continue;
+    leftover.push(remaining === total ? row : { ...row, count: remaining });
+  }
+  return leftover;
+}
+
 export function mapLayersForFilters(
   listings: MapListing[],
   serverClusters: MapCluster[],
@@ -102,7 +121,15 @@ export function mapLayersForFilters(
 ): { clusters: MapCluster[]; listings: MapListing[] } {
   const matched = listingsMatchingFilters(listings, input);
   if (!shouldCluster(input.zoom)) {
-    return { clusters: [], listings: matched };
+    // Street zoom: draw individual homes plus leftover Naver building bubbles
+    // (those still have no listable article behind them).
+    const grouped = leftoverGroupedListings(
+      (context.grouped ?? []).filter((row) =>
+        listingInArea(row, input.circle, input.polygon ?? undefined),
+      ),
+      matched,
+    );
+    return { clusters: groupedListingsToClusters(grouped), listings: matched };
   }
 
   const grouped = (context.grouped ?? []).filter((row) =>
@@ -142,7 +169,11 @@ export function layerSourceCounts(
 ): LayerSourceCounts {
   const drawn = { zigbang: 0, naver: 0, peterpan: 0 };
   let naverApprox = false;
-  if (layers.clusters.length) {
+  const streetGroups =
+    layers.listings.length > 0 &&
+    layers.clusters.length > 0 &&
+    layers.clusters.every((cluster) => isNaverGroupClusterId(cluster.id));
+  if (layers.clusters.length && !streetGroups) {
     for (const cluster of layers.clusters) {
       drawn.zigbang += cluster.sources.zigbang ?? 0;
       drawn.naver += cluster.sources.naver ?? 0;
@@ -152,6 +183,14 @@ export function layerSourceCounts(
       }
     }
     return { ...drawn, totals: {}, naverApprox };
+  }
+  for (const cluster of layers.clusters) {
+    drawn.zigbang += cluster.sources.zigbang ?? 0;
+    drawn.naver += cluster.sources.naver ?? 0;
+    drawn.peterpan += cluster.sources.peterpan ?? 0;
+    if ((cluster.unfilteredCount ?? 0) > 0 && (cluster.sources.naver ?? 0) > 0) {
+      naverApprox = true;
+    }
   }
   for (const listing of layers.listings) {
     drawn[listing.source] += listing.count ?? 1;
