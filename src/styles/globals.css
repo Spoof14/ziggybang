@@ -119,13 +119,18 @@ body {
 }
 
 .leaflet-tooltip-pane {
-  pointer-events: none;
+  pointer-events: none !important;
+}
+
+.leaflet-marker-pane {
+  z-index: 700 !important;
 }
 
 .listing-cluster {
   background: transparent !important;
   border: 0 !important;
   pointer-events: auto !important;
+  touch-action: manipulation;
 }
 
 .listing-cluster-unfiltered .listing-cluster-inner,
@@ -159,8 +164,7 @@ body {
   height: var(--cluster-size);
   justify-content: center;
   width: var(--cluster-size);
-  pointer-events: auto;
-  touch-action: manipulation;
+  pointer-events: none;
 }
 
 .listing-cluster-loading .listing-cluster-inner {

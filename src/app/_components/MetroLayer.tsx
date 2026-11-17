@@ -31,6 +31,7 @@ function ensureMetroPanes(map: LeafletMap) {
   if (!map.getPane("metroStations")) {
     const pane = map.createPane("metroStations");
     pane.style.zIndex = "360";
+    pane.style.pointerEvents = "none";
   }
 }
 
@@ -198,7 +199,10 @@ export function MetroLayer({ toggle = true }: { toggle?: boolean }) {
           pane="metroStations"
           center={[station.lat, station.lng]}
           radius={zoom >= 15 ? 5 : 4}
+          interactive={false}
+          bubblingMouseEvents={false}
           pathOptions={{
+            interactive: false,
             color: "#0f172a",
             weight: 1,
             fillColor: "#f8fafc",

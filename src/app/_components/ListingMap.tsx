@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
   Circle,
@@ -448,6 +448,20 @@ function clusterIcon(
   });
 }
 
+function subscribeTouchPrimary(onStoreChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+  const mq = window.matchMedia("(pointer: coarse)");
+  mq.addEventListener("change", onStoreChange);
+  return () => mq.removeEventListener("change", onStoreChange);
+}
+
+function touchPrimary(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(pointer: coarse)").matches;
+}
+
 function ClusterLayer({
   clusters,
   expandingId,
@@ -458,18 +472,25 @@ function ClusterLayer({
   onSelect: (cluster: MapCluster) => void;
 }) {
   const { lang, t } = useI18n();
+  const touchUi = useSyncExternalStore(subscribeTouchPrimary, touchPrimary, () => false);
+
   return (
     <>
       {clusters.map((cluster) => {
         const uncertain = clusterShowsUncertainty(cluster);
         const label = clusterBubbleLabel(cluster, lang);
         const loading = expandingId === cluster.id;
+        const openCluster = (event: { originalEvent: Event }) => {
+          DomEvent.stopPropagation(event.originalEvent);
+          onSelect(cluster);
+        };
         return (
         <Marker
           key={cluster.id}
           position={[cluster.lat, cluster.lng]}
-          zIndexOffset={loading ? 2000 : 1200}
+          zIndexOffset={loading ? 2400 : 1600}
           riseOnHover
+          keyboard
           icon={clusterIcon(
             cluster.count,
             sourceColor(cluster.sources),
@@ -479,13 +500,14 @@ function ClusterLayer({
           )}
           title={clusterBubbleHint(cluster, lang)}
           eventHandlers={{
-            click: (event) => {
-              DomEvent.stopPropagation(event);
-              onSelect(cluster);
+            click: openCluster,
+            keypress: (event) => {
+              const key = event.originalEvent.key;
+              if (key === "Enter" || key === " ") openCluster(event);
             },
           }}
         >
-          {uncertain ? (
+          {uncertain && !touchUi ? (
             <Tooltip direction="top" permanent opacity={0.92} className="cluster-hint-tooltip">
               {t("map.clusterApproximate")}
             </Tooltip>
@@ -636,7 +658,13 @@ export function ListingMap({
           center={[circle.lat, circle.lng]}
           radius={circle.radiusM}
           interactive={false}
-          pathOptions={{ color: "#38bdf8", weight: 2, fillOpacity: 0.12 }}
+          bubblingMouseEvents={false}
+          pathOptions={{
+            color: "#38bdf8",
+            weight: 2,
+            fillOpacity: 0.12,
+            interactive: false,
+          }}
         />
       ) : null}
       {polygon && polygon.length >= 3 ? (
