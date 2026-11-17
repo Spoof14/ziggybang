@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Circle,
@@ -23,6 +23,7 @@ import {
   latLng,
   point as leafletPoint,
   type Map as LeafletMap,
+  type Marker as LeafletMarker,
 } from "leaflet";
 import { leafletBasemap } from "~/lib/geo/basemap";
 import { isUsableMapViewport, offsetLngByPx, panelOffsetPx } from "~/lib/geo/bounds";
@@ -426,12 +427,20 @@ function LocateMeControl() {
   );
 }
 
+function escapeAttr(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
 function clusterIcon(
   count: number,
   color: string,
   uncertain: boolean,
   label: string,
   loading: boolean,
+  hint: string,
 ) {
   const basis = uncertain ? Math.max(count, 8) : count;
   const size = Math.min(44, 26 + Math.log2(basis + 1) * 5);
@@ -444,22 +453,8 @@ function clusterIcon(
     className: `listing-cluster${modifier}${busy}`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
-    html: `<span class="listing-cluster-inner" style="--cluster-size:${size}px;--cluster-color:${color}">${inner}</span>`,
+    html: `<span role="button" tabindex="-1" aria-label="${escapeAttr(hint)}" class="listing-cluster-inner" style="--cluster-size:${size}px;--cluster-color:${color}">${inner}</span>`,
   });
-}
-
-function subscribeTouchPrimary(onStoreChange: () => void) {
-  if (typeof window === "undefined") {
-    return () => undefined;
-  }
-  const mq = window.matchMedia("(pointer: coarse)");
-  mq.addEventListener("change", onStoreChange);
-  return () => mq.removeEventListener("change", onStoreChange);
-}
-
-function touchPrimary(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(pointer: coarse)").matches;
 }
 
 function ClusterLayer({
@@ -471,14 +466,14 @@ function ClusterLayer({
   expandingId?: string | null;
   onSelect: (cluster: MapCluster) => void;
 }) {
-  const { lang, t } = useI18n();
-  const touchUi = useSyncExternalStore(subscribeTouchPrimary, touchPrimary, () => false);
+  const { lang } = useI18n();
 
   return (
     <>
       {clusters.map((cluster) => {
         const uncertain = clusterShowsUncertainty(cluster);
         const label = clusterBubbleLabel(cluster, lang);
+        const hint = clusterBubbleHint(cluster, lang);
         const loading = expandingId === cluster.id;
         const openCluster = (event: { originalEvent: Event }) => {
           DomEvent.stopPropagation(event.originalEvent);
@@ -497,22 +492,19 @@ function ClusterLayer({
             uncertain,
             label,
             loading,
+            hint,
           )}
-          title={clusterBubbleHint(cluster, lang)}
           eventHandlers={{
+            add: (event) => {
+              (event.target as LeafletMarker).unbindTooltip();
+            },
             click: openCluster,
             keypress: (event) => {
               const key = event.originalEvent.key;
               if (key === "Enter" || key === " ") openCluster(event);
             },
           }}
-        >
-          {uncertain && !touchUi ? (
-            <Tooltip direction="top" permanent opacity={0.92} className="cluster-hint-tooltip">
-              {t("map.clusterApproximate")}
-            </Tooltip>
-          ) : null}
-        </Marker>
+        />
       );
       })}
     </>
