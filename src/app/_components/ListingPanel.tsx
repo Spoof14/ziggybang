@@ -143,7 +143,7 @@ export function ListingPanel({
             <button
               type="button"
               onClick={() => onToggleSave(detail)}
-              className="rounded-full bg-white/10 px-2 py-1 text-sm hover:bg-white/20"
+              className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full bg-white/10 px-2 text-sm hover:bg-white/20"
               aria-label={saved ? t("card.unsave") : t("card.save")}
               aria-pressed={saved}
             >
@@ -158,7 +158,7 @@ export function ListingPanel({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-white/10 px-2 py-1 text-sm text-slate-300 hover:bg-white/20"
+            className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-sm text-slate-300 hover:bg-white/20"
           >
             {modal?.closeLabel ?? t("panel.close")}
           </button>

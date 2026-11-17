@@ -152,7 +152,7 @@ export function ListingList({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-950">
-      <div className="flex flex-col gap-2 px-3 pt-2">
+      <div className="sticky top-0 z-10 flex flex-col gap-2 border-b border-white/10 bg-slate-950 px-3 pb-2 pt-2">
         <p className="text-xs text-slate-400">{countLabel}</p>
         {recommendHint ? (
           <p className="text-[11px] leading-snug text-sky-300">{recommendHint}</p>
@@ -180,7 +180,7 @@ export function ListingList({
               type="button"
               aria-pressed={sort === option}
               onClick={() => onSort(option)}
-              className={`rounded-full px-2 py-0.5 text-[11px] ${
+              className={`inline-flex min-h-10 items-center rounded-full px-3 py-1.5 text-[11px] ${
                 sort === option ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"
               }`}
             >

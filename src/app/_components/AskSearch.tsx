@@ -456,7 +456,7 @@ export function AskSearch({
         role="dialog"
         aria-label={t("ask.dialog")}
         {...behind}
-        className={`${preview ? "mobile:invisible " : ""}fixed inset-x-0 bottom-0 z-[1401] flex w-auto max-w-none flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-slate-950 shadow-2xl sm:inset-x-3 sm:bottom-3 sm:rounded-2xl desk:inset-auto desk:bottom-3 desk:left-3 desk:right-auto desk:top-3 desk:max-h-none desk:w-[calc(var(--desktop-panel)-1.5rem)] desk:max-w-[calc(40%-1.5rem)] ${
+        className={`${preview ? "mobile:invisible " : ""}fixed inset-x-0 bottom-0 z-[1401] flex w-auto max-w-none flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-slate-950 pb-[max(0px,env(safe-area-inset-bottom))] shadow-2xl sm:inset-x-3 sm:bottom-3 sm:rounded-2xl desk:inset-auto desk:bottom-3 desk:left-3 desk:right-auto desk:top-3 desk:max-h-none desk:w-[calc(var(--desktop-panel)-1.5rem)] desk:max-w-[calc(40%-1.5rem)] desk:pb-0 ${
           hasResult || pending ? "max-h-[92dvh] sm:max-h-[88dvh]" : "max-h-[min(28rem,58dvh)]"
         }`}
       >
@@ -476,7 +476,7 @@ export function AskSearch({
               <button
                 type="button"
                 onClick={newSearch}
-                className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
+                className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-white/20"
               >
                 {t("ask.newSearch")}
               </button>
@@ -484,7 +484,7 @@ export function AskSearch({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-white/20"
+              className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-white/20"
             >
               {t("ask.close")}
             </button>
